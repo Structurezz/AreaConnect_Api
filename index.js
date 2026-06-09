@@ -22,16 +22,15 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(mongoSanitize());
 
 // CORS
-const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? [
-      process.env.CLIENT_URL,
-      process.env.RESIDENTS_URL,
-      process.env.ADMIN_URL,
-      process.env.SECURITY_URL,
-      'https://area-mates.areaconnect.pro',
-      'https://area-connector.areaconnect.pro',
-    ].filter(Boolean).flatMap(o => o.split(',').map(s => s.trim()))
-  : [5173, 5174, 5175, 5176, 5177, 5178, 5180, 5181].map(p => `http://localhost:${p}`);
+const allowedOrigins = [
+  'https://area-mates.areaconnect.pro',
+  'https://area-connector.areaconnect.pro',
+  'https://area-connect-admin.areaconnect.pro',
+  'https://area-connect-security.areaconnect.pro',
+  'https://areaconnector-guards-production.up.railway.app',
+  'https://area-guards.areaconnect.pro',
+  ...[5173, 5174, 5175, 5176, 5177, 5178, 5180, 5181].map(p => `http://localhost:${p}`),
+];
 
   
 
@@ -74,6 +73,17 @@ app.use('/api/lounge', require('./routes/lounge'));
 // Health check
 app.get('/health', (req, res) => {
   res.json({ success: true, message: 'Estate Management API running', timestamp: new Date() });
+});
+
+// Temp: delete user by email
+app.delete('/api/dev/user', async (req, res) => {
+  const seedSecret = process.env.SEED_SECRET || 'area_connect_seed_2024';
+  if (req.headers['x-seed-secret'] !== seedSecret) return res.status(403).json({ success: false });
+  const User = require('./models/User');
+  const { email } = req.query;
+  const user = await User.findOneAndDelete({ email });
+  if (!user) return res.json({ success: false, message: 'User not found' });
+  res.json({ success: true, message: `Deleted user: ${user.email}` });
 });
 
 // One-time demo seed endpoint
