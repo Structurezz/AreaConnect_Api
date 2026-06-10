@@ -23,8 +23,7 @@ exports.preRegisterVisitor = async (req, res) => {
     const resident = req.user;
 
     const visitorCode = await makeUniqueCode();
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const qrCodeUrl = await generateQRCode(visitorCode, baseUrl);
+    const qrCodeUrl = await generateQRCode(visitorCode);
 
     const visitor = await Visitor.create({
       estateId,
