@@ -160,8 +160,38 @@ exports.checkIn = async (req, res) => {
       return res.status(409).json({ success: false, message: 'Already checked in' });
     }
 
+    const now = new Date();
+    const expectedAt = new Date(visitor.expectedDate);
+    const duration = visitor.expectedDuration || 720; // minutes
+    const expiresAt = new Date(expectedAt.getTime() + duration * 60 * 1000);
+
+    // Too early — visitor not yet expected
+    if (now < expectedAt) {
+      const diffMs = expectedAt - now;
+      const diffMins = Math.ceil(diffMs / 60000);
+      const hrs  = Math.floor(diffMins / 60);
+      const mins = diffMins % 60;
+      const when = hrs > 0 ? `${hrs}h ${mins}m` : `${mins} min`;
+      return res.status(425).json({
+        success: false,
+        code: 'TOO_EARLY',
+        message: `Visitor is expected at ${expectedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — ${when} from now. Please contact the resident to grant early entry.`,
+      });
+    }
+
+    // Pass expired
+    if (now > expiresAt) {
+      visitor.status = 'expired';
+      await visitor.save();
+      return res.status(410).json({
+        success: false,
+        code: 'PASS_EXPIRED',
+        message: 'This visitor pass has expired.',
+      });
+    }
+
     visitor.status = 'checked-in';
-    visitor.entryTime = new Date();
+    visitor.entryTime = now;
     visitor.verifiedBySecurityId = req.user._id;
     await visitor.save();
 

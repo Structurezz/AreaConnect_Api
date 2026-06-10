@@ -9,7 +9,7 @@ const visitorSchema = new mongoose.Schema({
   visitorEmail: { type: String, default: '' },
   purpose: { type: String, required: true },
   expectedDate: { type: Date, required: true },
-  expectedDuration: { type: Number, default: 60 }, // in minutes
+  expectedDuration: { type: Number, default: 720 }, // in minutes; default 12h
   visitorCode: { type: String, uppercase: true },
   qrCodeUrl: { type: String, default: '' },
   status: {
