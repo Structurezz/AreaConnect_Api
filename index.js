@@ -29,13 +29,18 @@ const allowedOrigins = [
   'https://area-connect-security.areaconnect.pro',
   'https://areaconnector-guards-production.up.railway.app',
   'https://area-guards.areaconnect.pro',
+  ...(process.env.EXTRA_ORIGINS ? process.env.EXTRA_ORIGINS.split(',').map(o => o.trim()) : []),
   ...[5173, 5174, 5175, 5176, 5177, 5178, 5180, 5181].map(p => `http://localhost:${p}`),
 ];
 
-  
-
 app.use(cors({
-  origin: allowedOrigins,
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin) || /\.up\.railway\.app$/.test(origin) || /\.areaconnect\.pro$/.test(origin)) {
+      return callback(null, true);
+    }
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 }));
