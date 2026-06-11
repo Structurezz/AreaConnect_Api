@@ -48,6 +48,19 @@ exports.getGuards = async (req, res) => {
   }
 };
 
+// ── Get one ───────────────────────────────────────────────────────────────────
+
+exports.getGuard = async (req, res) => {
+  try {
+    const guard = await User.findOne({ _id: req.params.id, estateId: req.estateId, role: 'security' })
+      .select('-passwordHash -refreshToken');
+    if (!guard) return res.status(404).json({ success: false, message: 'Guard not found' });
+    return res.json({ success: true, data: guard });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
 // ── Invite ────────────────────────────────────────────────────────────────────
 
 exports.inviteGuard = async (req, res) => {

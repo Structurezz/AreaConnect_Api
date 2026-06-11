@@ -272,14 +272,35 @@ exports.assignUnit = async (req, res) => {
   try {
     const { unitId } = req.body;
 
+    const resident = await User.findOne({ _id: req.params.id, estateId: req.estateId });
+    if (!resident) return res.status(404).json({ success: false, message: 'Resident not found' });
+
+    // Unassign path
+    if (!unitId) {
+      if (resident.unitId) {
+        const oldUnit = await Unit.findByIdAndUpdate(
+          resident.unitId,
+          { $pull: { residentIds: resident._id } },
+          { new: true }
+        );
+        if (oldUnit && oldUnit.residentIds.length === 0) {
+          await Unit.findByIdAndUpdate(oldUnit._id, { status: 'vacant' });
+        }
+      }
+      const updated = await User.findByIdAndUpdate(
+        req.params.id,
+        { $unset: { unitId: '' } },
+        { new: true }
+      );
+      return res.json({ success: true, data: updated.toSafeObject() });
+    }
+
+    // Assign path
     const unit = await Unit.findOne({ _id: unitId, estateId: req.estateId });
     if (!unit) return res.status(404).json({ success: false, message: 'Unit not found' });
     if (unit.residentIds.length >= (unit.maxOccupants || 7)) {
       return res.status(400).json({ success: false, message: `Unit is full (max ${unit.maxOccupants || 7} occupants)` });
     }
-
-    const resident = await User.findOne({ _id: req.params.id, estateId: req.estateId });
-    if (!resident) return res.status(404).json({ success: false, message: 'Resident not found' });
 
     if (resident.unitId && !resident.unitId.equals(unitId)) {
       const oldUnit = await Unit.findByIdAndUpdate(

@@ -32,7 +32,7 @@ router.post('/', authorize('estate_manager', 'super_admin'), [
 router.patch('/:id/suspend',     authorize('estate_manager', 'super_admin'), ctrl.suspendResident);
 router.patch('/:id/activate',    authorize('estate_manager', 'super_admin'), ctrl.activateResident);
 router.patch('/:id/assign-unit', authorize('estate_manager', 'super_admin'), [
-  body('unitId').notEmpty(),
+  body('unitId').optional({ nullable: true }).isMongoId().withMessage('Invalid unit ID'),
 ], validate, ctrl.assignUnit);
 
 module.exports = router;

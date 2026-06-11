@@ -6,7 +6,8 @@ const validate = require('../middleware/validate');
 
 router.use(authenticate, scopeToEstate);
 
-router.get('/', authorize('estate_manager', 'super_admin'), ctrl.getGuards);
+router.get('/',    authorize('estate_manager', 'super_admin'), ctrl.getGuards);
+router.get('/:id', authorize('estate_manager', 'super_admin'), ctrl.getGuard);
 
 router.post('/invite', authorize('estate_manager', 'super_admin'), [
   body('email').isEmail().normalizeEmail(),
