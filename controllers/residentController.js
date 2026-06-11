@@ -56,7 +56,7 @@ exports.getResidents = async (req, res) => {
 
 exports.inviteResident = async (req, res) => {
   try {
-    const { email, name, phone } = req.body;
+    const { email, name, phone, unitId } = req.body;
     const estate = await Estate.findById(req.estateId);
 
     const existing = await User.findOne({ email: email.toLowerCase() });
@@ -64,10 +64,18 @@ exports.inviteResident = async (req, res) => {
       return res.status(409).json({ success: false, message: 'Email already registered' });
     }
 
+    // Validate unit capacity before creating the account
+    if (unitId) {
+      const unit = await Unit.findOne({ _id: unitId, estateId: req.estateId });
+      if (unit && unit.residentIds.length >= (unit.maxOccupants || 7)) {
+        return res.status(400).json({ success: false, message: `Apartment is full (max ${unit.maxOccupants || 7} occupants)` });
+      }
+    }
+
     const tempPassword = genTempPassword();
     const passwordHash = await bcrypt.hash(tempPassword, 12);
 
-    await User.create({
+    const resident = await User.create({
       name,
       email: email.toLowerCase(),
       phone: phone || '',
@@ -75,7 +83,15 @@ exports.inviteResident = async (req, res) => {
       role: 'resident',
       estateId: req.estateId,
       isActive: true,
+      unitId: unitId || null,
     });
+
+    if (unitId) {
+      await Unit.findByIdAndUpdate(unitId, {
+        $addToSet: { residentIds: resident._id },
+        status: 'occupied',
+      });
+    }
 
     await sendInviteEmail({
       to: email.toLowerCase(),
@@ -96,8 +112,8 @@ exports.inviteResident = async (req, res) => {
 };
 
 // ── Bulk invite ───────────────────────────────────────────────────────────────
-// Body: { residents: [{ name, email, phone? }] }
-// Creates accounts for each and sends credential emails.
+// Body: { residents: [{ name, email, phone?, unitNumber? }] }
+// unitNumber is matched against existing units in this estate.
 
 exports.bulkInviteResidents = async (req, res) => {
   try {
@@ -112,21 +128,42 @@ exports.bulkInviteResidents = async (req, res) => {
     const estate = await Estate.findById(req.estateId);
     const loginUrl = residentsLoginUrl();
 
+    // Pre-load all units for this estate to avoid N+1 lookups
+    const allUnits = await Unit.find({ estateId: req.estateId });
+    const unitByNumber = {};
+    allUnits.forEach(u => { unitByNumber[u.unitNumber.toUpperCase()] = u; });
+
     const results = { sent: [], skipped: [], failed: [] };
 
     for (const item of list) {
-      const email = (item.email || '').toLowerCase().trim();
-      const name  = (item.name  || '').trim();
+      const email      = (item.email      || '').toLowerCase().trim();
+      const name       = (item.name       || '').trim();
+      const unitNumber = (item.unitNumber || '').toUpperCase().trim();
+
       if (!email || !name) { results.skipped.push({ email, reason: 'Missing name or email' }); continue; }
 
       try {
         const existing = await User.findOne({ email });
         if (existing) { results.skipped.push({ email, reason: 'Already registered' }); continue; }
 
+        // Resolve unit
+        let resolvedUnit = null;
+        if (unitNumber) {
+          resolvedUnit = unitByNumber[unitNumber];
+          if (!resolvedUnit) {
+            results.skipped.push({ email, reason: `Apartment "${unitNumber}" not found` });
+            continue;
+          }
+          if (resolvedUnit.residentIds.length >= (resolvedUnit.maxOccupants || 7)) {
+            results.skipped.push({ email, reason: `Apartment "${unitNumber}" is full` });
+            continue;
+          }
+        }
+
         const tempPassword = genTempPassword();
         const passwordHash = await bcrypt.hash(tempPassword, 12);
 
-        await User.create({
+        const resident = await User.create({
           name,
           email,
           phone: item.phone || '',
@@ -134,10 +171,17 @@ exports.bulkInviteResidents = async (req, res) => {
           role: 'resident',
           estateId: req.estateId,
           isActive: true,
+          unitId: resolvedUnit ? resolvedUnit._id : null,
         });
 
+        if (resolvedUnit) {
+          resolvedUnit.residentIds.push(resident._id);
+          resolvedUnit.status = 'occupied';
+          await resolvedUnit.save();
+        }
+
         await sendInviteEmail({ to: email, name, estateName: estate.name, loginUrl, tempPassword });
-        results.sent.push({ email, name });
+        results.sent.push({ email, name, unit: unitNumber || null });
       } catch (e) {
         console.error('[bulkInvite] error for', email, e.message);
         results.failed.push({ email, reason: 'Internal error' });

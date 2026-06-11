@@ -12,13 +12,15 @@ router.get('/', authorize('estate_manager', 'super_admin', 'security'), ctrl.get
 router.post('/invite', authorize('estate_manager', 'super_admin'), [
   body('email').isEmail().normalizeEmail(),
   body('name').notEmpty().trim(),
+  body('unitId').optional().isMongoId(),
 ], validate, ctrl.inviteResident);
 
-// Bulk invite — body: { residents: [{name, email, phone?}] }
+// Bulk invite — body: { residents: [{name, email, phone?, unitNumber?}] }
 router.post('/bulk-invite', authorize('estate_manager', 'super_admin'), [
   body('residents').isArray({ min: 1 }),
   body('residents.*.email').isEmail(),
   body('residents.*.name').notEmpty(),
+  body('residents.*.unitNumber').optional().isString(),
 ], validate, ctrl.bulkInviteResidents);
 
 // Direct add (no email)
