@@ -2,15 +2,26 @@ let io = null;
 
 const initSocket = (server) => {
   const { Server } = require('socket.io');
-  const allowedOrigins = process.env.NODE_ENV === 'production'
-    ? (process.env.CLIENT_URL || '').split(',').map(o => o.trim())
-    : true; // allow all origins in dev (covers web + React Native mobile)
+
+  const originFn = (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (
+      /\.areaconnect\.pro$/.test(origin) ||
+      /\.up\.railway\.app$/.test(origin) ||
+      /^http:\/\/localhost:\d+$/.test(origin)
+    ) {
+      return callback(null, true);
+    }
+    callback(new Error(`Socket CORS: origin ${origin} not allowed`));
+  };
 
   io = new Server(server, {
     cors: {
-      origin: allowedOrigins,
+      origin: process.env.NODE_ENV === 'production' ? originFn : true,
       credentials: true,
     },
+    transports: ['polling', 'websocket'],
+    allowEIO3: true,
   });
 
   const connectedUsers = new Map(); // userId -> socketId
