@@ -51,6 +51,20 @@ exports.getResidents = async (req, res) => {
   }
 };
 
+// ── Get one ───────────────────────────────────────────────────────────────────
+
+exports.getResident = async (req, res) => {
+  try {
+    const resident = await User.findOne({ _id: req.params.id, estateId: req.estateId, role: 'resident' })
+      .populate('unitId', 'unitNumber block type')
+      .select('-passwordHash -refreshToken');
+    if (!resident) return res.status(404).json({ success: false, message: 'Resident not found' });
+    return res.json({ success: true, data: resident });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
 // ── Single invite ─────────────────────────────────────────────────────────────
 // Creates the account immediately + emails login credentials via Resend.
 

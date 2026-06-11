@@ -7,6 +7,7 @@ const validate = require('../middleware/validate');
 router.use(authenticate, scopeToEstate);
 
 router.get('/', authorize('estate_manager', 'super_admin', 'security'), ctrl.getResidents);
+router.get('/:id', authorize('estate_manager', 'super_admin'), ctrl.getResident);
 
 // Single invite — creates account + sends credentials via Resend
 router.post('/invite', authorize('estate_manager', 'super_admin'), [
