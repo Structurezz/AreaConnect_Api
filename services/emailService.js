@@ -142,4 +142,64 @@ const sendInviteEmail = async ({ to, name, estateName, loginUrl, tempPassword })
   return { sent: true };
 };
 
-module.exports = { sendVisitorPass, sendInviteEmail };
+// ── Manager notification email ────────────────────────────────────────────────
+const TYPE_META = {
+  payment_received: { label: 'Payment Received',  color: '#10B981', icon: '💰' },
+  new_resident:     { label: 'New Resident',       color: '#6366F1', icon: '👤' },
+  visitor_checkin:  { label: 'Visitor Check-In',   color: '#0EA5E9', icon: '🚪' },
+  visitor_checkout: { label: 'Visitor Check-Out',  color: '#F59E0B', icon: '🚪' },
+  new_alert:        { label: 'Security Alert',     color: '#EF4444', icon: '🚨' },
+};
+
+const sendManagerNotificationEmail = async ({ to, managerName, estateName, type, title, body }) => {
+  if (!process.env.RESEND_API_KEY) return { skipped: true };
+
+  const meta = TYPE_META[type] || { label: title, color: '#10B981', icon: '🔔' };
+
+  await getResend().emails.send({
+    from: FROM(),
+    to,
+    subject: `[${estateName}] ${meta.label}: ${title}`,
+    html: `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>*{box-sizing:border-box;margin:0;padding:0}</style></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:32px 16px;">
+
+<div style="max-width:520px;margin:0 auto;">
+
+  <div style="text-align:center;margin-bottom:24px;">
+    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+  </div>
+
+  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+
+    <div style="background:linear-gradient(135deg,${meta.color},${meta.color}cc);padding:28px 32px;">
+      <p style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.75);margin-bottom:6px;">${estateName}</p>
+      <h1 style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.02em;">${meta.icon} ${meta.label}</h1>
+    </div>
+
+    <div style="padding:32px;">
+      <p style="font-size:15px;color:#374151;line-height:1.6;margin-bottom:24px;">
+        Hi <strong>${managerName || 'Manager'}</strong>,
+      </p>
+
+      <div style="background:#F9FAFB;border-left:4px solid ${meta.color};border-radius:0 10px 10px 0;padding:16px 20px;margin-bottom:24px;">
+        <p style="font-size:13px;font-weight:700;color:#111827;margin-bottom:4px;">${title}</p>
+        <p style="font-size:14px;color:#374151;line-height:1.6;">${body}</p>
+      </div>
+
+      <p style="font-size:13px;color:#6B7280;line-height:1.6;">
+        Log in to your estate dashboard to view full details.
+      </p>
+    </div>
+  </div>
+
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by AreaConnect</p>
+</div>
+</body></html>`,
+  });
+
+  return { sent: true };
+};
+
+module.exports = { sendVisitorPass, sendInviteEmail, sendManagerNotificationEmail };

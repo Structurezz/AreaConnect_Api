@@ -4,6 +4,8 @@ const Payment = require('../models/Payment');
 const User = require('../models/User');
 const Estate = require('../models/Estate');
 const Withdrawal = require('../models/Withdrawal');
+const { emitNotification } = require('../services/socketService');
+const { sendManagerNotificationEmail } = require('../services/emailService');
 
 const PAYSTACK_BASE = 'https://api.paystack.co';
 const paystackHeaders = () => ({
@@ -147,6 +149,19 @@ exports.recordManualPayment = async (req, res) => {
     await creditManagerWallet(req.estateId, payment.amount);
 
     await payment.populate('residentId', 'name email');
+
+    try {
+      const fmt = (n) => `₦${Number(n).toLocaleString('en-NG')}`;
+      emitNotification(req.estateId, {
+        id: payment._id.toString(),
+        type: 'payment_received',
+        title: 'Manual Payment Recorded',
+        body: `${payment.residentId?.name || 'Resident'} — ${fmt(payment.amount)} recorded manually`,
+        amount: payment.amount,
+        meta: { paymentId: payment._id },
+      });
+    } catch (e) { console.error('[notify recordManualPayment]', e.message); }
+
     return res.json({ success: true, data: payment });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
@@ -299,6 +314,39 @@ exports.verifyPayment = async (req, res) => {
     if (!payment) return res.status(404).json({ success: false, message: 'Payment record not found' });
 
     await creditManagerWallet(req.estateId, payment.amount);
+
+    try {
+      await payment.populate('residentId', 'name email');
+      const fmt = (n) => `₦${Number(n).toLocaleString('en-NG')}`;
+      const residentName = payment.residentId?.name || 'A resident';
+      const scheduleTitle = payment.scheduleId?.title || 'levy';
+
+      const notif = {
+        id: payment._id.toString(),
+        type: 'payment_received',
+        title: 'Payment Received',
+        body: `${residentName} paid ${fmt(payment.amount)} for ${scheduleTitle}`,
+        amount: payment.amount,
+        meta: { paymentId: payment._id },
+      };
+
+      emitNotification(req.estateId, notif);
+
+      const [manager, estate] = await Promise.all([
+        User.findOne({ estateId: req.estateId, role: 'estate_manager' }).select('name email'),
+        Estate.findById(req.estateId).select('name'),
+      ]);
+      if (manager && estate) {
+        await sendManagerNotificationEmail({
+          to: manager.email,
+          managerName: manager.name,
+          estateName: estate.name,
+          type: 'payment_received',
+          title: notif.title,
+          body: notif.body,
+        });
+      }
+    } catch (e) { console.error('[notify verifyPayment]', e.message); }
 
     return res.json({ success: true, data: payment });
   } catch (err) {

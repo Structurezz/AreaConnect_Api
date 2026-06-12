@@ -3,6 +3,7 @@ const Unit    = require('../models/Unit');
 const Estate  = require('../models/Estate');
 const bcrypt  = require('bcryptjs');
 const { sendInviteEmail } = require('../services/emailService');
+const { emitNotification } = require('../services/socketService');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -114,6 +115,16 @@ exports.inviteResident = async (req, res) => {
       loginUrl: residentsLoginUrl(),
       tempPassword,
     });
+
+    try {
+      emitNotification(req.estateId, {
+        id: resident._id.toString(),
+        type: 'new_resident',
+        title: 'New Resident Added',
+        body: `${name} has been invited to ${estate.name}`,
+        meta: { residentId: resident._id },
+      });
+    } catch (e) { console.error('[notify inviteResident]', e.message); }
 
     return res.json({
       success: true,

@@ -97,6 +97,19 @@ const emitGroupMessage = (estateId, message) => {
   }
 };
 
+/**
+ * Emit a notification to all manager/resident sockets in an estate.
+ * Shape: { id, type, title, body, amount?, meta?, createdAt }
+ */
+const emitNotification = (estateId, notification) => {
+  if (io) {
+    io.to(`estate:${estateId}`).emit('notification', {
+      ...notification,
+      createdAt: notification.createdAt || new Date().toISOString(),
+    });
+  }
+};
+
 const getIO = () => io;
 
-module.exports = { initSocket, emitAlert, emitVisitorUpdate, emitAnnouncement, emitNkechiTyping, emitGroupMessage, getIO };
+module.exports = { initSocket, emitAlert, emitVisitorUpdate, emitAnnouncement, emitNkechiTyping, emitGroupMessage, emitNotification, getIO };
