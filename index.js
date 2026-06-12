@@ -76,6 +76,7 @@ app.use('/api/plans', require('./routes/plans'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/polls', require('./routes/polls'));
 app.use('/api/lounge', require('./routes/lounge'));
+app.use('/api/posts', require('./routes/posts'));
 app.use('/api/guards', require('./routes/guards'));
 
 // Health check
