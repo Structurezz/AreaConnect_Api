@@ -15,7 +15,7 @@ const COOKIE_OPTS = {
 
 exports.register = async (req, res) => {
   try {
-    const { name, email, phone, password, role, estateCode, estateName, estateAddress, billingModel, cycle } = req.body;
+    const { name, email, phone, password, role, estateCode, estateName, estateAddress, billingModel, cycle, planSlug } = req.body;
 
     const exists = await User.findOne({ email });
     if (exists) {
@@ -41,13 +41,17 @@ exports.register = async (req, res) => {
       user.refreshToken = refreshToken;
       await user.save();
 
-      // Start 14-day trial on Growth plan if it exists
-      const growthPlan = await Plan.findOne({ slug: 'growth', isActive: true });
-      if (growthPlan) {
+      // Start 14-day trial on the chosen plan (fall back through growth → starter → any active plan)
+      const slug = planSlug || 'growth';
+      const chosenPlan = await Plan.findOne({ slug, isActive: true })
+        || await Plan.findOne({ slug: 'growth', isActive: true })
+        || await Plan.findOne({ slug: 'starter', isActive: true })
+        || await Plan.findOne({ isActive: true }).sort({ sortOrder: 1 });
+      if (chosenPlan) {
         const trialEndsAt = new Date(Date.now() + 14 * 86400000);
         await Subscription.create({
           estateId: estate._id,
-          planId: growthPlan._id,
+          planId: chosenPlan._id,
           billingModel: billingModel || 'flat',
           cycle: cycle || 'monthly',
           status: 'trial',
