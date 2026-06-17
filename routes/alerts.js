@@ -1,10 +1,10 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
 const ctrl = require('../controllers/alertController');
-const { authenticate, authorize, scopeToEstate, requireEstate } = require('../middleware/auth');
+const { authenticate, authorize, scopeToEstate, requireEstate, requireActiveSubscription } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 
-router.use(authenticate, scopeToEstate, requireEstate);
+router.use(authenticate, scopeToEstate, requireEstate, requireActiveSubscription);
 
 router.post('/', [
   body('type').optional().isIn(['security', 'fire', 'medical', 'noise', 'other']),

@@ -1,11 +1,11 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
 const ctrl = require('../controllers/announcementController');
-const { authenticate, authorize, scopeToEstate, requireEstate } = require('../middleware/auth');
+const { authenticate, authorize, scopeToEstate, requireEstate, requireActiveSubscription } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const upload = require('../middleware/upload');
 
-router.use(authenticate, scopeToEstate, requireEstate);
+router.use(authenticate, scopeToEstate, requireEstate, requireActiveSubscription);
 
 router.get('/', ctrl.getAnnouncements);
 

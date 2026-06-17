@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Subscription = require('../models/Subscription');
 
 const authenticate = async (req, res, next) => {
   try {
@@ -57,4 +58,23 @@ const requireEstate = (req, res, next) => {
   next();
 };
 
-module.exports = { authenticate, authorize, scopeToEstate, requireEstate };
+const BLOCKED_STATUSES = ['suspended', 'expired', 'cancelled'];
+
+const requireActiveSubscription = async (req, res, next) => {
+  try {
+    if (!req.estateId) return next();
+    const sub = await Subscription.findOne({ estateId: req.estateId }).select('status');
+    if (sub && BLOCKED_STATUSES.includes(sub.status)) {
+      return res.status(402).json({
+        success: false,
+        subscriptionStatus: sub.status,
+        message: `Your subscription is ${sub.status}. Renew your plan to regain access.`,
+      });
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { authenticate, authorize, scopeToEstate, requireEstate, requireActiveSubscription };

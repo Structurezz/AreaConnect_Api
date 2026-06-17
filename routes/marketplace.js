@@ -1,11 +1,11 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
 const ctrl = require('../controllers/marketplaceController');
-const { authenticate, scopeToEstate } = require('../middleware/auth');
+const { authenticate, scopeToEstate, requireActiveSubscription } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const upload = require('../middleware/upload');
 
-router.use(authenticate, scopeToEstate);
+router.use(authenticate, scopeToEstate, requireActiveSubscription);
 
 router.get('/mine', ctrl.getMyListings);
 router.get('/saved', ctrl.getSaved);

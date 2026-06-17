@@ -1,10 +1,10 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
 const ctrl = require('../controllers/visitorController');
-const { authenticate, authorize, scopeToEstate } = require('../middleware/auth');
+const { authenticate, authorize, scopeToEstate, requireActiveSubscription } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 
-router.use(authenticate, scopeToEstate);
+router.use(authenticate, scopeToEstate, requireActiveSubscription);
 
 // Public code verification (security uses this, still needs auth)
 router.get('/verify/:code', authorize('security', 'estate_manager', 'super_admin'), ctrl.verifyVisitorCode);

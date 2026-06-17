@@ -1,9 +1,9 @@
 const router  = require('express').Router();
-const { authenticate, scopeToEstate, authorize } = require('../middleware/auth');
+const { authenticate, scopeToEstate, authorize, requireActiveSubscription } = require('../middleware/auth');
 const upload   = require('../middleware/upload');
 const ctrl     = require('../controllers/postController');
 
-router.use(authenticate, scopeToEstate);
+router.use(authenticate, scopeToEstate, requireActiveSubscription);
 
 router.get('/',                                ctrl.getPosts);
 router.post('/',  upload.array('images', 4),   ctrl.createPost);

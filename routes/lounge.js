@@ -1,8 +1,8 @@
 const router = require('express').Router();
-const { authenticate, scopeToEstate } = require('../middleware/auth');
+const { authenticate, scopeToEstate, requireActiveSubscription } = require('../middleware/auth');
 const ctrl = require('../controllers/loungeController');
 
-router.use(authenticate, scopeToEstate);
+router.use(authenticate, scopeToEstate, requireActiveSubscription);
 
 router.get('/',                              ctrl.getSession);
 router.patch('/mood',                        ctrl.updateMood);

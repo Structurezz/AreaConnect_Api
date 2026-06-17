@@ -1,10 +1,10 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
 const ctrl = require('../controllers/guardController');
-const { authenticate, authorize, scopeToEstate } = require('../middleware/auth');
+const { authenticate, authorize, scopeToEstate, requireActiveSubscription } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 
-router.use(authenticate, scopeToEstate);
+router.use(authenticate, scopeToEstate, requireActiveSubscription);
 
 router.get('/',    authorize('estate_manager', 'super_admin'), ctrl.getGuards);
 router.get('/:id', authorize('estate_manager', 'super_admin'), ctrl.getGuard);
