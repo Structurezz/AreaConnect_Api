@@ -14,6 +14,11 @@ router.get('/wallet', authorize('estate_manager', 'super_admin'), ctrl.getWallet
 
 router.get('/wallet/banks', authorize('estate_manager', 'super_admin'), ctrl.getBanks);
 
+router.post('/wallet/resolve', authorize('estate_manager', 'super_admin'), [
+  body('bankCode').notEmpty().withMessage('Bank is required'),
+  body('accountNumber').isLength({ min: 10, max: 10 }).withMessage('Account number must be 10 digits'),
+], validate, ctrl.resolveAccount);
+
 router.post('/wallet/bank', authorize('estate_manager', 'super_admin'), [
   body('bankCode').notEmpty().withMessage('Bank is required'),
   body('accountNumber').isLength({ min: 10, max: 10 }).withMessage('Account number must be 10 digits'),

@@ -417,12 +417,36 @@ exports.getWallet = async (req, res) => {
 exports.getBanks = async (req, res) => {
   try {
     const { data } = await axios.get(
-      `${PAYSTACK_BASE}/bank?currency=NGN&perPage=100`,
+      `${PAYSTACK_BASE}/bank?currency=NGN&perPage=200&use_cursor=false`,
       { headers: paystackHeaders() }
     );
     return res.json({ success: true, data: data.data });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Failed to fetch banks' });
+  }
+};
+
+exports.resolveAccount = async (req, res) => {
+  try {
+    const { bankCode, accountNumber } = req.body;
+
+    if (!process.env.PAYSTACK_SECRET_KEY) {
+      return res.status(503).json({ success: false, message: 'Payment gateway not configured' });
+    }
+
+    const { data: resolveData } = await axios.get(
+      `${PAYSTACK_BASE}/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`,
+      { headers: paystackHeaders() }
+    );
+
+    return res.json({
+      success: true,
+      data: { accountName: resolveData.data.account_name, accountNumber, bankCode },
+    });
+  } catch (err) {
+    console.error('[Resolve account]', err.response?.data || err.message);
+    const msg = err.response?.data?.message || 'Could not resolve account. Check the account number and bank, then try again.';
+    return res.status(422).json({ success: false, message: msg });
   }
 };
 
