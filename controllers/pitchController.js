@@ -1,5 +1,6 @@
 const Prospect = require('../models/Prospect');
 const { sendPitchEmail } = require('../services/emailService');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // ── Seed data ──────────────────────────────────────────────────────────────────
 const SEED_PROSPECTS = [
@@ -217,6 +218,111 @@ exports.sendPitchEmails = async (req, res) => {
   } catch (err) {
     console.error('[sendPitchEmails]', err.message);
     return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+exports.generateProspects = async (req, res) => {
+  try {
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({ success: false, message: 'Gemini API key not configured' });
+    }
+
+    const { count = 25 } = req.body;
+    const batchSize = Math.min(Math.max(Number(count) || 25, 5), 50);
+
+    const existingEmails    = await Prospect.distinct('email');
+    const existingCompanies = await Prospect.distinct('company');
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+    // Use Google Search grounding so Gemini pulls real companies from the web
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      tools: [{ googleSearch: {} }],
+    });
+
+    const searchQueries = [
+      'Nigerian real estate developers companies Lagos Abuja 2024 contact email',
+      'property management companies Nigeria estate managers contact details',
+      'Nigerian gated estate developers directors contact email Port Harcourt Enugu',
+      'real estate investment firms Nigeria Kano Ibadan Benin City contacts',
+    ];
+    const chosenQuery = searchQueries[Math.floor(Math.random() * searchQueries.length)];
+
+    const prompt = `Search the web for: "${chosenQuery}"
+
+Using what you find, extract ${batchSize} REAL Nigerian property companies and their real publicly listed contact persons.
+Only use information you actually find on the web — real company names, real people's names, real emails/phones from their official websites, LinkedIn, or business directories.
+
+Do NOT include any of these already-known companies: ${existingCompanies.slice(0, 20).join(', ')}.
+
+Return ONLY a valid JSON array (no markdown, no code fences, no explanation). Each object must have exactly:
+{
+  "name": "Real person's full name (director, manager, CEO, or contact person)",
+  "company": "Real company name exactly as listed",
+  "email": "Real email address found publicly (use info@, contact@, or personal if found)",
+  "phone": "Real phone number if found, else empty string",
+  "city": "City where company is based",
+  "type": one of ["developer", "estate_manager", "property_company", "investment_firm", "government"],
+  "source": "URL or site where this info was found"
+}
+
+If you cannot find a real email for a company, construct the most likely one from their domain (e.g. info@companyname.com) but mark it clearly. Prioritise real contacts over guesses.`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim();
+
+    // Strip markdown fences if present
+    const jsonText = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+
+    let generated;
+    try {
+      generated = JSON.parse(jsonText);
+    } catch (parseErr) {
+      // Try to extract JSON array from mixed text
+      const match = text.match(/\[[\s\S]*\]/);
+      if (match) {
+        try { generated = JSON.parse(match[0]); }
+        catch { generated = null; }
+      }
+      if (!generated) {
+        console.error('[generateProspects] parse error:', parseErr.message, '\nRaw:', text.slice(0, 400));
+        return res.status(500).json({ success: false, message: 'AI returned invalid JSON. Try again.' });
+      }
+    }
+
+    if (!Array.isArray(generated)) {
+      return res.status(500).json({ success: false, message: 'AI returned unexpected format. Try again.' });
+    }
+
+    const VALID_TYPES = ['developer','estate_manager','property_company','investment_firm','government'];
+
+    const newProspects = generated.filter(p =>
+      p.email && p.name && p.company &&
+      !existingEmails.includes(p.email.toLowerCase())
+    ).map(p => ({
+      name:    p.name,
+      company: p.company,
+      email:   p.email.toLowerCase().trim(),
+      phone:   p.phone || '',
+      city:    p.city  || '',
+      type:    VALID_TYPES.includes(p.type) ? p.type : 'estate_manager',
+      notes:   p.source ? `Source: ${p.source}` : '',
+      status:  'new',
+    }));
+
+    if (newProspects.length === 0) {
+      return res.json({ success: true, added: 0, message: 'No new unique prospects found. Try again for a different batch.' });
+    }
+
+    await Prospect.insertMany(newProspects, { ordered: false });
+    const newTotal = await Prospect.countDocuments();
+
+    console.log(`[generateProspects] Added ${newProspects.length} real prospects. Total: ${newTotal}`);
+    return res.json({ success: true, added: newProspects.length, total: newTotal, data: newProspects });
+  } catch (err) {
+    console.error('[generateProspects]', err.message);
+    return res.status(500).json({ success: false, message: err.message || 'Generation failed' });
   }
 };
 
