@@ -145,10 +145,28 @@ exports.getPlatformStats = async (req, res) => {
 
 exports.getMyEstates = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('managedEstates estateId');
-    const estates = await Estate.find({ _id: { $in: user.managedEstates } })
+    const userId = req.user._id;
+    const user = await User.findById(userId).select('managedEstates estateId');
+
+    // Union: estates in managedEstates array + any estate where this user is managerId
+    // This handles managers who registered before the managedEstates field was added
+    const estates = await Estate.find({
+      $or: [
+        { _id: { $in: user.managedEstates } },
+        { managerId: userId },
+      ],
+    })
       .select('name address estateCode logoUrl isActive createdAt')
       .lean();
+
+    // Backfill managedEstates for legacy accounts that are missing entries
+    const estateIds = estates.map(e => e._id);
+    const missing = estateIds.filter(
+      id => !user.managedEstates.some(m => m.toString() === id.toString())
+    );
+    if (missing.length > 0) {
+      await User.findByIdAndUpdate(userId, { $addToSet: { managedEstates: { $each: missing } } });
+    }
 
     const activeId = user.estateId?.toString();
     const result = estates.map(e => ({ ...e, isActive: e._id.toString() === activeId }));

@@ -205,9 +205,16 @@ exports.switchEstate = async (req, res) => {
     }
 
     const user = await User.findById(req.user._id);
-    const isManaged = user.managedEstates.some(id => id.toString() === estateId);
-    if (!isManaged) {
+
+    // Check managedEstates array OR direct managerId ownership (legacy accounts)
+    const inArray = user.managedEstates.some(id => id.toString() === estateId);
+    const ownsEstate = !inArray && await Estate.findOne({ _id: estateId, managerId: user._id });
+    if (!inArray && !ownsEstate) {
       return res.status(403).json({ success: false, message: 'You do not manage that estate' });
+    }
+    // Backfill if missing
+    if (!inArray) {
+      await User.findByIdAndUpdate(user._id, { $addToSet: { managedEstates: estateId } });
     }
 
     user.estateId = estateId;
