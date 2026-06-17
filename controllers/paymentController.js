@@ -445,6 +445,15 @@ exports.resolveAccount = async (req, res) => {
       return res.status(503).json({ success: false, message: 'Payment gateway not configured' });
     }
 
+    // Paystack test bank (001) does not support /bank/resolve — return mock data
+    const isTestMode = process.env.PAYSTACK_SECRET_KEY.startsWith('sk_test_');
+    if (isTestMode && bankCode === '001') {
+      return res.json({
+        success: true,
+        data: { accountName: 'Test Account', accountNumber, bankCode },
+      });
+    }
+
     const { data: resolveData } = await axios.get(
       `${PAYSTACK_BASE}/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`,
       { headers: paystackHeaders() }
@@ -469,6 +478,23 @@ exports.saveBankAccount = async (req, res) => {
       return res.status(503).json({ success: false, message: 'Payment gateway not configured' });
     }
 
+    const isTestMode = process.env.PAYSTACK_SECRET_KEY.startsWith('sk_test_');
+
+    // Test bank (001) — skip live API calls, store mock data directly
+    if (isTestMode && bankCode === '001') {
+      await User.findByIdAndUpdate(req.user._id, {
+        bankCode,
+        accountNumber,
+        accountName: 'Test Account',
+        bankName: 'Test Bank',
+        paystackRecipientCode: 'RCP_test_mock',
+      });
+      return res.json({
+        success: true,
+        data: { accountName: 'Test Account', bankName: 'Test Bank', accountNumber },
+      });
+    }
+
     // Resolve account name
     const { data: resolveData } = await axios.get(
       `${PAYSTACK_BASE}/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`,
@@ -478,7 +504,7 @@ exports.saveBankAccount = async (req, res) => {
 
     // Fetch bank name from banks list
     const { data: banksData } = await axios.get(
-      `${PAYSTACK_BASE}/bank?currency=NGN&perPage=100`,
+      `${PAYSTACK_BASE}/bank?currency=NGN&perPage=200`,
       { headers: paystackHeaders() }
     );
     const bank = banksData.data.find((b) => b.code === bankCode);
