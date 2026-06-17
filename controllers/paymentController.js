@@ -422,8 +422,9 @@ exports.getBanks = async (req, res) => {
     );
     let banks = data.data || [];
 
-    // Ensure the Paystack test bank is always present in test mode
-    if (process.env.NODE_ENV !== 'production') {
+    // Ensure Paystack test bank is always present when using a test secret key
+    const isTestMode = process.env.PAYSTACK_SECRET_KEY?.startsWith('sk_test_');
+    if (isTestMode) {
       const hasTestBank = banks.some(b => b.code === '001');
       if (!hasTestBank) {
         banks = [{ name: 'Test Bank', code: '001', slug: 'test-bank' }, ...banks];
