@@ -420,7 +420,17 @@ exports.getBanks = async (req, res) => {
       `${PAYSTACK_BASE}/bank?currency=NGN&perPage=200&use_cursor=false`,
       { headers: paystackHeaders() }
     );
-    return res.json({ success: true, data: data.data });
+    let banks = data.data || [];
+
+    // Ensure the Paystack test bank is always present in test mode
+    if (process.env.NODE_ENV !== 'production') {
+      const hasTestBank = banks.some(b => b.code === '001');
+      if (!hasTestBank) {
+        banks = [{ name: 'Test Bank', code: '001', slug: 'test-bank' }, ...banks];
+      }
+    }
+
+    return res.json({ success: true, data: banks });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Failed to fetch banks' });
   }
