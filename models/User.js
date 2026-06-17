@@ -12,6 +12,7 @@ const userSchema = new mongoose.Schema({
     default: 'resident',
   },
   estateId: { type: mongoose.Schema.Types.ObjectId, ref: 'Estate' },
+  managedEstates: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Estate' }],
   unitId: { type: mongoose.Schema.Types.ObjectId, ref: 'Unit' },
   profilePhoto: { type: String, default: '' },
   isActive: { type: Boolean, default: true },

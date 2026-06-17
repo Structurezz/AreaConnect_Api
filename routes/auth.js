@@ -19,5 +19,6 @@ router.post('/login', [
 router.post('/refresh', ctrl.refresh);
 router.post('/logout', ctrl.logout);
 router.get('/me', authenticate, ctrl.getMe);
+router.post('/switch-estate', authenticate, ctrl.switchEstate);
 
 module.exports = router;

@@ -16,6 +16,13 @@ router.get('/', authorize('super_admin'), ctrl.getAllEstates);
 router.get('/platform-stats', authorize('super_admin'), ctrl.getPlatformStats);
 router.get('/stats', scopeToEstate, ctrl.getEstateStats);
 
+// Multi-estate management for estate_managers
+router.get('/mine', authorize('estate_manager'), ctrl.getMyEstates);
+router.post('/add', authorize('estate_manager'), [
+  body('name').notEmpty(),
+  body('address').notEmpty(),
+], validate, ctrl.addEstate);
+
 router.get('/:estateId/detail', authorize('super_admin'), ctrl.getEstateDetail);
 router.get('/:estateId', ctrl.getEstate);
 

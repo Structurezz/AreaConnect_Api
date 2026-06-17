@@ -36,6 +36,7 @@ exports.register = async (req, res) => {
       // Create estate and link manager
       const estate = await Estate.create({ name: estateName, address: estateAddress, managerId: user._id });
       user.estateId = estate._id;
+      user.managedEstates = [estate._id];
       const accessToken = generateAccessToken(user._id, user.role, estate._id);
       const refreshToken = generateRefreshToken(user._id);
       user.refreshToken = refreshToken;
@@ -188,9 +189,36 @@ exports.getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
       .populate('estateId', 'name estateCode logoUrl settings')
+      .populate('managedEstates', 'name estateCode logoUrl isActive')
       .populate('unitId', 'unitNumber block type');
     return res.json({ success: true, data: user.toSafeObject() });
   } catch (err) {
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+exports.switchEstate = async (req, res) => {
+  try {
+    const { estateId } = req.body;
+    if (!estateId) {
+      return res.status(400).json({ success: false, message: 'estateId is required' });
+    }
+
+    const user = await User.findById(req.user._id);
+    const isManaged = user.managedEstates.some(id => id.toString() === estateId);
+    if (!isManaged) {
+      return res.status(403).json({ success: false, message: 'You do not manage that estate' });
+    }
+
+    user.estateId = estateId;
+    await user.save();
+
+    const estate = await Estate.findById(estateId).select('name estateCode logoUrl settings');
+    const accessToken = generateAccessToken(user._id, user.role, estateId);
+
+    return res.json({ success: true, data: { accessToken, estate } });
+  } catch (err) {
+    console.error(err);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };

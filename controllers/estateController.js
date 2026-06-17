@@ -3,6 +3,8 @@ const User = require('../models/User');
 const Unit = require('../models/Unit');
 const Visitor = require('../models/Visitor');
 const Alert = require('../models/Alert');
+const Plan = require('../models/Plan');
+const Subscription = require('../models/Subscription');
 
 exports.createEstate = async (req, res) => {
   try {
@@ -135,6 +137,60 @@ exports.getPlatformStats = async (req, res) => {
         totalVisitors, visitorsToday, totalUnits, openAlerts, estateGrowth,
       },
     });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+exports.getMyEstates = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('managedEstates estateId');
+    const estates = await Estate.find({ _id: { $in: user.managedEstates } })
+      .select('name address estateCode logoUrl isActive createdAt')
+      .lean();
+
+    const activeId = user.estateId?.toString();
+    const result = estates.map(e => ({ ...e, isActive: e._id.toString() === activeId }));
+    return res.json({ success: true, data: result });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+exports.addEstate = async (req, res) => {
+  try {
+    const { name, address } = req.body;
+    if (!name || !address) {
+      return res.status(400).json({ success: false, message: 'Name and address are required' });
+    }
+
+    const managerId = req.user._id;
+    const estate = await Estate.create({ name, address, managerId });
+
+    await User.findByIdAndUpdate(managerId, {
+      $addToSet: { managedEstates: estate._id },
+    });
+
+    // Start 14-day trial on starter/growth plan
+    const plan = await Plan.findOne({ slug: 'starter', isActive: true })
+      || await Plan.findOne({ isActive: true }).sort({ sortOrder: 1 });
+    if (plan) {
+      const trialEndsAt = new Date(Date.now() + 14 * 86400000);
+      await Subscription.create({
+        estateId: estate._id,
+        planId: plan._id,
+        billingModel: 'flat',
+        cycle: 'monthly',
+        status: 'trial',
+        trialEndsAt,
+        nextBillingDate: trialEndsAt,
+        startDate: new Date(),
+      });
+    }
+
+    return res.status(201).json({ success: true, message: 'Estate created', data: estate });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: false, message: 'Server error' });
