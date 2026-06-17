@@ -168,6 +168,76 @@ exports.recordManualPayment = async (req, res) => {
   }
 };
 
+exports.getInvoice = async (req, res) => {
+  try {
+    const payment = await Payment.findOne({ _id: req.params.paymentId, estateId: req.estateId })
+      .populate('scheduleId')
+      .populate('residentId', 'name email phone unitId')
+      .populate({ path: 'residentId', populate: { path: 'unitId', select: 'unitNumber block type' } })
+      .populate('recordedBy', 'name')
+      .populate('estateId', 'name address estateCode logoUrl');
+
+    if (!payment) return res.status(404).json({ success: false, message: 'Payment not found' });
+
+    const estate = payment.estateId;
+    const resident = payment.residentId;
+    const schedule = payment.scheduleId;
+    const unit = resident?.unitId;
+
+    const dateStr = payment.createdAt.toISOString().slice(0, 10).replace(/-/g, '');
+    const invoiceNumber = `INV-${dateStr}-${payment._id.toString().slice(-6).toUpperCase()}`;
+
+    const TYPE_LABELS = {
+      security_dues: 'Security Dues',
+      maintenance:   'Maintenance Fee',
+      levy:          'Estate Levy',
+      contribution:  'Community Contribution',
+      other:         'Payment',
+    };
+
+    return res.json({
+      success: true,
+      data: {
+        invoiceNumber,
+        date: payment.createdAt,
+        dueDate: schedule?.dueDate,
+        status: payment.status,
+        paidAt: payment.paidAt,
+        method: payment.method,
+        notes: payment.notes,
+        recordedBy: payment.recordedBy?.name || null,
+        estate: {
+          name: estate?.name || '',
+          address: estate?.address || '',
+          estateCode: estate?.estateCode || '',
+          logoUrl: estate?.logoUrl || '',
+        },
+        resident: {
+          name: resident?.name || 'Resident',
+          email: resident?.email || '',
+          phone: resident?.phone || '',
+          unit: unit ? `${unit.block ? unit.block + ' ' : ''}${unit.unitNumber}` : 'N/A',
+        },
+        items: [{
+          description: schedule?.title || TYPE_LABELS[schedule?.type] || 'Payment',
+          detail: schedule?.description || '',
+          frequency: schedule?.frequency || '',
+          quantity: 1,
+          unitPrice: payment.amount,
+          vat: 0,
+          total: payment.amount,
+        }],
+        subtotal: payment.amount,
+        vatAmount: 0,
+        total: payment.amount,
+      },
+    });
+  } catch (err) {
+    console.error('[getInvoice]', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
 exports.waivePayment = async (req, res) => {
   try {
     const { paymentId } = req.params;

@@ -43,6 +43,8 @@ router.get('/schedules/:scheduleId/payments', authorize('estate_manager', 'super
 router.delete('/schedules/:scheduleId', authorize('estate_manager', 'super_admin'), ctrl.deleteSchedule);
 
 // ── Individual payment actions ──────────────────────────────────
+router.get('/:paymentId/invoice', ctrl.getInvoice);
+
 router.patch('/:paymentId/manual', authorize('estate_manager', 'super_admin'), [
   body('method').isIn(['cash', 'bank_transfer', 'manual']),
 ], validate, ctrl.recordManualPayment);

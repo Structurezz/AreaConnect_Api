@@ -79,7 +79,15 @@ exports.getMySubscription = async (req, res) => {
     const sub = await Subscription.findOne({ estateId: req.estateId })
       .populate('planId');
     if (!sub) return res.status(404).json({ success: false, message: 'No subscription found' });
-    return res.json({ success: true, data: sub });
+
+    // Compute days until expiry for frontend warnings
+    const expiryDate = sub.status === 'trial' ? sub.trialEndsAt : sub.nextBillingDate;
+    let daysUntilExpiry = null;
+    if (expiryDate) {
+      daysUntilExpiry = Math.ceil((new Date(expiryDate) - Date.now()) / 86400000);
+    }
+
+    return res.json({ success: true, data: { ...sub.toObject(), daysUntilExpiry } });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
