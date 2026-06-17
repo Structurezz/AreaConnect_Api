@@ -484,6 +484,7 @@ const sendPitchEmail = async ({ to, name, company, city }) => {
 
   await getResend().emails.send({
     from: FROM(),
+    reply_to: 'hello@areaconnect.pro',
     to,
     subject: `Transform How You Manage ${company || 'Your Estate'} — AreaConnect`,
     html: `<!DOCTYPE html>
@@ -554,14 +555,14 @@ const sendPitchEmail = async ({ to, name, company, city }) => {
         <p style="font-size:11px;font-weight:800;color:#059669;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px;">Transparent Pricing</p>
         <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
           ${[
-            ['Free Starter',  '₦0/mo',       'Up to 30 residents, core features'],
-            ['Growth',        '₦15,000/mo',  '100 residents, full feature access'],
-            ['Professional',  '₦35,000/mo',  '300 residents + analytics & API'],
-            ['Enterprise',    'Custom',       'Unlimited residents, white-label'],
+            ['Starter',    '&#8358;20,000/mo',  'Up to 50 residents &middot; security, announcements, visitor mgmt'],
+            ['Growth',     '&#8358;47,000/mo',  'Up to 150 residents &middot; payments, AI, community chat, events'],
+            ['Premium',    '&#8358;80,000/mo',  'Up to 300 residents &middot; marketplace, lounge, white-label'],
+            ['Enterprise', '&#8358;100,000/mo', 'Up to 500 residents &middot; full suite, API access, priority support'],
           ].map(([plan, price, desc]) => `
           <tr>
-            <td style="padding:6px 0;font-size:13px;font-weight:700;color:#0F172A;width:130px;">${plan}</td>
-            <td style="padding:6px 0;font-size:14px;font-weight:800;color:#059669;width:110px;">${price}</td>
+            <td style="padding:6px 0;font-size:13px;font-weight:700;color:#0F172A;width:110px;">${plan}</td>
+            <td style="padding:6px 0;font-size:14px;font-weight:800;color:#059669;width:130px;">${price}</td>
             <td style="padding:6px 0;font-size:12px;color:#6B7280;">${desc}</td>
           </tr>`).join('')}
         </table>
