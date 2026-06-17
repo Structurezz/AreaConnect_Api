@@ -579,6 +579,27 @@ exports.withdrawFromWallet = async (req, res) => {
     }
 
     const reference = generateRef();
+    const isTestMode = process.env.PAYSTACK_SECRET_KEY.startsWith('sk_test_');
+
+    // Mock withdrawal for test bank account
+    if (isTestMode && user.paystackRecipientCode === 'RCP_test_mock') {
+      await Withdrawal.create({
+        userId: req.user._id,
+        estateId: req.estateId,
+        amount,
+        status: 'success',
+        paystackTransferCode: 'TRF_test_mock',
+        reference,
+        bankName: user.bankName,
+        accountNumber: user.accountNumber,
+        accountName: user.accountName,
+      });
+
+      return res.json({
+        success: true,
+        data: { message: 'Withdrawal initiated successfully (test mode)', transferCode: 'TRF_test_mock' },
+      });
+    }
 
     const { data } = await axios.post(
       `${PAYSTACK_BASE}/transfer`,
