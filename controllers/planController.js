@@ -2,6 +2,8 @@ const axios = require('axios');
 const Plan = require('../models/Plan');
 const Subscription = require('../models/Subscription');
 const Estate = require('../models/Estate');
+const User = require('../models/User');
+const { sendSubscriptionReminderEmail } = require('../services/emailService');
 
 const PAYSTACK_BASE = 'https://api.paystack.co';
 const paystackHeaders = () => ({
@@ -76,15 +78,44 @@ exports.getSubscriptions = async (req, res) => {
 
 exports.getMySubscription = async (req, res) => {
   try {
-    const sub = await Subscription.findOne({ estateId: req.estateId })
-      .populate('planId');
+    const sub = await Subscription.findOne({ estateId: req.estateId }).populate('planId');
     if (!sub) return res.status(404).json({ success: false, message: 'No subscription found' });
 
-    // Compute days until expiry for frontend warnings
+    // Compute days until expiry
     const expiryDate = sub.status === 'trial' ? sub.trialEndsAt : sub.nextBillingDate;
     let daysUntilExpiry = null;
     if (expiryDate) {
       daysUntilExpiry = Math.ceil((new Date(expiryDate) - Date.now()) / 86400000);
+    }
+
+    // Send expiry reminder email at 7, 3, 1 day thresholds (once per threshold)
+    const THRESHOLDS = [7, 3, 1];
+    if (
+      daysUntilExpiry != null &&
+      daysUntilExpiry > 0 &&
+      ['active', 'trial'].includes(sub.status)
+    ) {
+      const threshold = THRESHOLDS.find(t => daysUntilExpiry <= t && !sub.remindersSent.includes(t));
+      if (threshold) {
+        try {
+          const [manager, estate] = await Promise.all([
+            User.findOne({ estateId: req.estateId, role: 'estate_manager' }).select('name email'),
+            Estate.findById(req.estateId).select('name'),
+          ]);
+          if (manager?.email && estate) {
+            await sendSubscriptionReminderEmail({
+              to: manager.email,
+              managerName: manager.name,
+              estateName: estate.name,
+              daysLeft: daysUntilExpiry,
+              sub,
+            });
+            await Subscription.findByIdAndUpdate(sub._id, { $addToSet: { remindersSent: threshold } });
+          }
+        } catch (e) {
+          console.error('[subscription reminder email]', e.message);
+        }
+      }
     }
 
     return res.json({ success: true, data: { ...sub.toObject(), daysUntilExpiry } });

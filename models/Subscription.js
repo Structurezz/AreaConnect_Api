@@ -22,6 +22,9 @@ const subscriptionSchema = new mongoose.Schema({
   pendingRef:    { type: String },
   pendingPlanId: { type: mongoose.Schema.Types.ObjectId, ref: 'Plan' },
   pendingCycle:  { type: String },
+
+  // Tracks which day-thresholds have already had a reminder email sent (e.g. [7, 3, 1])
+  remindersSent: { type: [Number], default: [] },
 }, { timestamps: true });
 
 subscriptionSchema.index({ status: 1 });

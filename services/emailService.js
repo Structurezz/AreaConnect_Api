@@ -202,4 +202,285 @@ const sendManagerNotificationEmail = async ({ to, managerName, estateName, type,
   return { sent: true };
 };
 
-module.exports = { sendVisitorPass, sendInviteEmail, sendManagerNotificationEmail };
+// ── Shared invoice HTML builder ───────────────────────────────────────────────
+const fmtNGN = (n) => `&#8358;${Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' }) : '&mdash;';
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://estatemanager.areaconnect.pro';
+const HERO_IMG = `${FRONTEND_URL}/estate-hero.jpeg`;
+
+const METHOD_LABELS = {
+  cash: 'Cash', bank_transfer: 'Bank Transfer',
+  paystack: 'Paystack (Online)', manual: 'Manual Entry',
+};
+const FREQ_LABELS = {
+  one_time: 'One-time', monthly: 'Monthly', quarterly: 'Quarterly', annual: 'Annual',
+};
+
+const generateInvoiceHtml = (inv) => {
+  const isReceipt = inv.status === 'paid';
+  const statusColor = { paid: '#059669', pending: '#D97706', overdue: '#DC2626', waived: '#6B7280' }[inv.status] || '#D97706';
+  const statusBg    = { paid: '#D1FAE5', pending: '#FEF3C7', overdue: '#FEE2E2', waived: '#F3F4F6' }[inv.status] || '#FEF3C7';
+  const statusLabel = (inv.status || 'PENDING').toUpperCase();
+
+  const itemsHtml = inv.items.map((item, i) => `
+    <tr style="background:${i % 2 === 0 ? '#F8FAFC' : '#fff'};">
+      <td style="padding:12px 14px;font-size:13px;color:#0F172A;">
+        <strong>${item.description}</strong>
+        ${item.detail ? `<br><span style="font-size:11px;color:#94A3B8;">${item.detail}</span>` : ''}
+      </td>
+      <td style="padding:12px 14px;font-size:12px;color:#64748B;text-align:right;">${FREQ_LABELS[item.frequency] || '&mdash;'}</td>
+      <td style="padding:12px 14px;font-size:13px;text-align:right;color:#0F172A;">${item.quantity}</td>
+      <td style="padding:12px 14px;font-size:13px;text-align:right;color:#0F172A;">${fmtNGN(item.unitPrice)}</td>
+      <td style="padding:12px 14px;font-size:13px;text-align:right;color:#64748B;">${item.vat}%</td>
+      <td style="padding:12px 14px;font-size:13px;text-align:right;color:#0F172A;font-weight:700;">${fmtNGN(item.total)}</td>
+    </tr>`).join('');
+
+  const metaRows = [
+    ['Invoice No:', `<strong>${inv.invoiceNumber}</strong>`],
+    ['Date Issued:', fmtDate(inv.date)],
+    ['Due Date:', fmtDate(inv.dueDate)],
+    inv.paidAt     ? ['Date Paid:',       fmtDate(inv.paidAt)]                          : null,
+    inv.method     ? ['Payment Method:',  METHOD_LABELS[inv.method] || inv.method]      : null,
+    inv.recordedBy ? ['Recorded By:',     inv.recordedBy]                               : null,
+  ].filter(Boolean).map(([label, val]) =>
+    `<tr><td style="padding:4px 0;color:#94A3B8;font-size:12px;font-weight:600;padding-right:12px;white-space:nowrap;">${label}</td>
+         <td style="padding:4px 0;font-size:12px;color:#0F172A;">${val}</td></tr>`
+  ).join('');
+
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>*{box-sizing:border-box;margin:0;padding:0;}</style></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:32px 16px;">
+<div style="max-width:700px;margin:0 auto;">
+
+  <!-- Logo bar -->
+  <div style="text-align:center;margin-bottom:20px;">
+    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+  </div>
+
+  <!-- Invoice card -->
+  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
+
+    <!-- Header: two columns -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+      <tr>
+        <!-- Left: estate brand -->
+        <td style="background:#0F172A;padding:24px;width:50%;vertical-align:top;">
+          <div style="font-size:18px;font-weight:800;color:#fff;letter-spacing:-0.02em;">${inv.estate.name}</div>
+          <div style="font-size:10px;color:#94A3B8;letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">Estate Management</div>
+          <div style="margin-top:14px;font-size:11px;color:#94A3B8;line-height:1.7;">${inv.estate.address || ''}</div>
+          <div style="font-size:11px;color:#64748B;margin-top:4px;">Code: <span style="color:#10B981;font-weight:700;">${inv.estate.estateCode}</span></div>
+        </td>
+        <!-- Right: hero image with overlay -->
+        <td style="width:50%;position:relative;padding:0;overflow:hidden;min-height:130px;" bgcolor="#1E3A5F">
+          <img src="${HERO_IMG}" alt="estate" width="100%"
+            style="display:block;width:100%;height:130px;object-fit:cover;opacity:0.7;" />
+          <div style="position:absolute;top:0;left:0;right:0;bottom:0;padding:20px;background:linear-gradient(135deg,rgba(15,23,42,0.8) 0%,rgba(15,23,42,0.2) 100%);">
+            <div style="font-size:24px;font-weight:900;color:#fff;letter-spacing:-0.03em;">${isReceipt ? 'RECEIPT' : 'INVOICE'}</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.65);margin-top:3px;">${isReceipt ? 'Payment Confirmation' : 'Payment Request'}</div>
+            <div style="display:inline-block;margin-top:10px;background:${statusBg};color:${statusColor};font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:0.04em;">${statusLabel}</div>
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Bill To + Invoice Meta -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border-bottom:2px solid #E2E8F0;">
+      <tr>
+        <td style="padding:18px 20px;width:50%;vertical-align:top;border-right:1px solid #E2E8F0;">
+          <div style="font-size:9px;font-weight:800;color:#94A3B8;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;">Bill To</div>
+          <div style="font-size:15px;font-weight:700;color:#0F172A;">${inv.resident.name}</div>
+          ${inv.resident.unit !== 'N/A' ? `<div style="font-size:12px;color:#64748B;margin-top:3px;">Unit: ${inv.resident.unit}</div>` : ''}
+          <div style="font-size:12px;color:#64748B;">${inv.estate.name}</div>
+          ${inv.resident.email ? `<div style="font-size:11px;color:#94A3B8;margin-top:4px;">${inv.resident.email}</div>` : ''}
+          ${inv.resident.phone ? `<div style="font-size:11px;color:#94A3B8;">${inv.resident.phone}</div>` : ''}
+        </td>
+        <td style="padding:18px 20px;width:50%;vertical-align:top;">
+          <table cellpadding="0" cellspacing="0" style="width:100%;">${metaRows}</table>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Line items -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+      <thead>
+        <tr style="background:#0F172A;">
+          ${['Description','Freq.','Qty','Unit Price','VAT %','Amount'].map((h,i) =>
+            `<th style="padding:10px 14px;color:#fff;font-size:11px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;text-align:${i===0?'left':'right'};">${h}</th>`
+          ).join('')}
+        </tr>
+      </thead>
+      <tbody>${itemsHtml}</tbody>
+    </table>
+
+    <!-- Summary -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;padding:16px;">
+      <tr>
+        <td style="padding:16px 20px;">
+          ${inv.notes ? `<div style="background:#F8FAFC;border-left:3px solid #10B981;border-radius:0 8px 8px 0;padding:10px 14px;font-size:12px;color:#64748B;">${inv.notes}</div>` : ''}
+        </td>
+        <td style="padding:16px 20px;width:240px;vertical-align:top;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="font-size:13px;color:#64748B;padding:4px 0;">Subtotal</td><td style="font-size:13px;color:#0F172A;text-align:right;padding:4px 0;">${fmtNGN(inv.subtotal)}</td></tr>
+            <tr><td style="font-size:13px;color:#64748B;padding:4px 0;">VAT (0%)</td><td style="font-size:13px;color:#0F172A;text-align:right;padding:4px 0;">${fmtNGN(0)}</td></tr>
+            <tr style="border-top:2px solid #0F172A;">
+              <td style="font-size:15px;font-weight:800;color:#0F172A;padding:10px 0 4px;">TOTAL</td>
+              <td style="font-size:15px;font-weight:800;color:#10B981;text-align:right;padding:10px 0 4px;">${fmtNGN(inv.total)}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Footer -->
+    <div style="background:#F8FAFC;border-top:1px solid #E2E8F0;padding:14px 20px;display:flex;justify-content:space-between;">
+      <span style="font-size:11px;color:#94A3B8;">Generated by <strong style="color:#10B981;">AreaConnect</strong> Estate Management</span>
+      <span style="font-size:11px;color:#CBD5E1;">${inv.invoiceNumber}</span>
+    </div>
+  </div>
+
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by AreaConnect &nbsp;&middot;&nbsp; areaconnect.pro</p>
+</div>
+</body></html>`;
+};
+
+// ── Payment receipt email (to resident) ──────────────────────────────────────
+const sendPaymentReceiptEmail = async ({ to, residentName, estateName, inv }) => {
+  if (!process.env.RESEND_API_KEY) return { skipped: true };
+
+  const invoiceHtml = generateInvoiceHtml(inv);
+  const subject = inv.status === 'paid'
+    ? `Payment Receipt — ${inv.invoiceNumber} | ${estateName}`
+    : `Payment Invoice — ${inv.invoiceNumber} | ${estateName}`;
+
+  await getResend().emails.send({
+    from: FROM(),
+    to,
+    subject,
+    html: `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:24px 16px;margin:0;">
+<div style="max-width:700px;margin:0 auto;">
+  <div style="text-align:center;margin-bottom:16px;">
+    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+  </div>
+  <div style="background:#D1FAE5;border:1px solid #A7F3D0;border-radius:10px;padding:14px 20px;margin-bottom:20px;font-size:14px;color:#065F46;line-height:1.6;">
+    Hi <strong>${residentName}</strong>, ${inv.status === 'paid'
+      ? `your payment of <strong>${fmtNGN(inv.total)}</strong> to <strong>${estateName}</strong> has been confirmed. Your receipt is below.`
+      : `please find your invoice of <strong>${fmtNGN(inv.total)}</strong> from <strong>${estateName}</strong> below.`}
+  </div>
+  ${invoiceHtml}
+</div>
+</body></html>`,
+    attachments: [
+      {
+        filename: `${inv.invoiceNumber}.html`,
+        content: Buffer.from(invoiceHtml).toString('base64'),
+      },
+    ],
+  });
+
+  return { sent: true };
+};
+
+// ── Subscription expiry reminder email (to manager) ──────────────────────────
+const sendSubscriptionReminderEmail = async ({ to, managerName, estateName, daysLeft, sub }) => {
+  if (!process.env.RESEND_API_KEY) return { skipped: true };
+
+  const isUrgent  = daysLeft <= 3;
+  const isTrial   = sub.status === 'trial';
+  const planName  = sub.planId?.name || 'Current Plan';
+  const expiryDate = isTrial ? sub.trialEndsAt : sub.nextBillingDate;
+  const color     = isUrgent ? '#DC2626' : '#D97706';
+  const bg        = isUrgent ? '#FEE2E2' : '#FEF3C7';
+
+  const fmtNGNSub = (n) => n != null ? `&#8358;${Number(n).toLocaleString('en-NG', { minimumFractionDigits: 2 })}` : '&mdash;';
+
+  const subInvoiceHtml = `
+    <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);margin-top:20px;">
+      <div style="background:#0F172A;padding:20px 24px;">
+        <div style="font-size:10px;color:#94A3B8;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;">${estateName}</div>
+        <div style="font-size:20px;font-weight:800;color:#fff;">Subscription Summary</div>
+      </div>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+        ${[
+          ['Plan',           planName],
+          ['Status',         (sub.status || '').toUpperCase()],
+          ['Billing Cycle',  sub.cycle === 'annual' ? 'Annual' : 'Monthly'],
+          ['Expiry Date',    fmtDate(expiryDate)],
+          ['Days Remaining', `<strong style="color:${color};">${daysLeft} day${daysLeft === 1 ? '' : 's'}</strong>`],
+          sub.planId?.price != null ? ['Amount Due', fmtNGNSub(sub.planId.price)] : null,
+        ].filter(Boolean).map(([label, val], i) => `
+          <tr style="background:${i%2===0?'#F8FAFC':'#fff'};">
+            <td style="padding:12px 20px;font-size:13px;color:#94A3B8;font-weight:600;width:40%;">${label}</td>
+            <td style="padding:12px 20px;font-size:13px;color:#0F172A;">${val}</td>
+          </tr>`).join('')}
+      </table>
+      <div style="background:#F8FAFC;border-top:1px solid #E2E8F0;padding:14px 20px;">
+        <span style="font-size:11px;color:#94A3B8;">AreaConnect Estate Management &nbsp;&middot;&nbsp; areaconnect.pro</span>
+      </div>
+    </div>`;
+
+  await getResend().emails.send({
+    from: FROM(),
+    to,
+    subject: `${isUrgent ? '🚨 URGENT:' : '⚠️'} Your ${isTrial ? 'trial' : 'subscription'} expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'} — ${estateName}`,
+    html: `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:32px 16px;margin:0;">
+<div style="max-width:600px;margin:0 auto;">
+
+  <div style="text-align:center;margin-bottom:20px;">
+    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+  </div>
+
+  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
+    <div style="background:linear-gradient(135deg,${color},${color}cc);padding:28px 32px;">
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.75);margin-bottom:6px;">${estateName}</div>
+      <h1 style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.02em;">
+        ${isUrgent ? '🚨' : '⚠️'} ${isTrial ? 'Trial' : 'Subscription'} Expiring Soon
+      </h1>
+    </div>
+    <div style="padding:32px;">
+      <p style="font-size:15px;color:#374151;line-height:1.7;margin-bottom:20px;">
+        Hi <strong>${managerName || 'Manager'}</strong>,<br><br>
+        Your <strong>${planName}</strong> ${isTrial ? 'trial' : 'subscription'} for <strong>${estateName}</strong> expires in
+        <strong style="color:${color};">${daysLeft} day${daysLeft === 1 ? '' : 's'}</strong>
+        on <strong>${fmtDate(expiryDate)}</strong>.
+      </p>
+      <div style="background:${bg};border:1px solid ${color}40;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+        <p style="font-size:13px;color:${color};font-weight:600;line-height:1.6;">
+          ${isUrgent
+            ? 'If your subscription expires, your estate features will be suspended and residents will lose access.'
+            : 'Renew now to ensure uninterrupted access for you and your residents.'}
+        </p>
+      </div>
+      <div style="text-align:center;margin-bottom:28px;">
+        <a href="${FRONTEND_URL}/upgrade"
+          style="display:inline-block;background:linear-gradient(135deg,#10B981,#059669);color:#fff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 40px;border-radius:10px;">
+          Renew Now &rarr;
+        </a>
+      </div>
+      ${subInvoiceHtml}
+    </div>
+  </div>
+
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">
+    Powered by AreaConnect &nbsp;&middot;&nbsp; areaconnect.pro
+  </p>
+</div>
+</body></html>`,
+  });
+
+  return { sent: true };
+};
+
+module.exports = {
+  sendVisitorPass,
+  sendInviteEmail,
+  sendManagerNotificationEmail,
+  sendPaymentReceiptEmail,
+  sendSubscriptionReminderEmail,
+  generateInvoiceHtml,
+};

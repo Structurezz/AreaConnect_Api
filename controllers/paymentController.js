@@ -5,7 +5,7 @@ const User = require('../models/User');
 const Estate = require('../models/Estate');
 const Withdrawal = require('../models/Withdrawal');
 const { emitNotification } = require('../services/socketService');
-const { sendManagerNotificationEmail } = require('../services/emailService');
+const { sendManagerNotificationEmail, sendPaymentReceiptEmail } = require('../services/emailService');
 
 const PAYSTACK_BASE = 'https://api.paystack.co';
 const paystackHeaders = () => ({
@@ -148,7 +148,39 @@ exports.recordManualPayment = async (req, res) => {
 
     await creditManagerWallet(req.estateId, payment.amount);
 
-    await payment.populate('residentId', 'name email');
+    await payment.populate([
+      { path: 'residentId', populate: { path: 'unitId', select: 'unitNumber block type' } },
+      { path: 'scheduleId' },
+      { path: 'recordedBy', select: 'name' },
+      { path: 'estateId', select: 'name address estateCode logoUrl' },
+    ]);
+
+    const resident  = payment.residentId;
+    const estate    = payment.estateId;
+    const schedule  = payment.scheduleId;
+    const unit      = resident?.unitId;
+    const dateStr   = payment.createdAt.toISOString().slice(0, 10).replace(/-/g, '');
+    const invoiceNumber = `INV-${dateStr}-${payment._id.toString().slice(-6).toUpperCase()}`;
+
+    const inv = {
+      invoiceNumber,
+      date: payment.createdAt,
+      dueDate: schedule?.dueDate,
+      status: payment.status,
+      paidAt: payment.paidAt,
+      method: payment.method,
+      notes: payment.notes,
+      recordedBy: payment.recordedBy?.name || null,
+      estate: { name: estate?.name || '', address: estate?.address || '', estateCode: estate?.estateCode || '', logoUrl: estate?.logoUrl || '' },
+      resident: {
+        name: resident?.name || 'Resident',
+        email: resident?.email || '',
+        phone: resident?.phone || '',
+        unit: unit ? `${unit.block ? unit.block + ' ' : ''}${unit.unitNumber}` : 'N/A',
+      },
+      items: [{ description: schedule?.title || 'Payment', detail: schedule?.description || '', frequency: schedule?.frequency || '', quantity: 1, unitPrice: payment.amount, vat: 0, total: payment.amount }],
+      subtotal: payment.amount, vatAmount: 0, total: payment.amount,
+    };
 
     try {
       const fmt = (n) => `₦${Number(n).toLocaleString('en-NG')}`;
@@ -156,11 +188,21 @@ exports.recordManualPayment = async (req, res) => {
         id: payment._id.toString(),
         type: 'payment_received',
         title: 'Manual Payment Recorded',
-        body: `${payment.residentId?.name || 'Resident'} — ${fmt(payment.amount)} recorded manually`,
+        body: `${resident?.name || 'Resident'} — ${fmt(payment.amount)} recorded manually`,
         amount: payment.amount,
         meta: { paymentId: payment._id },
       });
     } catch (e) { console.error('[notify recordManualPayment]', e.message); }
+
+    // Send receipt email to resident (fire-and-forget)
+    if (resident?.email) {
+      sendPaymentReceiptEmail({
+        to: resident.email,
+        residentName: resident.name,
+        estateName: estate?.name || 'your estate',
+        inv,
+      }).catch(e => console.error('[receipt email]', e.message));
+    }
 
     return res.json({ success: true, data: payment });
   } catch (err) {
@@ -386,35 +428,54 @@ exports.verifyPayment = async (req, res) => {
     await creditManagerWallet(req.estateId, payment.amount);
 
     try {
-      await payment.populate('residentId', 'name email');
-      const fmt = (n) => `₦${Number(n).toLocaleString('en-NG')}`;
-      const residentName = payment.residentId?.name || 'A resident';
-      const scheduleTitle = payment.scheduleId?.title || 'levy';
+      await payment.populate([
+        { path: 'residentId', populate: { path: 'unitId', select: 'unitNumber block type' } },
+        { path: 'recordedBy', select: 'name' },
+      ]);
+      const estate   = await Estate.findById(req.estateId).select('name address estateCode logoUrl');
+      const resident = payment.residentId;
+      const unit     = resident?.unitId;
+      const fmt      = (n) => `₦${Number(n).toLocaleString('en-NG')}`;
 
       const notif = {
         id: payment._id.toString(),
         type: 'payment_received',
         title: 'Payment Received',
-        body: `${residentName} paid ${fmt(payment.amount)} for ${scheduleTitle}`,
+        body: `${resident?.name || 'A resident'} paid ${fmt(payment.amount)} for ${payment.scheduleId?.title || 'levy'}`,
         amount: payment.amount,
         meta: { paymentId: payment._id },
       };
-
       emitNotification(req.estateId, notif);
 
-      const [manager, estate] = await Promise.all([
-        User.findOne({ estateId: req.estateId, role: 'estate_manager' }).select('name email'),
-        Estate.findById(req.estateId).select('name'),
-      ]);
+      const manager = await User.findOne({ estateId: req.estateId, role: 'estate_manager' }).select('name email');
       if (manager && estate) {
-        await sendManagerNotificationEmail({
+        sendManagerNotificationEmail({
           to: manager.email,
           managerName: manager.name,
           estateName: estate.name,
           type: 'payment_received',
           title: notif.title,
           body: notif.body,
-        });
+        }).catch(e => console.error('[manager email]', e.message));
+      }
+
+      // Send receipt to resident
+      if (resident?.email) {
+        const dateStr = payment.createdAt.toISOString().slice(0, 10).replace(/-/g, '');
+        const invoiceNumber = `INV-${dateStr}-${payment._id.toString().slice(-6).toUpperCase()}`;
+        const inv = {
+          invoiceNumber,
+          date: payment.createdAt,
+          dueDate: payment.scheduleId?.dueDate,
+          status: 'paid', paidAt: payment.paidAt, method: 'paystack',
+          notes: '',  recordedBy: null,
+          estate: { name: estate?.name || '', address: estate?.address || '', estateCode: estate?.estateCode || '', logoUrl: estate?.logoUrl || '' },
+          resident: { name: resident.name, email: resident.email, phone: resident.phone || '', unit: unit ? `${unit.block ? unit.block + ' ' : ''}${unit.unitNumber}` : 'N/A' },
+          items: [{ description: payment.scheduleId?.title || 'Payment', detail: '', frequency: payment.scheduleId?.frequency || '', quantity: 1, unitPrice: payment.amount, vat: 0, total: payment.amount }],
+          subtotal: payment.amount, vatAmount: 0, total: payment.amount,
+        };
+        sendPaymentReceiptEmail({ to: resident.email, residentName: resident.name, estateName: estate?.name || '', inv })
+          .catch(e => console.error('[receipt email]', e.message));
       }
     } catch (e) { console.error('[notify verifyPayment]', e.message); }
 
