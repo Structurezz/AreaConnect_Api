@@ -476,6 +476,152 @@ const sendSubscriptionReminderEmail = async ({ to, managerName, estateName, days
   return { sent: true };
 };
 
+// ── Pitch / intro email (to prospects) ───────────────────────────────────────
+const sendPitchEmail = async ({ to, name, company, city }) => {
+  if (!process.env.RESEND_API_KEY) return { skipped: true };
+
+  const firstName = (name || '').split(' ')[0] || 'there';
+
+  await getResend().emails.send({
+    from: FROM(),
+    to,
+    subject: `Transform How You Manage ${company || 'Your Estate'} — AreaConnect`,
+    html: `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>*{box-sizing:border-box;margin:0;padding:0;}</style></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:32px 16px;margin:0;">
+<div style="max-width:600px;margin:0 auto;">
+
+  <!-- Logo -->
+  <div style="text-align:center;margin-bottom:24px;">
+    <span style="font-size:26px;font-weight:900;letter-spacing:-0.04em;color:#0F172A;">Area<span style="color:#10B981;">Connect</span></span>
+    <div style="font-size:11px;color:#94A3B8;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">Smart Estate Management Platform</div>
+  </div>
+
+  <!-- Hero card -->
+  <div style="background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.12);">
+
+    <!-- Header gradient -->
+    <div style="background:linear-gradient(135deg,#0F172A 0%,#1E3A5F 60%,#10B981 100%);padding:40px 32px;text-align:center;">
+      <div style="display:inline-block;background:rgba(16,185,129,0.2);border:1px solid rgba(16,185,129,0.4);color:#34D399;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 14px;border-radius:20px;margin-bottom:16px;">
+        Estate Management Revolution
+      </div>
+      <h1 style="font-size:28px;font-weight:900;color:#fff;letter-spacing:-0.03em;line-height:1.2;margin-bottom:8px;">
+        Your Estate Deserves<br>Better Technology
+      </h1>
+      <p style="font-size:15px;color:rgba(255,255,255,0.7);line-height:1.6;">
+        Join hundreds of Nigerian estates already running on AreaConnect
+      </p>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:36px 32px;">
+
+      <!-- Greeting -->
+      <p style="font-size:16px;color:#374151;line-height:1.7;margin-bottom:24px;">
+        Hi <strong style="color:#0F172A;">${firstName}</strong>,
+      </p>
+      <p style="font-size:15px;color:#4B5563;line-height:1.8;margin-bottom:28px;">
+        Managing <strong>${company}</strong>${city ? ` in <strong>${city}</strong>` : ''} comes with real challenges —
+        tracking residents, managing security, collecting levies, and keeping everyone informed.
+        <strong style="color:#0F172A;">AreaConnect</strong> was built specifically for estates like yours.
+      </p>
+
+      <!-- Feature grid -->
+      <div style="margin-bottom:32px;">
+        <p style="font-size:11px;font-weight:800;color:#94A3B8;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:16px;">What You Get</p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          ${[
+            ['🏠', 'Resident Management',    'Digital resident directory, unit assignment, lease tracking'],
+            ['🔐', 'Security & Access',       'Visitor pre-registration, QR codes, guard dashboard, security logs'],
+            ['💰', 'Levy & Payment Tracking', 'Automated billing, payment history, invoices & receipts via email'],
+            ['📢', 'Announcements & Alerts',  'Broadcast messages, emergency alerts, community noticeboard'],
+            ['💬', 'Community Lounge',        'Social feed, polls, marketplace — residents stay connected'],
+            ['📊', 'Analytics Dashboard',     'Occupancy rates, payment stats, visitor trends at a glance'],
+          ].map(([icon, title, desc], i) => `
+          <tr style="background:${i % 2 === 0 ? '#F8FAFC' : '#fff'};">
+            <td style="padding:14px 16px;width:40px;font-size:22px;vertical-align:top;">${icon}</td>
+            <td style="padding:14px 8px 14px 0;vertical-align:top;">
+              <div style="font-size:14px;font-weight:700;color:#0F172A;margin-bottom:3px;">${title}</div>
+              <div style="font-size:12px;color:#6B7280;line-height:1.5;">${desc}</div>
+            </td>
+          </tr>`).join('')}
+        </table>
+      </div>
+
+      <!-- Pricing callout -->
+      <div style="background:linear-gradient(135deg,#F0FDF4,#ECFDF5);border:1.5px solid #A7F3D0;border-radius:14px;padding:22px 24px;margin-bottom:28px;">
+        <p style="font-size:11px;font-weight:800;color:#059669;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px;">Transparent Pricing</p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          ${[
+            ['Free Starter',  '₦0/mo',       'Up to 30 residents, core features'],
+            ['Growth',        '₦15,000/mo',  '100 residents, full feature access'],
+            ['Professional',  '₦35,000/mo',  '300 residents + analytics & API'],
+            ['Enterprise',    'Custom',       'Unlimited residents, white-label'],
+          ].map(([plan, price, desc]) => `
+          <tr>
+            <td style="padding:6px 0;font-size:13px;font-weight:700;color:#0F172A;width:130px;">${plan}</td>
+            <td style="padding:6px 0;font-size:14px;font-weight:800;color:#059669;width:110px;">${price}</td>
+            <td style="padding:6px 0;font-size:12px;color:#6B7280;">${desc}</td>
+          </tr>`).join('')}
+        </table>
+      </div>
+
+      <!-- Social proof -->
+      <div style="background:#F8FAFC;border-radius:12px;padding:18px 20px;margin-bottom:28px;border-left:4px solid #10B981;">
+        <p style="font-size:13px;font-style:italic;color:#374151;line-height:1.7;margin-bottom:8px;">
+          "AreaConnect reduced our security incidents by 60% in the first month. The visitor management system alone is worth every kobo."
+        </p>
+        <p style="font-size:12px;font-weight:600;color:#6B7280;">— Estate Manager, Lekki Phase 1, Lagos</p>
+      </div>
+
+      <!-- Stats row -->
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:32px;">
+        ${[
+          ['500+',   'Active Estates'],
+          ['50,000+','Residents Managed'],
+          ['99.9%',  'Platform Uptime'],
+          ['14 Days','Free Trial'],
+        ].map(([num, label]) => `
+        <td style="text-align:center;padding:16px 8px;background:#F8FAFC;border-radius:10px;margin:4px;">
+          <div style="font-size:22px;font-weight:900;color:#10B981;letter-spacing:-0.03em;">${num}</div>
+          <div style="font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-top:3px;">${label}</div>
+        </td>`).join('')}
+      </table>
+
+      <!-- CTA -->
+      <div style="text-align:center;margin-bottom:20px;">
+        <a href="${FRONTEND_URL}/register"
+          style="display:inline-block;background:linear-gradient(135deg,#10B981,#059669);color:#fff;font-weight:800;font-size:16px;text-decoration:none;padding:16px 48px;border-radius:12px;letter-spacing:-0.01em;box-shadow:0 4px 16px rgba(16,185,129,0.4);">
+          Start Free 14-Day Trial &rarr;
+        </a>
+        <p style="font-size:12px;color:#94A3B8;margin-top:10px;">No credit card required &nbsp;·&nbsp; Setup in under 10 minutes</p>
+      </div>
+
+      <!-- Contact -->
+      <div style="border-top:1px solid #E2E8F0;padding-top:20px;text-align:center;">
+        <p style="font-size:13px;color:#6B7280;line-height:1.8;">
+          Questions? Reply to this email or reach us at<br>
+          <a href="mailto:hello@areaconnect.pro" style="color:#10B981;font-weight:600;text-decoration:none;">hello@areaconnect.pro</a>
+          &nbsp;·&nbsp;
+          <a href="https://areaconnect.pro" style="color:#10B981;font-weight:600;text-decoration:none;">areaconnect.pro</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;line-height:1.8;">
+    You're receiving this because you were identified as a property professional in Nigeria.<br>
+    <a href="${FRONTEND_URL}/unsubscribe" style="color:#CBD5E1;text-decoration:none;">Unsubscribe</a>
+    &nbsp;·&nbsp; AreaConnect &nbsp;·&nbsp; Lagos, Nigeria
+  </p>
+</div>
+</body></html>`,
+  });
+
+  return { sent: true };
+};
+
 module.exports = {
   sendVisitorPass,
   sendInviteEmail,
@@ -483,4 +629,5 @@ module.exports = {
   sendPaymentReceiptEmail,
   sendSubscriptionReminderEmail,
   generateInvoiceHtml,
+  sendPitchEmail,
 };

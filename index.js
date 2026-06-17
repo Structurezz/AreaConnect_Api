@@ -78,6 +78,7 @@ app.use('/api/polls', require('./routes/polls'));
 app.use('/api/lounge', require('./routes/lounge'));
 app.use('/api/posts', require('./routes/posts'));
 app.use('/api/guards', require('./routes/guards'));
+app.use('/api/pitch',  require('./routes/pitch'));
 
 // Health check
 app.get('/health', (req, res) => {
