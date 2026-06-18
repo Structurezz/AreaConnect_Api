@@ -264,7 +264,8 @@ Return ONLY a valid JSON array (no markdown, no code fences, no explanation). Ea
   "phone": "Real phone number if found, else empty string",
   "city": "City where company is based",
   "type": one of ["developer", "estate_manager", "property_company", "investment_firm", "government"],
-  "source": "URL or site where this info was found"
+  "website": "Company's official website URL (e.g. https://companyname.com)",
+  "source": "URL or page where this info was found"
 }
 
 If you cannot find a real email for a company, construct the most likely one from their domain (e.g. info@companyname.com) but mark it clearly. Prioritise real contacts over guesses.`;
@@ -304,8 +305,9 @@ If you cannot find a real email for a company, construct the most likely one fro
       name:    p.name,
       company: p.company,
       email:   p.email.toLowerCase().trim(),
-      phone:   p.phone || '',
-      city:    p.city  || '',
+      phone:   p.phone   || '',
+      city:    p.city    || '',
+      website: p.website || '',
       type:    VALID_TYPES.includes(p.type) ? p.type : 'estate_manager',
       notes:   p.source ? `Source: ${p.source}` : '',
       status:  'new',

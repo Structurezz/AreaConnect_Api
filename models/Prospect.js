@@ -16,6 +16,7 @@ const prospectSchema = new mongoose.Schema({
     enum: ['new', 'contacted', 'interested', 'converted', 'declined'],
     default: 'new',
   },
+  website:     { type: String, default: '' },
   emailSentAt: { type: Date },
   notes:       { type: String, default: '' },
 }, { timestamps: true });
