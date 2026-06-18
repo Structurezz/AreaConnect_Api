@@ -196,10 +196,11 @@ exports.sendPitchEmails = async (req, res) => {
     for (const prospect of prospects) {
       try {
         const result = await sendPitchEmail({
-          to: prospect.email,
-          name: prospect.name,
+          to:      prospect.email,
+          name:    prospect.name,
+          title:   prospect.title,
           company: prospect.company,
-          city: prospect.city,
+          city:    prospect.city,
         });
 
         if (result?.skipped) {
@@ -242,33 +243,34 @@ exports.generateProspects = async (req, res) => {
     });
 
     const searchQueries = [
-      'Nigerian real estate developers companies Lagos Abuja 2024 contact email',
-      'property management companies Nigeria estate managers contact details',
-      'Nigerian gated estate developers directors contact email Port Harcourt Enugu',
-      'real estate investment firms Nigeria Kano Ibadan Benin City contacts',
+      'CEO MD founder Nigerian real estate developer company email address Lagos Abuja contact',
+      'managing director Nigerian property development company personal email contact Lagos Port Harcourt',
+      'CEO founder Nigerian gated estate company email LinkedIn contact Abuja Enugu Ibadan',
+      'Nigerian real estate investment firm CEO director personal email contact details',
+      'property management company CEO MD Nigeria personal email Kano Kaduna Benin City',
+      'Nigerian estate developer chairman CEO email address contact Lekki Victoria Island Ikoyi',
+      'real estate company founder CEO Nigeria email address Calabar Owerri Asaba Uyo',
     ];
     const chosenQuery = searchQueries[Math.floor(Math.random() * searchQueries.length)];
 
-    const prompt = `Search the web for: "${chosenQuery}"
+    const prompt = `Search the web for real decision-makers at Nigerian real estate and property companies. Use this search: "${chosenQuery}"
 
-Using what you find, extract ${batchSize} REAL Nigerian property companies and their real publicly listed contact persons.
-Only use information you actually find on the web — real company names, real people's names, real emails/phones from their official websites, LinkedIn, or business directories.
+Find CEOs, MDs, Founders, Directors at Nigerian property/estate companies. Look at:
+- Company websites (About Us, Team, Leadership pages)
+- LinkedIn profiles
+- Press releases, news interviews
+- Property business directories
 
-Do NOT include any of these already-known companies: ${existingCompanies.slice(0, 20).join(', ')}.
+Do NOT include these companies: ${existingCompanies.slice(0, 20).join(', ')}.
 
-Return ONLY a valid JSON array (no markdown, no code fences, no explanation). Each object must have exactly:
-{
-  "name": "Real person's full name (director, manager, CEO, or contact person)",
-  "company": "Real company name exactly as listed",
-  "email": "Real email address found publicly (use info@, contact@, or personal if found)",
-  "phone": "Real phone number if found, else empty string",
-  "city": "City where company is based",
-  "type": one of ["developer", "estate_manager", "property_company", "investment_firm", "government"],
-  "website": "Company's official website URL (e.g. https://companyname.com)",
-  "source": "URL or page where this info was found"
-}
+YOU MUST RESPOND WITH ONLY A RAW JSON ARRAY. NO TEXT BEFORE OR AFTER. NO MARKDOWN. NO EXPLANATION. NO CODE FENCES.
 
-If you cannot find a real email for a company, construct the most likely one from their domain (e.g. info@companyname.com) but mark it clearly. Prioritise real contacts over guesses.`;
+Start your response with [ and end with ]. Nothing else.
+
+Each element:
+{"name":"full name","title":"CEO/MD/Founder/Director etc","company":"company name","email":"direct personal email preferred over info@","phone":"phone or empty","city":"city","type":"developer|estate_manager|property_company|investment_firm|government","website":"https://...","source":"url where found"}
+
+Prefer direct emails like firstname@company.com over info@ or contact@. If only info@ exists, use it. Include ${batchSize} entries.`;
 
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
@@ -280,11 +282,17 @@ If you cannot find a real email for a company, construct the most likely one fro
     try {
       generated = JSON.parse(jsonText);
     } catch (parseErr) {
-      // Try to extract JSON array from mixed text
-      const match = text.match(/\[[\s\S]*\]/);
+      // Try to find JSON array anywhere in the response
+      const match = text.match(/\[[\s\S]*?\]/);
       if (match) {
-        try { generated = JSON.parse(match[0]); }
-        catch { generated = null; }
+        try { generated = JSON.parse(match[0]); } catch { generated = null; }
+      }
+      // Try to extract individual JSON objects and wrap in array
+      if (!generated) {
+        const objMatches = [...text.matchAll(/\{[^{}]*"email"[^{}]*\}/g)];
+        if (objMatches.length > 0) {
+          try { generated = objMatches.map(m => JSON.parse(m[0])); } catch { generated = null; }
+        }
       }
       if (!generated) {
         console.error('[generateProspects] parse error:', parseErr.message, '\nRaw:', text.slice(0, 400));
@@ -303,6 +311,7 @@ If you cannot find a real email for a company, construct the most likely one fro
       !existingEmails.includes(p.email.toLowerCase())
     ).map(p => ({
       name:    p.name,
+      title:   p.title   || '',
       company: p.company,
       email:   p.email.toLowerCase().trim(),
       phone:   p.phone   || '',

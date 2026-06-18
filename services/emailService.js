@@ -477,10 +477,11 @@ const sendSubscriptionReminderEmail = async ({ to, managerName, estateName, days
 };
 
 // ── Pitch / intro email (to prospects) ───────────────────────────────────────
-const sendPitchEmail = async ({ to, name, company, city }) => {
+const sendPitchEmail = async ({ to, name, title, company, city }) => {
   if (!process.env.RESEND_API_KEY) return { skipped: true };
 
   const firstName = (name || '').split(' ')[0] || 'there';
+  const greeting = title ? `${title} ${(name || '').split(' ').slice(-1)[0]}` : firstName;
 
   await getResend().emails.send({
     from: FROM(),
@@ -520,7 +521,7 @@ const sendPitchEmail = async ({ to, name, company, city }) => {
 
       <!-- Greeting -->
       <p style="font-size:16px;color:#374151;line-height:1.7;margin-bottom:24px;">
-        Hi <strong style="color:#0F172A;">${firstName}</strong>,
+        Hi <strong style="color:#0F172A;">${greeting}</strong>,
       </p>
       <p style="font-size:15px;color:#4B5563;line-height:1.8;margin-bottom:28px;">
         Managing <strong>${company}</strong>${city ? ` in <strong>${city}</strong>` : ''} comes with real challenges —
