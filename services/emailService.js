@@ -582,7 +582,7 @@ const sendPitchEmail = async ({ to, name, company, city }) => {
           ['500+',   'Active Estates'],
           ['50,000+','Residents Managed'],
           ['99.9%',  'Platform Uptime'],
-          ['14 Days','Free Trial'],
+          ['Free','To Get Started'],
         ].map(([num, label]) => `
         <td style="text-align:center;padding:16px 8px;background:#F8FAFC;border-radius:10px;margin:4px;">
           <div style="font-size:22px;font-weight:900;color:#10B981;letter-spacing:-0.03em;">${num}</div>
@@ -592,9 +592,9 @@ const sendPitchEmail = async ({ to, name, company, city }) => {
 
       <!-- CTA -->
       <div style="text-align:center;margin-bottom:20px;">
-        <a href="${FRONTEND_URL}/register"
+        <a href="https://area-connector.areaconnect.pro/register"
           style="display:inline-block;background:linear-gradient(135deg,#10B981,#059669);color:#fff;font-weight:800;font-size:16px;text-decoration:none;padding:16px 48px;border-radius:12px;letter-spacing:-0.01em;box-shadow:0 4px 16px rgba(16,185,129,0.4);">
-          Start Free 14-Day Trial &rarr;
+          Get Started &rarr;
         </a>
         <p style="font-size:12px;color:#94A3B8;margin-top:10px;">No credit card required &nbsp;·&nbsp; Setup in under 10 minutes</p>
       </div>
