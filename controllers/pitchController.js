@@ -210,7 +210,11 @@ exports.sendPitchEmails = async (req, res) => {
           await Prospect.findByIdAndUpdate(prospect._id, { status: 'contacted', emailSentAt: now });
         }
       } catch (e) {
-        console.error('[pitch email]', prospect.email, e.message);
+        console.error('[pitch email] FAILED for', prospect.email,
+          '| status:', e.statusCode,
+          '| name:', e.name,
+          '| message:', e.message,
+          '| detail:', JSON.stringify(e.response || e.cause || ''));
         results.failed++;
       }
     }

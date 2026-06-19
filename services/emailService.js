@@ -490,7 +490,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
 
   await getResend().emails.send({
     from: FROM(),
-    reply_to: 'hello@areaconnect.pro',
+    reply_to: 'michael@areaconnect.pro',
     to,
     subject: `Transform How You Manage ${company || 'Your Estate'} — AreaConnect`,
     html: `<!DOCTYPE html>
@@ -605,14 +605,30 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
         <p style="font-size:12px;color:#94A3B8;margin-top:10px;">No credit card required &nbsp;·&nbsp; Setup in under 10 minutes</p>
       </div>
 
-      <!-- Contact -->
-      <div style="border-top:1px solid #E2E8F0;padding-top:20px;text-align:center;">
-        <p style="font-size:13px;color:#6B7280;line-height:1.8;">
-          Questions? Reply to this email or reach us at<br>
-          <a href="mailto:hello@areaconnect.pro" style="color:#10B981;font-weight:600;text-decoration:none;">hello@areaconnect.pro</a>
-          &nbsp;·&nbsp;
-          <a href="https://areaconnect.pro" style="color:#10B981;font-weight:600;text-decoration:none;">areaconnect.pro</a>
-        </p>
+      <!-- CEO personal sign-off -->
+      <div style="border-top:1px solid #E2E8F0;padding-top:24px;margin-top:4px;">
+        <table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;">
+          <tr>
+            <td style="vertical-align:top;padding-right:16px;width:52px;">
+              <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#10B981,#059669);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#fff;text-align:center;line-height:48px;">
+                MO
+              </div>
+            </td>
+            <td style="vertical-align:top;">
+              <p style="font-size:14px;color:#374151;line-height:1.7;margin:0 0 10px;">
+                I built AreaConnect because I've seen first-hand how much time Nigerian estate managers lose to manual processes — WhatsApp dues reminders, handwritten visitor logs, security gaps. I'd love to show you what we've built and hear what's most painful for <strong>${company}</strong>.
+              </p>
+              <p style="font-size:13px;color:#374151;margin:0;">
+                Feel free to reach me directly —<br>
+                <a href="mailto:michael@areaconnect.pro" style="color:#10B981;font-weight:700;text-decoration:none;font-size:14px;">michael@areaconnect.pro</a>
+              </p>
+              <div style="margin-top:12px;">
+                <div style="font-size:14px;font-weight:800;color:#0F172A;">Michael Orizu</div>
+                <div style="font-size:12px;color:#64748B;margin-top:1px;">CEO &amp; Co-founder, AreaConnect</div>
+              </div>
+            </td>
+          </tr>
+        </table>
       </div>
     </div>
   </div>
