@@ -625,6 +625,9 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
               <div style="margin-top:12px;">
                 <div style="font-size:14px;font-weight:800;color:#0F172A;">Michael Orizu</div>
                 <div style="font-size:12px;color:#64748B;margin-top:1px;">CEO &amp; Co-founder, AreaConnect</div>
+                <div style="margin-top:6px;">
+                  <a href="https://areaconnect.pro" style="color:#10B981;font-size:12px;font-weight:600;text-decoration:none;">areaconnect.pro</a>
+                </div>
               </div>
             </td>
           </tr>
