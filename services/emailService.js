@@ -207,7 +207,7 @@ const fmtNGN = (n) => `&#8358;${Number(n || 0).toLocaleString('en-NG', { minimum
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' }) : '&mdash;';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://estatemanager.areaconnect.pro';
-const HERO_IMG = `${FRONTEND_URL}/estate-hero.jpeg`;
+const DEFAULT_HERO  = `${FRONTEND_URL}/estate-hero.jpeg`;
 
 const METHOD_LABELS = {
   cash: 'Cash', bank_transfer: 'Bank Transfer',
@@ -218,10 +218,11 @@ const FREQ_LABELS = {
 };
 
 const generateInvoiceHtml = (inv) => {
-  const isReceipt = inv.status === 'paid';
+  const isReceipt  = inv.status === 'paid';
   const statusColor = { paid: '#059669', pending: '#D97706', overdue: '#DC2626', waived: '#6B7280' }[inv.status] || '#D97706';
   const statusBg    = { paid: '#D1FAE5', pending: '#FEF3C7', overdue: '#FEE2E2', waived: '#F3F4F6' }[inv.status] || '#FEF3C7';
   const statusLabel = (inv.status || 'PENDING').toUpperCase();
+  const HERO_IMG    = (inv.estate?.logoUrl && inv.estate.logoUrl.startsWith('http')) ? inv.estate.logoUrl : DEFAULT_HERO;
 
   const itemsHtml = inv.items.map((item, i) => `
     <tr style="background:${i % 2 === 0 ? '#F8FAFC' : '#fff'};">
@@ -272,15 +273,19 @@ const generateInvoiceHtml = (inv) => {
           <div style="margin-top:14px;font-size:11px;color:#94A3B8;line-height:1.7;">${inv.estate.address || ''}</div>
           <div style="font-size:11px;color:#64748B;margin-top:4px;">Code: <span style="color:#10B981;font-weight:700;">${inv.estate.estateCode}</span></div>
         </td>
-        <!-- Right: hero image with overlay -->
-        <td style="width:50%;position:relative;padding:0;overflow:hidden;min-height:130px;" bgcolor="#1E3A5F">
-          <img src="${HERO_IMG}" alt="estate" width="100%"
-            style="display:block;width:100%;height:130px;object-fit:cover;opacity:0.7;" />
-          <div style="position:absolute;top:0;left:0;right:0;bottom:0;padding:20px;background:linear-gradient(135deg,rgba(15,23,42,0.8) 0%,rgba(15,23,42,0.2) 100%);">
-            <div style="font-size:24px;font-weight:900;color:#fff;letter-spacing:-0.03em;">${isReceipt ? 'RECEIPT' : 'INVOICE'}</div>
-            <div style="font-size:11px;color:rgba(255,255,255,0.65);margin-top:3px;">${isReceipt ? 'Payment Confirmation' : 'Payment Request'}</div>
-            <div style="display:inline-block;margin-top:10px;background:${statusBg};color:${statusColor};font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:0.04em;">${statusLabel}</div>
-          </div>
+        <!-- Right: hero image via background-image (email-safe, no position:absolute) -->
+        <td width="50%" style="padding:0;background-color:#1E3A5F;background-image:url(${HERO_IMG});background-size:cover;background-position:center;background-repeat:no-repeat;" valign="top">
+          <!--[if gte mso 9]><v:rect xmlns:v="urn:schemas-microsoft-com:vml" fill="true" stroke="false" style="width:260px;height:130px;"><v:fill type="frame" src="${HERO_IMG}" color="#1E3A5F"/><v:textbox inset="0,0,0,0"><![endif]-->
+          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;min-height:130px;">
+            <tr>
+              <td style="padding:20px;height:130px;background:linear-gradient(135deg,rgba(15,23,42,0.82) 0%,rgba(15,23,42,0.28) 100%);" valign="top">
+                <div style="font-size:24px;font-weight:900;color:#fff;letter-spacing:-0.03em;">${isReceipt ? 'RECEIPT' : 'INVOICE'}</div>
+                <div style="font-size:11px;color:rgba(255,255,255,0.65);margin-top:3px;">${isReceipt ? 'Payment Confirmation' : 'Payment Request'}</div>
+                <div style="display:inline-block;margin-top:10px;background:${statusBg};color:${statusColor};font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:0.04em;">${statusLabel}</div>
+              </td>
+            </tr>
+          </table>
+          <!--[if gte mso 9]></v:textbox></v:rect><![endif]-->
         </td>
       </tr>
     </table>
@@ -624,11 +629,83 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
   return { sent: true };
 };
 
+// ── Withdrawal receipt email (to estate manager) ─────────────────────────────
+const sendWithdrawalReceiptEmail = async ({ to, managerName, estateName, estateCode, amount, bankName, accountNumber, accountName, reference, transferCode, status, createdAt }) => {
+  if (!process.env.RESEND_API_KEY) return { skipped: true };
+
+  const isPending  = status === 'pending';
+  const maskedAcct = accountNumber
+    ? accountNumber.slice(0, -4).replace(/\d/g, '•') + accountNumber.slice(-4)
+    : '••••';
+
+  const notes = [
+    `Bank: ${bankName || '—'}`,
+    `Account: ${accountName || '—'} · ${maskedAcct}`,
+    transferCode && transferCode !== 'TRF_test_mock' ? `Transfer Code: ${transferCode}` : null,
+    isPending
+      ? 'Transfer is processing — typically completes within 5 minutes.'
+      : 'Funds have been sent to your bank account.',
+  ].filter(Boolean).join('  ·  ');
+
+  const inv = {
+    status:        isPending ? 'pending' : 'paid',
+    invoiceNumber: reference,
+    date:          createdAt || new Date(),
+    dueDate:       createdAt || new Date(),
+    paidAt:        isPending ? null : (createdAt || new Date()),
+    method:        'bank_transfer',
+    recordedBy:    null,
+    estate:        { name: estateName, address: '', estateCode: estateCode || '' },
+    resident:      { name: managerName || 'Estate Manager', unit: 'N/A', email: to, phone: null },
+    items: [{
+      description: 'Wallet Withdrawal',
+      detail:      `${bankName || ''} · ${maskedAcct}`,
+      frequency:   'one_time',
+      quantity:    1,
+      unitPrice:   amount,
+      vat:         0,
+      total:       amount,
+    }],
+    subtotal: amount,
+    total:    amount,
+    notes,
+  };
+
+  const invoiceHtml = generateInvoiceHtml(inv);
+
+  await getResend().emails.send({
+    from: FROM(),
+    to,
+    subject: `Withdrawal ${isPending ? 'Initiated' : 'Successful'} — ₦${Number(amount).toLocaleString('en-NG')} | ${estateName}`,
+    html: `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:24px 16px;margin:0;">
+<div style="max-width:700px;margin:0 auto;">
+  <div style="text-align:center;margin-bottom:16px;">
+    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+  </div>
+  <div style="background:${isPending ? '#FEF3C7' : '#D1FAE5'};border:1px solid ${isPending ? '#FDE68A' : '#A7F3D0'};border-radius:10px;padding:14px 20px;margin-bottom:20px;font-size:14px;color:${isPending ? '#92400E' : '#065F46'};line-height:1.6;">
+    Hi <strong>${managerName || 'Manager'}</strong>, your withdrawal of <strong>₦${Number(amount).toLocaleString('en-NG')}</strong> from <strong>${estateName}</strong>
+    ${isPending ? 'is being processed. Funds typically arrive within 5 minutes.' : 'was successful. Funds have been sent to your bank account.'}
+  </div>
+  ${invoiceHtml}
+</div>
+</body></html>`,
+    attachments: [{
+      filename: `withdrawal-${reference}.html`,
+      content: Buffer.from(invoiceHtml).toString('base64'),
+    }],
+  });
+
+  return { sent: true };
+};
+
 module.exports = {
   sendVisitorPass,
   sendInviteEmail,
   sendManagerNotificationEmail,
   sendPaymentReceiptEmail,
+  sendWithdrawalReceiptEmail,
   sendSubscriptionReminderEmail,
   generateInvoiceHtml,
   sendPitchEmail,

@@ -5,7 +5,7 @@ const User = require('../models/User');
 const Estate = require('../models/Estate');
 const Withdrawal = require('../models/Withdrawal');
 const { emitNotification } = require('../services/socketService');
-const { sendManagerNotificationEmail, sendPaymentReceiptEmail } = require('../services/emailService');
+const { sendManagerNotificationEmail, sendPaymentReceiptEmail, sendWithdrawalReceiptEmail } = require('../services/emailService');
 
 const PAYSTACK_BASE = 'https://api.paystack.co';
 const paystackHeaders = () => ({
@@ -685,7 +685,7 @@ exports.withdrawFromWallet = async (req, res) => {
     }
 
     const user = await User.findById(req.user._id).select(
-      'paystackRecipientCode bankName accountNumber accountName'
+      'paystackRecipientCode bankName accountNumber accountName email name'
     );
 
     if (!user.paystackRecipientCode) {
@@ -712,9 +712,11 @@ exports.withdrawFromWallet = async (req, res) => {
     const reference = generateRef();
     const isTestMode = process.env.PAYSTACK_SECRET_KEY.startsWith('sk_test_');
 
+    const estate = await Estate.findById(req.estateId).select('name estateCode');
+
     // Mock withdrawal for test bank account
     if (isTestMode && user.paystackRecipientCode === 'RCP_test_mock') {
-      await Withdrawal.create({
+      const withdrawal = await Withdrawal.create({
         userId: req.user._id,
         estateId: req.estateId,
         amount,
@@ -725,6 +727,21 @@ exports.withdrawFromWallet = async (req, res) => {
         accountNumber: user.accountNumber,
         accountName: user.accountName,
       });
+
+      sendWithdrawalReceiptEmail({
+        to: user.email,
+        managerName: user.name,
+        estateName: estate?.name || 'Your Estate',
+        estateCode: estate?.estateCode || '',
+        amount,
+        bankName: user.bankName,
+        accountNumber: user.accountNumber,
+        accountName: user.accountName,
+        reference,
+        transferCode: 'TRF_test_mock',
+        status: 'success',
+        createdAt: withdrawal.createdAt,
+      }).catch(e => console.error('[WithdrawalEmail]', e.message));
 
       return res.json({
         success: true,
@@ -744,17 +761,32 @@ exports.withdrawFromWallet = async (req, res) => {
       { headers: paystackHeaders() }
     );
 
-    await Withdrawal.create({
+    const withdrawalStatus = data.data.status === 'success' ? 'success' : 'pending';
+    const withdrawal = await Withdrawal.create({
       userId: req.user._id,
       estateId: req.estateId,
       amount,
-      status: data.data.status === 'success' ? 'success' : 'pending',
+      status: withdrawalStatus,
       paystackTransferCode: data.data.transfer_code,
       reference,
       bankName: user.bankName,
       accountNumber: user.accountNumber,
       accountName: user.accountName,
     });
+
+    sendWithdrawalReceiptEmail({
+      to: user.email,
+      managerName: user.name,
+      estateName: estate?.name || 'Your Estate',
+      amount,
+      bankName: user.bankName,
+      accountNumber: user.accountNumber,
+      accountName: user.accountName,
+      reference,
+      transferCode: data.data.transfer_code,
+      status: withdrawalStatus,
+      createdAt: withdrawal.createdAt,
+    }).catch(e => console.error('[WithdrawalEmail]', e.message));
 
     return res.json({
       success: true,
