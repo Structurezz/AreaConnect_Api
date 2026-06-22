@@ -9,6 +9,9 @@ router.use(authenticate, scopeToEstate, requireEstate, requireActiveSubscription
 // ── Stats (manager) ─────────────────────────────────────────────
 router.get('/stats', authorize('estate_manager', 'super_admin'), ctrl.getPaymentStats);
 
+// ── Payment history (manager) ────────────────────────────────────
+router.get('/history', authorize('estate_manager', 'super_admin'), ctrl.getPaymentHistory);
+
 // ── Wallet (manager) ─────────────────────────────────────────────
 router.get('/wallet', authorize('estate_manager', 'super_admin'), ctrl.getWallet);
 

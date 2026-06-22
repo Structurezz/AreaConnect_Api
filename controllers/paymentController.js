@@ -210,6 +210,36 @@ exports.recordManualPayment = async (req, res) => {
   }
 };
 
+exports.getPaymentHistory = async (req, res) => {
+  try {
+    await markOverdue(req.estateId);
+
+    const page  = parseInt(req.query.page)  || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip  = (page - 1) * limit;
+
+    const filter = { estateId: req.estateId };
+    if (req.query.status) filter.status = req.query.status;
+    if (req.query.resident) filter.residentId = req.query.resident;
+
+    const [payments, total] = await Promise.all([
+      Payment.find(filter)
+        .populate('residentId', 'name email')
+        .populate('scheduleId', 'title type frequency')
+        .populate('recordedBy', 'name')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Payment.countDocuments(filter),
+    ]);
+
+    return res.json({ success: true, data: payments, total, page, pages: Math.ceil(total / limit) });
+  } catch (err) {
+    console.error('[getPaymentHistory]', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
 exports.getInvoice = async (req, res) => {
   try {
     const payment = await Payment.findOne({ _id: req.params.paymentId, estateId: req.estateId })
