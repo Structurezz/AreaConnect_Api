@@ -30,6 +30,8 @@ const allowedOrigins = [
   'https://areaconnector-guards-production.up.railway.app',
   'https://area-guards.areaconnect.pro',
   'https://admin.areaconnect.pro',
+  'https://areaconnect.pro',
+  'https://www.areaconnect.pro',
   ...(process.env.EXTRA_ORIGINS ? process.env.EXTRA_ORIGINS.split(',').map(o => o.trim()) : []),
   ...[5173, 5174, 5175, 5176, 5177, 5178, 5180, 5181].map(p => `http://localhost:${p}`),
 ];
