@@ -1,4 +1,5 @@
 const { Resend } = require('resend');
+const { generateInvoicePdf } = require('./pdfService');
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 const FROM      = () => process.env.RESEND_FROM || 'Orizu <noreply@areaconnect.pro>';
@@ -354,10 +355,11 @@ const generateInvoiceHtml = (inv) => {
 const sendPaymentReceiptEmail = async ({ to, residentName, estateName, inv }) => {
   if (!process.env.RESEND_API_KEY) return { skipped: true };
 
-  const invoiceHtml = generateInvoiceHtml(inv);
   const subject = inv.status === 'paid'
     ? `Payment Receipt — ${inv.invoiceNumber} | ${estateName}`
     : `Payment Invoice — ${inv.invoiceNumber} | ${estateName}`;
+
+  const pdfBuffer = await generateInvoicePdf(inv);
 
   await getResend().emails.send({
     from: FROM(),
@@ -366,22 +368,23 @@ const sendPaymentReceiptEmail = async ({ to, residentName, estateName, inv }) =>
     html: `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:24px 16px;margin:0;">
-<div style="max-width:700px;margin:0 auto;">
+<div style="max-width:600px;margin:0 auto;">
   <div style="text-align:center;margin-bottom:16px;">
     <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
   </div>
-  <div style="background:#D1FAE5;border:1px solid #A7F3D0;border-radius:10px;padding:14px 20px;margin-bottom:20px;font-size:14px;color:#065F46;line-height:1.6;">
+  <div style="background:#D1FAE5;border:1px solid #A7F3D0;border-radius:10px;padding:14px 20px;font-size:14px;color:#065F46;line-height:1.6;">
     Hi <strong>${residentName}</strong>, ${inv.status === 'paid'
-      ? `your payment of <strong>${fmtNGN(inv.total)}</strong> to <strong>${estateName}</strong> has been confirmed. Your receipt is below.`
-      : `please find your invoice of <strong>${fmtNGN(inv.total)}</strong> from <strong>${estateName}</strong> below.`}
+      ? `your payment of <strong>NGN ${Number(inv.total || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}</strong> to <strong>${estateName}</strong> has been confirmed.`
+      : `please find your invoice of <strong>NGN ${Number(inv.total || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}</strong> from <strong>${estateName}</strong> attached.`}
+    Your ${inv.status === 'paid' ? 'receipt' : 'invoice'} is attached as a PDF.
   </div>
-  ${invoiceHtml}
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by AreaConnect &nbsp;&middot;&nbsp; areaconnect.pro</p>
 </div>
 </body></html>`,
     attachments: [
       {
-        filename: `${inv.invoiceNumber}.html`,
-        content: Buffer.from(invoiceHtml).toString('base64'),
+        filename: `${inv.invoiceNumber}.pdf`,
+        content: pdfBuffer.toString('base64'),
       },
     ],
   });
@@ -690,7 +693,7 @@ const sendWithdrawalReceiptEmail = async ({ to, managerName, estateName, estateC
     notes,
   };
 
-  const invoiceHtml = generateInvoiceHtml(inv);
+  const pdfBuffer = await generateInvoicePdf(inv);
 
   await getResend().emails.send({
     from: FROM(),
@@ -699,20 +702,21 @@ const sendWithdrawalReceiptEmail = async ({ to, managerName, estateName, estateC
     html: `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:24px 16px;margin:0;">
-<div style="max-width:700px;margin:0 auto;">
+<div style="max-width:600px;margin:0 auto;">
   <div style="text-align:center;margin-bottom:16px;">
     <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
   </div>
-  <div style="background:${isPending ? '#FEF3C7' : '#D1FAE5'};border:1px solid ${isPending ? '#FDE68A' : '#A7F3D0'};border-radius:10px;padding:14px 20px;margin-bottom:20px;font-size:14px;color:${isPending ? '#92400E' : '#065F46'};line-height:1.6;">
+  <div style="background:${isPending ? '#FEF3C7' : '#D1FAE5'};border:1px solid ${isPending ? '#FDE68A' : '#A7F3D0'};border-radius:10px;padding:14px 20px;font-size:14px;color:${isPending ? '#92400E' : '#065F46'};line-height:1.6;">
     Hi <strong>${managerName || 'Manager'}</strong>, your withdrawal of <strong>₦${Number(amount).toLocaleString('en-NG')}</strong> from <strong>${estateName}</strong>
     ${isPending ? 'is being processed. Funds typically arrive within 5 minutes.' : 'was successful. Funds have been sent to your bank account.'}
+    Your receipt is attached as a PDF.
   </div>
-  ${invoiceHtml}
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by AreaConnect &nbsp;&middot;&nbsp; areaconnect.pro</p>
 </div>
 </body></html>`,
     attachments: [{
-      filename: `withdrawal-${reference}.html`,
-      content: Buffer.from(invoiceHtml).toString('base64'),
+      filename: `withdrawal-${reference}.pdf`,
+      content: pdfBuffer.toString('base64'),
     }],
   });
 
