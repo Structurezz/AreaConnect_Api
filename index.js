@@ -79,6 +79,7 @@ app.use('/api/lounge', require('./routes/lounge'));
 app.use('/api/posts', require('./routes/posts'));
 app.use('/api/guards', require('./routes/guards'));
 app.use('/api/pitch',  require('./routes/pitch'));
+app.use('/api/contact', require('./routes/contact'));
 
 // Health check
 app.get('/health', (req, res) => {
