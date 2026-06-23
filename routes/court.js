@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const ctrl = require('../controllers/courtController');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, authorize, scopeToEstate } = require('../middleware/auth');
 
-router.use(authenticate);
+router.use(authenticate, scopeToEstate);
 
 router.get('/stats', ctrl.getPublicStats);
+router.get('/members', ctrl.getMembers);
 router.get('/', ctrl.listCases);
 router.post('/', ctrl.fileCase);
 router.get('/:id', ctrl.getCase);

@@ -772,3 +772,23 @@ exports.getPublicStats = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+// ─── GET /api/court/members ───────────────────────────────────────────────────
+// Returns all residents in the estate — open to any authenticated estate member
+
+exports.getMembers = async (req, res) => {
+  try {
+    const estateId = req.user.estateId;
+    if (!estateId) return res.status(400).json({ success: false, message: 'No estate assigned' });
+
+    const members = await User.find({ estateId, role: 'resident', isActive: true })
+      .select('_id name email unitId')
+      .populate('unitId', 'unitNumber block')
+      .sort({ name: 1 });
+
+    return res.json({ success: true, data: members });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
