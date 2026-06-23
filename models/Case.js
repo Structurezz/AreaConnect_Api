@@ -123,19 +123,43 @@ const caseSchema = new Schema({
   closedAt: Date,
 }, { timestamps: true });
 
-// Auto-generate caseNumber using an atomic counter to prevent duplicate key races
+// Auto-generate caseNumber using an atomic counter seeded from the existing max
 caseSchema.pre('save', async function(next) {
   if (this.caseNumber) return next();
-  const year = new Date().getFullYear();
-  const db = mongoose.connection.db;
-  const result = await db.collection('counters').findOneAndUpdate(
-    { _id: `caseNumber_${year}` },
-    { $inc: { seq: 1 } },
-    { upsert: true, returnDocument: 'after' }
-  );
-  const seq = result.seq ?? result.value?.seq ?? 1;
-  this.caseNumber = `COURT-${year}-${String(seq).padStart(4, '0')}`;
-  next();
+  try {
+    const year = new Date().getFullYear();
+    const db = mongoose.connection.db;
+    const counterId = `caseNumber_${year}`;
+
+    // Find the highest existing case number for this year so the counter never
+    // goes backwards after a fresh deployment or counter reset
+    const maxCase = await mongoose.model('Case')
+      .findOne({ caseNumber: { $regex: `^COURT-${year}-` } }, { caseNumber: 1 })
+      .sort({ caseNumber: -1 })
+      .lean();
+    const floorSeq = maxCase ? parseInt(maxCase.caseNumber.split('-')[2], 10) : 0;
+
+    // $max ensures the counter never dips below the current DB high-water mark
+    await db.collection('counters').updateOne(
+      { _id: counterId },
+      { $max: { seq: floorSeq } },
+      { upsert: true }
+    );
+
+    // Atomically increment and read back
+    const result = await db.collection('counters').findOneAndUpdate(
+      { _id: counterId },
+      { $inc: { seq: 1 } },
+      { returnDocument: 'after' }
+    );
+    const seq = result?.seq ?? result?.value?.seq;
+    if (!seq) throw new Error('Counter returned empty seq');
+
+    this.caseNumber = `COURT-${year}-${String(seq).padStart(4, '0')}`;
+    next();
+  } catch (err) {
+    next(err);
+  }
 });
 
 module.exports = mongoose.model('Case', caseSchema);
