@@ -10,6 +10,8 @@ const proceedingSchema = new Schema({
     'judge_deliberation','verdict_delivered','fine_issued','fine_paid',
     'settlement_proposed','settlement_accepted','settlement_rejected',
     'appeal_filed','appeal_ruled','case_closed','punishment_enforced',
+    'default_judgment_warning','default_judgment','adjourned','adjournment_denied',
+    'closing_arguments_called','defendant_engaged',
   ], required: true },
   actorId: { type: ObjectId, ref: 'User' },
   actorName: String,      // 'Judge Orizu', 'Barrister Adaeze Okafor', etc.
@@ -115,6 +117,34 @@ const caseSchema = new Schema({
     targetUserId: { type: ObjectId, ref: 'User' },
     actionType: String, // 'ban','suspend','warn'
     isEnforced: { type: Boolean, default: false },
+  },
+
+  // Autonomous proceedings
+  responseDeadline: Date,          // defendant must engage by this date
+  defaultJudgmentWarningAt: Date,  // when the 24h final warning was issued
+  isDefaultJudgment: { type: Boolean, default: false },
+
+  adjournments: [{
+    requestedById: { type: ObjectId, ref: 'User' },
+    side: String,
+    reason: String,
+    status: { type: String, enum: ['granted','denied'], default: 'denied' },
+    aiRuling: String,
+    requestedAt: { type: Date, default: Date.now },
+  }],
+
+  // Private lawyer consultations (not shown in public proceedings)
+  lawyerChats: {
+    prosecution: [{
+      from: { type: String, enum: ['user','ai'] },
+      content: String,
+      timestamp: { type: Date, default: Date.now },
+    }],
+    defense: [{
+      from: { type: String, enum: ['user','ai'] },
+      content: String,
+      timestamp: { type: Date, default: Date.now },
+    }],
   },
 
   isPublic: { type: Boolean, default: true },

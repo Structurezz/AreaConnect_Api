@@ -153,6 +153,61 @@ Rule on this appeal. Consider whether new grounds justify reconsideration. End w
   }
 }
 
+async function getLawyerConsultation({ persona, side, caseTitle, caseType, charges, status, evidenceCount, proceedingCount, userMessage }) {
+  const p = AI_PERSONAS[persona];
+  if (!process.env.GEMINI_API_KEY) {
+    return `Understood. As your private counsel, my advice is: ${side === 'prosecution' ? 'focus on the evidence and keep your statement factual and clear.' : 'stay calm, challenge every unproven claim, and remember — the burden of proof is on the plaintiff.'} — ${p.name}`;
+  }
+  try {
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-1.5-flash',
+      systemInstruction: `${p.system}\n\nIMPORTANT: You are now in a PRIVATE CONSULTATION with your client — NOT addressing the court. Speak directly and confidentially to your client. Be strategic, practical, and supportive. Help them understand the situation and guide their next steps. Keep responses under 200 words.`,
+    });
+    const prompt = `PRIVATE CLIENT CONSULTATION
+Case: "${caseTitle}" (${caseType})
+Your role: ${side === 'prosecution' ? 'Prosecution counsel for the plaintiff' : 'Defense counsel for the defendant'}
+Charges: ${(charges || []).join(', ') || 'None specified'}
+Case status: ${status}
+Evidence submitted so far: ${evidenceCount} item(s)
+Proceedings logged: ${proceedingCount} event(s)
+
+Your client says: "${userMessage}"
+
+Give private, strategic legal advice. Be direct and practical.`;
+    const result = await model.generateContent(prompt);
+    return result.response.text();
+  } catch (err) {
+    console.error('getLawyerConsultation error:', err.message);
+    return `Understood. Stay focused and trust the process. I'm building your case carefully. — ${p.name}`;
+  }
+}
+
+async function getAdjournmentRuling({ caseTitle, reason, adjournmentCount }) {
+  if (!process.env.GEMINI_API_KEY) {
+    if (adjournmentCount >= 2) return { granted: false, ruling: `The application for adjournment is DENIED. This court has indulged ${adjournmentCount} delay(s) already. Justice cannot wait indefinitely. We proceed today. — Judge Orizu` };
+    return { granted: true, ruling: `The application for adjournment is GRANTED. The hearing is adjourned for 3 days. Both parties are reminded that further delays will not be tolerated. Come prepared. — Judge Orizu` };
+  }
+  try {
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-1.5-flash',
+      systemInstruction: JUDGE_SYSTEM,
+    });
+    const prompt = `Application for adjournment in: "${caseTitle}".
+Reason given: "${reason}"
+Previous adjournments in this case: ${adjournmentCount}
+${adjournmentCount >= 2 ? 'NOTE: This case has already been adjourned multiple times.' : ''}
+
+Rule on this application briefly. End your ruling with either "ADJOURNMENT: GRANTED" or "ADJOURNMENT: DENIED" on its own line.`;
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    const granted = /ADJOURNMENT:\s*GRANTED/i.test(text) && adjournmentCount < 2;
+    return { granted, ruling: text };
+  } catch (err) {
+    const granted = adjournmentCount < 1;
+    return { granted, ruling: granted ? 'Adjournment granted. The hearing is adjourned for 3 days.' : 'Application denied. We proceed immediately.' };
+  }
+}
+
 function fallbackArgument(persona, side, caseTitle) {
   const p = AI_PERSONAS[persona];
   if (side === 'prosecution') return `My Lord, the evidence before this court in the matter of "${caseTitle}" speaks plainly. The prosecution will demonstrate beyond reasonable doubt that the charges are well-founded. We shall proceed methodically through the facts. — ${p.name}`;
@@ -167,4 +222,4 @@ function fallbackVerdict(caseTitle) {
   };
 }
 
-module.exports = { getLawyerArgument, getLawyerRebuttal, getJudgeVerdict, getJudgeAppealRuling, AI_PERSONAS };
+module.exports = { getLawyerArgument, getLawyerRebuttal, getJudgeVerdict, getJudgeAppealRuling, getLawyerConsultation, getAdjournmentRuling, AI_PERSONAS };
