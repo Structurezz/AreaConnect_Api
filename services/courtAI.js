@@ -1,6 +1,7 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 const AI_PERSONAS = {
   adaeze: {
@@ -39,7 +40,7 @@ async function getLawyerArgument({ persona, caseTitle, caseType, charges, plaint
   if (!process.env.GEMINI_API_KEY) return fallbackArgument(persona, side, caseTitle);
   try {
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: GEMINI_MODEL,
       systemInstruction: AI_PERSONAS[persona].system,
     });
     const prompt = `Case: "${caseTitle}" (${caseType})
@@ -62,7 +63,7 @@ async function getLawyerRebuttal({ persona, caseTitle, charges, evidence, oppone
   if (!process.env.GEMINI_API_KEY) return fallbackArgument(persona, side, caseTitle);
   try {
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: GEMINI_MODEL,
       systemInstruction: AI_PERSONAS[persona].system,
     });
     const prompt = `Case: "${caseTitle}"
@@ -84,7 +85,7 @@ async function getJudgeVerdict({ caseTitle, caseType, charges, severity, plainti
   if (!process.env.GEMINI_API_KEY) return fallbackVerdict(caseTitle);
   try {
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: GEMINI_MODEL,
       systemInstruction: JUDGE_SYSTEM,
     });
 
@@ -135,7 +136,7 @@ async function getJudgeAppealRuling({ caseTitle, originalVerdict, appealReason }
   if (!process.env.GEMINI_API_KEY) return { granted: false, ruling: 'The appeal is denied. The original verdict stands.' };
   try {
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: GEMINI_MODEL,
       systemInstruction: JUDGE_SYSTEM,
     });
     const prompt = `Appeal in case "${caseTitle}".
@@ -160,7 +161,7 @@ async function getLawyerConsultation({ persona, side, caseTitle, caseType, charg
   }
   try {
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: GEMINI_MODEL,
       systemInstruction: `${p.system}\n\nIMPORTANT: You are now in a PRIVATE CONSULTATION with your client — NOT addressing the court. Speak directly and confidentially to your client. Be strategic, practical, and supportive. Help them understand the situation and guide their next steps. Keep responses under 200 words.`,
     });
     const prompt = `PRIVATE CLIENT CONSULTATION
@@ -189,7 +190,7 @@ async function getAdjournmentRuling({ caseTitle, reason, adjournmentCount }) {
   }
   try {
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: GEMINI_MODEL,
       systemInstruction: JUDGE_SYSTEM,
     });
     const prompt = `Application for adjournment in: "${caseTitle}".
