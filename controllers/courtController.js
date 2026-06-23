@@ -12,11 +12,23 @@ function addProceeding(courtCase, { event, actorId, actorName, role, content, is
 
 exports.listCases = async (req, res) => {
   try {
-    const { status, type, limit = 20, page = 1 } = req.query;
+    const { status, type, mine, limit = 20, page = 1 } = req.query;
     const estateId = req.user.estateId;
 
     const filter = { estateId };
-    if (status) filter.status = status;
+
+    if (mine === 'true' || mine === true) {
+      const userId = req.user._id;
+      filter.$or = [
+        { 'plaintiff.userId': userId },
+        { 'defendant.userId': userId },
+        { 'jury.members': userId },
+      ];
+    } else if (status) {
+      const statusList = status.split(',').map(s => s.trim()).filter(Boolean);
+      filter.status = statusList.length === 1 ? statusList[0] : { $in: statusList };
+    }
+
     if (type) filter.type = type;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
