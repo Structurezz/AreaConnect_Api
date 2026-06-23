@@ -123,12 +123,18 @@ const caseSchema = new Schema({
   closedAt: Date,
 }, { timestamps: true });
 
-// Auto-generate caseNumber before save
+// Auto-generate caseNumber using an atomic counter to prevent duplicate key races
 caseSchema.pre('save', async function(next) {
   if (this.caseNumber) return next();
   const year = new Date().getFullYear();
-  const count = await mongoose.model('Case').countDocuments({ estateId: this.estateId }) + 1;
-  this.caseNumber = `COURT-${year}-${String(count).padStart(4, '0')}`;
+  const db = mongoose.connection.db;
+  const result = await db.collection('counters').findOneAndUpdate(
+    { _id: `caseNumber_${year}` },
+    { $inc: { seq: 1 } },
+    { upsert: true, returnDocument: 'after' }
+  );
+  const seq = result.seq ?? result.value?.seq ?? 1;
+  this.caseNumber = `COURT-${year}-${String(seq).padStart(4, '0')}`;
   next();
 });
 
