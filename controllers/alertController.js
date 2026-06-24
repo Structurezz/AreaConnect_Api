@@ -11,10 +11,11 @@ exports.createAlert = async (req, res) => {
       type: type || 'security',
       note,
       status: 'open',
+      raisedByRole: req.user.role || 'resident',
     });
 
     await alert.populate([
-      { path: 'residentId', select: 'name phone' },
+      { path: 'residentId', select: 'name phone role' },
       { path: 'unitId', select: 'unitNumber block' },
     ]);
 
@@ -47,7 +48,7 @@ exports.getAlerts = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const [alerts, total] = await Promise.all([
       Alert.find(filter)
-        .populate('residentId', 'name phone')
+        .populate('residentId', 'name phone role')
         .populate('unitId', 'unitNumber block')
         .populate('resolvedBy', 'name')
         .sort({ createdAt: -1 })
@@ -109,6 +110,7 @@ exports.broadcastEmergency = async (req, res) => {
     const alert = await Alert.create({
       estateId: req.estateId,
       residentId: req.user._id,
+      unitId: req.user.unitId,
       type: type || 'security',
       title: title || '',
       note,
@@ -118,9 +120,13 @@ exports.broadcastEmergency = async (req, res) => {
       contactNumber: contactNumber || '',
       status: 'open',
       isEmergencyBroadcast: true,
+      raisedByRole: req.user.role || 'security',
     });
 
-    await alert.populate('residentId', 'name');
+    await alert.populate([
+      { path: 'residentId', select: 'name phone role' },
+      { path: 'unitId', select: 'unitNumber block' },
+    ]);
     emitAlert(req.estateId.toString(), { ...alert.toObject(), isEmergencyBroadcast: true });
 
     return res.status(201).json({ success: true, message: 'Emergency broadcast sent', data: alert });
