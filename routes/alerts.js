@@ -15,7 +15,7 @@ router.get('/', ctrl.getAlerts);
 router.patch('/:id/acknowledge', authorize('security', 'estate_manager', 'super_admin'), ctrl.acknowledgeAlert);
 router.patch('/:id/resolve', authorize('security', 'estate_manager', 'super_admin'), ctrl.resolveAlert);
 
-router.post('/broadcast', authorize('estate_manager', 'super_admin'), [
+router.post('/broadcast', authorize('security', 'estate_manager', 'super_admin'), [
   body('title').notEmpty().withMessage('Title is required'),
   body('note').notEmpty().withMessage('Message is required'),
   body('type').optional().isIn(['security', 'fire', 'medical', 'noise', 'other']),
