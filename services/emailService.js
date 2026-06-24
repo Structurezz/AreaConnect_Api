@@ -57,7 +57,7 @@ const sendVisitorPass = async ({ to, visitorName, hostName, code, expectedDate, 
     </div>
   </div>
 
-  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by AreaConnect</p>
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by Area Connector Technologies &nbsp;&middot;&nbsp; RC 9607864</p>
 </div>
 </body></html>`,
   });
@@ -134,7 +134,7 @@ const sendInviteEmail = async ({ to, name, estateName, loginUrl, tempPassword })
   </div>
 
   <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">
-    If you didn't expect this email, you can safely ignore it. &nbsp;·&nbsp; Powered by AreaConnect
+    If you didn't expect this email, you can safely ignore it. &nbsp;·&nbsp; Powered by Area Connector Technologies · RC 9607864
   </p>
 </div>
 </body></html>`,
@@ -195,7 +195,7 @@ const sendManagerNotificationEmail = async ({ to, managerName, estateName, type,
     </div>
   </div>
 
-  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by AreaConnect</p>
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by Area Connector Technologies &nbsp;&middot;&nbsp; RC 9607864</p>
 </div>
 </body></html>`,
   });
@@ -346,7 +346,7 @@ const generateInvoiceHtml = (inv) => {
     </div>
   </div>
 
-  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by AreaConnect &nbsp;&middot;&nbsp; areaconnect.pro</p>
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by Area Connector Technologies &nbsp;&middot;&nbsp; RC 9607864</p>
 </div>
 </body></html>`;
 };
@@ -378,7 +378,7 @@ const sendPaymentReceiptEmail = async ({ to, residentName, estateName, inv }) =>
       : `please find your invoice of <strong>NGN ${Number(inv.total || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}</strong> from <strong>${estateName}</strong> attached.`}
     Your ${inv.status === 'paid' ? 'receipt' : 'invoice'} is attached as a PDF.
   </div>
-  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by AreaConnect &nbsp;&middot;&nbsp; areaconnect.pro</p>
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by Area Connector Technologies &nbsp;&middot;&nbsp; RC 9607864</p>
 </div>
 </body></html>`,
     attachments: [
@@ -475,7 +475,7 @@ const sendSubscriptionReminderEmail = async ({ to, managerName, estateName, days
   </div>
 
   <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">
-    Powered by AreaConnect &nbsp;&middot;&nbsp; areaconnect.pro
+    Powered by Area Connector Technologies · RC 9607864
   </p>
 </div>
 </body></html>`,
@@ -711,7 +711,7 @@ const sendWithdrawalReceiptEmail = async ({ to, managerName, estateName, estateC
     ${isPending ? 'is being processed. Funds typically arrive within 5 minutes.' : 'was successful. Funds have been sent to your bank account.'}
     Your receipt is attached as a PDF.
   </div>
-  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by AreaConnect &nbsp;&middot;&nbsp; areaconnect.pro</p>
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by Area Connector Technologies &nbsp;&middot;&nbsp; RC 9607864</p>
 </div>
 </body></html>`,
     attachments: [{
