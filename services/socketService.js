@@ -98,12 +98,14 @@ const emitGroupMessage = (estateId, message) => {
 };
 
 /**
- * Emit a notification to all manager/resident sockets in an estate.
+ * Emit a notification to a specific user or (fallback) everyone in an estate.
  * Shape: { id, type, title, body, amount?, meta?, createdAt }
+ * Pass userId to target one user; omit/null to broadcast estate-wide.
  */
-const emitNotification = (estateId, notification) => {
+const emitNotification = (estateId, notification, userId = null) => {
   if (io) {
-    io.to(`estate:${estateId}`).emit('notification', {
+    const room = userId ? `user:${userId}` : `estate:${estateId}`;
+    io.to(room).emit('notification', {
       ...notification,
       createdAt: notification.createdAt || new Date().toISOString(),
     });

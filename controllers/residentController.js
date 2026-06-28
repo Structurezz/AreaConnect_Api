@@ -123,7 +123,7 @@ exports.inviteResident = async (req, res) => {
         title: 'New Resident Added',
         body: `${name} has been invited to ${estate.name}`,
         meta: { residentId: resident._id },
-      });
+      }, req.user._id);
     } catch (e) { console.error('[notify inviteResident]', e.message); }
 
     return res.json({

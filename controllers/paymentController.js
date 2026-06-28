@@ -187,11 +187,11 @@ exports.recordManualPayment = async (req, res) => {
       emitNotification(req.estateId, {
         id: payment._id.toString(),
         type: 'payment_received',
-        title: 'Manual Payment Recorded',
-        body: `${resident?.name || 'Resident'} — ${fmt(payment.amount)} recorded manually`,
+        title: 'Payment Recorded',
+        body: `Your payment of ${fmt(payment.amount)} for ${schedule?.title || 'levy'} has been recorded`,
         amount: payment.amount,
         meta: { paymentId: payment._id },
-      });
+      }, resident?._id);
     } catch (e) { console.error('[notify recordManualPayment]', e.message); }
 
     // Send receipt email to resident (fire-and-forget)
@@ -475,9 +475,19 @@ exports.verifyPayment = async (req, res) => {
         amount: payment.amount,
         meta: { paymentId: payment._id },
       };
-      emitNotification(req.estateId, notif);
+
+      // Notify the resident that their payment was confirmed
+      emitNotification(req.estateId, {
+        ...notif,
+        title: 'Payment Confirmed',
+        body: `Your payment of ${fmt(payment.amount)} for ${payment.scheduleId?.title || 'levy'} was received`,
+      }, resident?._id);
 
       const manager = await User.findOne({ estateId: req.estateId, role: 'estate_manager' }).select('name email');
+
+      // Notify only the manager about the incoming payment
+      emitNotification(req.estateId, notif, manager?._id);
+
       if (manager && estate) {
         sendManagerNotificationEmail({
           to: manager.email,
