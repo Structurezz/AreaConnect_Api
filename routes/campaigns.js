@@ -20,5 +20,6 @@ router.patch('/:id', authorize('super_admin'), ctrl.update);
 router.patch('/:id/status', authorize('super_admin'), ctrl.setStatus);
 router.delete('/:id', authorize('super_admin'), ctrl.remove);
 router.post('/:id/send-email', authorize('super_admin'), ctrl.sendEmailBlast);
+router.post('/generate-email', authorize('super_admin'), ctrl.generateEmailContent);
 
 module.exports = router;
