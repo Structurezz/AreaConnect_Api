@@ -3,7 +3,17 @@ const mongoose = require('mongoose');
 const PLACEMENTS = ['modal', 'email', 'login_sidebar', 'lounge_feed', 'dashboard_banner'];
 const AUDIENCE_SEGMENTS = ['all', 'new_users', 'existing_users', 'by_role', 'by_estate'];
 const STATUSES = ['draft', 'active', 'paused', 'ended'];
-const APPS = ['residents', 'estatemanager', 'both'];
+const ROLES = ['resident', 'estate_manager'];
+// APPS accepts both the newer, role-aligned keys and the legacy keys so
+// pre-existing campaigns in the DB (app: 'residents' / 'estatemanager') keep working.
+const APPS = ['resident', 'residents', 'estate_manager', 'estatemanager', 'both'];
+
+const APP_TO_ROLE = {
+  resident: 'resident',
+  residents: 'resident',
+  estate_manager: 'estate_manager',
+  estatemanager: 'estate_manager',
+};
 
 const campaignSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
@@ -19,9 +29,9 @@ const campaignSchema = new mongoose.Schema({
     segment: { type: String, enum: AUDIENCE_SEGMENTS, default: 'all' },
     newUserWithinDays: { type: Number, default: 7, min: 1, max: 365 },
     existingUserBeyondDays: { type: Number, default: 7, min: 1, max: 365 },
-    roles: [{ type: String, enum: ['resident', 'estate_manager'] }],
+    roles: [{ type: String, enum: ROLES }],
     estateIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Estate' }],
-    app: { type: String, enum: APPS, default: 'residents' },
+    app: { type: String, enum: APPS, default: 'resident' },
   },
 
   content: {
@@ -71,9 +81,11 @@ campaignSchema.index({ 'schedule.startAt': 1, 'schedule.endAt': 1 });
 campaignSchema.methods.matchesUser = function (user) {
   const a = this.audience || {};
 
-  if (a.app && a.app !== 'both') {
-    const appRole = a.app === 'residents' ? 'resident' : 'estate_manager';
-    if (user.role !== appRole) return false;
+  // App filter: hard-restricts by the user's role. The by_role segment carries
+  // its own explicit role list, so let that take precedence instead of double-filtering.
+  if (a.app && a.app !== 'both' && a.segment !== 'by_role') {
+    const requiredRole = APP_TO_ROLE[a.app];
+    if (!requiredRole || user.role !== requiredRole) return false;
   }
 
   const now = Date.now();
@@ -108,5 +120,7 @@ campaignSchema.statics.PLACEMENTS = PLACEMENTS;
 campaignSchema.statics.AUDIENCE_SEGMENTS = AUDIENCE_SEGMENTS;
 campaignSchema.statics.STATUSES = STATUSES;
 campaignSchema.statics.APPS = APPS;
+campaignSchema.statics.ROLES = ROLES;
+campaignSchema.statics.APP_TO_ROLE = APP_TO_ROLE;
 
 module.exports = mongoose.model('Campaign', campaignSchema);

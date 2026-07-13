@@ -10,7 +10,7 @@ const WELCOME_NEW_MEMBERS = {
   audience: {
     segment: 'new_users',
     newUserWithinDays: 7,
-    app: 'residents',
+    app: 'resident',
   },
   content: {
     badge: 'NEW HERE?',
