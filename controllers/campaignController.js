@@ -243,9 +243,8 @@ exports.generateEmailContent = async (req, res) => {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-    const prompt = `You are an expert email + ad copywriter for a Nigerian estate-management SaaS called "${brandName}".
+    const prompt = `You are a senior email designer + copywriter for "${brandName}", a Nigerian estate-management SaaS. Write a marketing email that looks like a modern SaaS product email (Linear, Notion, Stripe) — visually structured, not a wall of text.
 
-Write a marketing email and a matching in-app ad for this goal:
 GOAL: ${goal}
 AUDIENCE: ${audience}
 TONE: ${tone}
@@ -253,24 +252,30 @@ BRAND COLORS: primary=${primary}, accent=${accent}, background=${bg}, text=${tex
 CTA TEXT (if provided, keep it): ${ctaText || '(pick one)'}
 CTA URL: ${ctaUrl || '(none — do not invent one)'}
 
-CONSTRAINTS
-- No emojis in the subject line. In the body, use at most 3 emojis, only where they add clarity.
-- Never over-promise. Never say "click here". CTAs must be concrete verbs.
-- Write to one person, not "everyone".
-- Address the reader as "Hi {{name}}," — that literal placeholder — so the server can substitute.
-- Use inline styles only. No <style>, <script>, <link>, or class attributes.
-- Do not include an <html>, <head>, <body>, header logo, or footer — the server wraps that around your snippet.
-- Use the brand colors above meaningfully (accents, dividers, callout borders, CTA button).
-- No external images. No <img> tags.
-- Keep the email body under ~250 words and scannable (short paragraphs, bullets/callouts if helpful).
+DESIGN LANGUAGE (the server wraps a logo header + gradient stripe + footer around your snippet — do NOT include those):
+- Open with a bold H1 headline (fontSize:22-26px, fontWeight:800, letterSpacing:-0.02em, color:#0F172A, marginBottom:8px). One line.
+- Follow with an intro paragraph (fontSize:15px, color:#475569, lineHeight:1.65).
+- Include 2-4 "feature callouts" as div blocks with borderLeft:3px solid ${primary}, background:#F8FAFC, padding:14px 16px, borderRadius:8px, marginBottom:12px. Each has a bold title line (fontSize:14px, fontWeight:700, color:#0F172A) and a supporting line (fontSize:13px, color:#64748B, lineHeight:1.55). A single small emoji at the START of the title is fine.
+- Between blocks, use a subtle divider: <div style="height:1px;background:#F1F5F9;margin:20px 0;"></div>
+- Optionally add a quote/highlight card with background:${primary}0F, border:1px solid ${primary}33, padding:16px 18px, borderRadius:12px.
+- Close with one short human sign-off paragraph (fontSize:14px, color:#475569).
+
+HARD RULES
+- HTML is a snippet only — no <html>, <head>, <body>, <style>, <script>, <link>, or <img> tags. No class attributes. Inline styles only.
+- Address the reader once as "Hi {{name}}," on its own line before the H1. Use the literal placeholder — the server substitutes it.
+- No "click here" language. CTAs are concrete verbs.
+- Max 3 emojis in the entire body. None in subject or preheader.
+- The subject uses no emojis. Under 60 chars. Concrete.
+- The preheader is a distinct value-prop teaser (not "welcome to X"). Under 90 chars.
+- Do NOT include the CTA button in htmlBody — the server appends it based on ctaText/ctaUrl.
 
 RESPOND WITH ONLY RAW JSON — no markdown, no code fences, no commentary. Start with { and end with }.
 
 Schema:
 {
   "subject": "email subject line (max 60 chars, no emojis)",
-  "preheader": "preview text shown in inbox (max 90 chars)",
-  "htmlBody": "the inline-styled HTML snippet described above",
+  "preheader": "preview text shown in inbox (max 90 chars, no emojis, no {{name}})",
+  "htmlBody": "the styled HTML snippet described above (structured divs, not paragraphs)",
   "ad": {
     "badge": "SHORT UPPERCASE BADGE (max 3 words)",
     "headline": "punchy headline (max 60 chars)",

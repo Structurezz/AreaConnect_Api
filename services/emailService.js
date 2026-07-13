@@ -731,49 +731,85 @@ const sendCampaignEmail = async ({ to, name, subject, preheader, htmlBody, ctaUr
   const accent    = theme?.accentColor     || '#F472B6';
   const brandName = brand?.name            || 'AreaConnect';
   const logoUrl   = brand?.logoUrl         || '';
+  const social    = brand?.social || {
+    twitter:   process.env.BRAND_TWITTER_URL   || 'https://x.com/areaconnect',
+    instagram: process.env.BRAND_INSTAGRAM_URL || 'https://instagram.com/areaconnect',
+    linkedin:  process.env.BRAND_LINKEDIN_URL  || 'https://linkedin.com/company/areaconnect',
+    website:   process.env.BRAND_WEBSITE_URL   || 'https://areaconnect.pro',
+  };
 
-  // Substitute the {{name}} placeholder the AI may have used
-  const personalized = String(htmlBody || '').replace(/\{\{name\}\}/g, name || 'there');
+  const nameFallback = (name || '').trim() || 'there';
+  const personalize = (s) => String(s || '').replace(/\{\{name\}\}/g, nameFallback);
+
+  const finalSubject   = personalize(subject);
+  const finalPreheader = personalize(preheader);
+  const finalBody      = personalize(htmlBody);
 
   const cta = ctaUrl
-    ? `<div style="text-align:center;margin:32px 0 8px;">
-         <a href="${ctaUrl}" style="display:inline-block;background:linear-gradient(135deg,${primary},${accent});color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-weight:700;font-size:15px;letter-spacing:-0.01em;">
-           ${ctaText || 'Get Started'}
-         </a>
-       </div>`
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0 8px;">
+         <tr><td align="center">
+           <a href="${ctaUrl}" style="display:inline-block;background:linear-gradient(135deg,${primary},${accent});color:#ffffff;text-decoration:none;padding:15px 34px;border-radius:12px;font-weight:700;font-size:15px;letter-spacing:-0.01em;box-shadow:0 6px 18px ${primary}44;">
+             ${ctaText || 'Get Started'}
+           </a>
+         </td></tr>
+       </table>`
     : '';
 
-  const preheaderBlock = preheader
-    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${preheader}</div>`
+  const preheaderBlock = finalPreheader
+    ? `<div style="display:none !important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden;mso-hide:all;">${finalPreheader}</div>`
     : '';
 
-  // Logo: image if provided, otherwise brand text with the theme primary as accent
   const logoBlock = logoUrl
-    ? `<img src="${logoUrl}" alt="${brandName}" style="height:32px;display:inline-block;" />`
-    : `<span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">${
+    ? `<img src="${logoUrl}" alt="${brandName}" style="height:36px;display:inline-block;" />`
+    : `<span style="font-size:24px;font-weight:800;letter-spacing:-0.03em;color:#0F172A;">${
         brandName.startsWith('Area')
           ? `Area<span style="color:${primary};">${brandName.slice(4) || 'Connect'}</span>`
           : brandName
       }</span>`;
 
+  // Social icon buttons — text-based glyphs work reliably across email clients
+  const socialIcon = (href, glyph, aria) => `<a href="${href}" aria-label="${aria}" style="display:inline-block;width:36px;height:36px;line-height:36px;text-align:center;border-radius:50%;background:${primary};color:#ffffff;text-decoration:none;font-family:'Helvetica Neue',Arial,sans-serif;font-weight:700;font-size:14px;margin:0 4px;">${glyph}</a>`;
+
+  const socialRow = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
+      <tr><td align="center">
+        ${social.twitter   ? socialIcon(social.twitter,   '𝕏',  'Twitter / X')  : ''}
+        ${social.instagram ? socialIcon(social.instagram, 'IG', 'Instagram')     : ''}
+        ${social.linkedin  ? socialIcon(social.linkedin,  'in', 'LinkedIn')      : ''}
+        ${social.website   ? socialIcon(social.website,   '↗',  'Website')       : ''}
+      </td></tr>
+    </table>`;
+
   await getResend().emails.send({
     from: FROM(),
     to,
-    subject,
+    subject: finalSubject,
     html: `<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="background:#F8FAFC;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:32px 16px;margin:0;">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${finalSubject}</title></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:24px 12px;margin:0;color:#0F172A;">
 ${preheaderBlock}
-<div style="max-width:560px;margin:0 auto;">
-  <div style="text-align:center;margin-bottom:24px;">${logoBlock}</div>
-  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);padding:36px 32px;border-top:4px solid ${primary};">
-    ${personalized}
-    ${cta}
-  </div>
-  <p style="text-align:center;font-size:12px;color:#94A3B8;margin-top:20px;">
-    Powered by Area Connector Technologies &nbsp;&middot;&nbsp; RC 9607864
-  </p>
-</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;">
+  <tr><td align="center" style="padding:8px 0 20px;">${logoBlock}</td></tr>
+
+  <tr><td style="background:#ffffff;border-radius:18px;box-shadow:0 8px 32px rgba(15,23,42,0.08);overflow:hidden;">
+    <div style="height:6px;background:linear-gradient(90deg,${primary} 0%,${accent} 100%);"></div>
+    <div style="padding:36px 34px 30px;">
+      <div style="font-size:15px;color:#0F172A;line-height:1.7;">
+        ${finalBody}
+      </div>
+      ${cta}
+    </div>
+  </td></tr>
+
+  <tr><td align="center" style="padding:28px 20px 8px;">
+    ${socialRow}
+    <p style="font-size:12px;color:#64748B;margin:0 0 4px;font-weight:600;letter-spacing:-0.01em;">${brandName} — your estate, together.</p>
+    <p style="font-size:11px;color:#94A3B8;margin:0 0 12px;">Powered by Area Connector Technologies · RC 9607864</p>
+    <p style="font-size:11px;color:#CBD5E1;margin:0;">You're receiving this because you signed up for ${brandName}.<br/>
+      <a href="${social.website || '#'}" style="color:#94A3B8;text-decoration:underline;">Manage preferences</a> · <a href="${social.website || '#'}" style="color:#94A3B8;text-decoration:underline;">Unsubscribe</a>
+    </p>
+  </td></tr>
+</table>
 </body></html>`,
   });
 
