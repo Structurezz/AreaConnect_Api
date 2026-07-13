@@ -723,6 +723,49 @@ const sendWithdrawalReceiptEmail = async ({ to, managerName, estateName, estateC
   return { sent: true };
 };
 
+// ── Marketing / campaign email ──────────────────────────────────────────────
+const sendCampaignEmail = async ({ to, name, subject, preheader, htmlBody, ctaUrl, ctaText }) => {
+  if (!process.env.RESEND_API_KEY) return { skipped: true };
+
+  const cta = ctaUrl
+    ? `<div style="text-align:center;margin:32px 0 8px;">
+         <a href="${ctaUrl}" style="display:inline-block;background:linear-gradient(135deg,#EC4899,#F472B6);color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-weight:700;font-size:15px;letter-spacing:-0.01em;">
+           ${ctaText || 'Get Started'}
+         </a>
+       </div>`
+    : '';
+
+  const preheaderBlock = preheader
+    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${preheader}</div>`
+    : '';
+
+  await getResend().emails.send({
+    from: FROM(),
+    to,
+    subject,
+    html: `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="background:#F8FAFC;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:32px 16px;margin:0;">
+${preheaderBlock}
+<div style="max-width:560px;margin:0 auto;">
+  <div style="text-align:center;margin-bottom:24px;">
+    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#EC4899;">Connect</span></span>
+  </div>
+  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);padding:36px 32px;">
+    <p style="font-size:14px;color:#475569;margin-bottom:16px;">Hi ${name || 'there'},</p>
+    ${htmlBody}
+    ${cta}
+  </div>
+  <p style="text-align:center;font-size:12px;color:#94A3B8;margin-top:20px;">
+    Powered by Area Connector Technologies &nbsp;&middot;&nbsp; RC 9607864
+  </p>
+</div>
+</body></html>`,
+  });
+
+  return { sent: true };
+};
+
 module.exports = {
   sendVisitorPass,
   sendInviteEmail,
@@ -732,4 +775,5 @@ module.exports = {
   sendSubscriptionReminderEmail,
   generateInvoiceHtml,
   sendPitchEmail,
+  sendCampaignEmail,
 };

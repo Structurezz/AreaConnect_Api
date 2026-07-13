@@ -83,6 +83,7 @@ app.use('/api/guards', require('./routes/guards'));
 app.use('/api/pitch',  require('./routes/pitch'));
 app.use('/api/contact', require('./routes/contact'));
 app.use('/api/court', require('./routes/court'));
+app.use('/api/campaigns', require('./routes/campaigns'));
 
 // Health check
 app.get('/health', (req, res) => {

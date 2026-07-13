@@ -5,6 +5,7 @@ const Unit = require('../models/Unit');
 const Plan = require('../models/Plan');
 const Subscription = require('../models/Subscription');
 const { generateAccessToken, generateRefreshToken, verifyRefreshToken } = require('../services/tokenService');
+const campaignController = require('./campaignController');
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -63,6 +64,7 @@ exports.register = async (req, res) => {
       }
 
       res.cookie('refreshToken', refreshToken, COOKIE_OPTS);
+      campaignController.onUserSignup(user).catch(() => {});
       return res.status(201).json({
         success: true,
         message: 'Registration successful',
@@ -97,6 +99,7 @@ exports.register = async (req, res) => {
     await user.save();
 
     res.cookie('refreshToken', refreshToken, COOKIE_OPTS);
+    campaignController.onUserSignup(user).catch(() => {});
     return res.status(201).json({
       success: true,
       message: 'Registration successful',
