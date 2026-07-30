@@ -31,6 +31,8 @@ router.patch('/:estateId', authorize('estate_manager', 'super_admin'), [
   body('name').optional().notEmpty(),
 ], validate, ctrl.updateEstate);
 
+router.post('/:estateId/geocode', authorize('estate_manager', 'super_admin'), ctrl.geocodeEstate);
+
 // ── Constitution PDF ──────────────────────────────────────────────────────────
 router.post(
   '/:estateId/constitution',

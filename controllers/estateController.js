@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const pdfParse = require('pdf-parse');
+const { geocodeAddress } = require('../services/geocoding');
 const Estate = require('../models/Estate');
 const User = require('../models/User');
 const Unit = require('../models/Unit');
@@ -13,7 +14,11 @@ exports.createEstate = async (req, res) => {
   try {
     const { name, address, managerId } = req.body;
 
-    const estate = await Estate.create({ name, address, managerId });
+    const location = {};
+    const geo = await geocodeAddress(address);
+    if (geo) Object.assign(location, geo, { geocodedAt: new Date() });
+
+    const estate = await Estate.create({ name, address, managerId, location });
 
     if (managerId) {
       await User.findByIdAndUpdate(managerId, {
@@ -45,6 +50,17 @@ exports.getEstate = async (req, res) => {
     const estate = await Estate.findById(req.params.estateId)
       .populate('managerId', 'name email phone');
     if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
+
+    // Lazy backfill: if the estate has an address but no lat/lng yet, geocode inline
+    // so existing records get map coordinates the first time anyone views them.
+    if (estate.address && !estate.location?.lat && process.env.GOOGLE_MAPS_API_KEY) {
+      const geo = await geocodeAddress(estate.address);
+      if (geo) {
+        estate.location = { ...geo, geocodedAt: new Date() };
+        estate.save().catch(err => console.warn('lazy geocode save failed:', err.message));
+      }
+    }
+
     return res.json({ success: true, data: estate });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
@@ -81,15 +97,41 @@ exports.getEstateDetail = async (req, res) => {
 
 exports.updateEstate = async (req, res) => {
   try {
-    const { name, address, settings } = req.body;
+    const { name, address, settings, location: manualLocation } = req.body;
+    const update = {};
+    if (name !== undefined) update.name = name;
+    if (settings !== undefined) update.settings = settings;
+
+    // Manual pin override (from Settings map picker) takes precedence over geocoding
+    if (manualLocation && typeof manualLocation.lat === 'number' && typeof manualLocation.lng === 'number') {
+      update.location = {
+        lat: manualLocation.lat,
+        lng: manualLocation.lng,
+        formattedAddress: manualLocation.formattedAddress || address || '',
+        placeId: manualLocation.placeId || '',
+        geocodedAt: new Date(),
+      };
+      if (manualLocation.formattedAddress) update.address = manualLocation.formattedAddress;
+      else if (address !== undefined) update.address = address;
+    } else if (address !== undefined) {
+      update.address = address;
+      // Re-geocode when address changed and no manual pin provided
+      const current = await Estate.findById(req.params.estateId).select('address').lean();
+      if (current && current.address !== address) {
+        const geo = await geocodeAddress(address);
+        if (geo) update.location = { ...geo, geocodedAt: new Date() };
+      }
+    }
+
     const estate = await Estate.findByIdAndUpdate(
       req.params.estateId,
-      { name, address, settings },
+      update,
       { new: true, runValidators: true }
     );
     if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
     return res.json({ success: true, data: estate });
   } catch (err) {
+    console.error('updateEstate error:', err);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
@@ -188,7 +230,11 @@ exports.addEstate = async (req, res) => {
     }
 
     const managerId = req.user._id;
-    const estate = await Estate.create({ name, address, managerId });
+    const location = {};
+    const geo = await geocodeAddress(address);
+    if (geo) Object.assign(location, geo, { geocodedAt: new Date() });
+
+    const estate = await Estate.create({ name, address, managerId, location });
 
     await User.findByIdAndUpdate(managerId, {
       $addToSet: { managedEstates: estate._id },
@@ -228,6 +274,25 @@ function assertEstateAccess(user, estate) {
   }
   return user.estateId?.toString() === estate._id.toString();
 }
+
+// POST /estates/:estateId/geocode — force re-geocode this estate's address
+exports.geocodeEstate = async (req, res) => {
+  try {
+    const estate = await Estate.findById(req.params.estateId);
+    if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
+    if (!estate.address) return res.status(400).json({ success: false, message: 'Estate has no address to geocode' });
+
+    const geo = await geocodeAddress(estate.address);
+    if (!geo) return res.status(422).json({ success: false, message: 'Address could not be geocoded' });
+
+    estate.location = { ...geo, geocodedAt: new Date() };
+    await estate.save();
+    return res.json({ success: true, data: estate.location });
+  } catch (err) {
+    console.error('geocodeEstate error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
 
 exports.uploadConstitution = async (req, res) => {
   try {

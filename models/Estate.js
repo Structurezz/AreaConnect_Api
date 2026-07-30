@@ -16,6 +16,13 @@ const estateSchema = new mongoose.Schema({
     marketplaceApproval: { type: Boolean, default: false },
     allowGuestChat: { type: Boolean, default: true },
   },
+  location: {
+    lat: { type: Number, default: null },
+    lng: { type: Number, default: null },
+    formattedAddress: { type: String, default: '' },
+    placeId: { type: String, default: '' },
+    geocodedAt: Date,
+  },
   constitution: {
     fileUrl: { type: String, default: '' },
     fileName: { type: String, default: '' },
