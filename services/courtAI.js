@@ -3,6 +3,18 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const GEMINI_MODEL = 'gemini-2.5-flash';
 
+// Gemini 2.5 Flash accepts ~1M tokens of context, so we can safely inject
+// even a long estate constitution (roughly 4 chars ≈ 1 token). Cap for safety.
+const MAX_CONSTITUTION_CHARS = 120_000;
+
+function constitutionBlock(constitutionText, estateName) {
+  if (!constitutionText || !constitutionText.trim()) return '';
+  const body = constitutionText.length > MAX_CONSTITUTION_CHARS
+    ? constitutionText.slice(0, MAX_CONSTITUTION_CHARS) + '\n\n[…constitution truncated for length…]'
+    : constitutionText;
+  return `\n\n─── ESTATE CONSTITUTION — ${estateName || 'This Estate'} ───\nThe following is the governing constitution of this estate. You MUST reason from these rules, cite specific clauses (by number or heading) where relevant, and never contradict them. If a matter is not addressed by the constitution, say so plainly and fall back to general estate governance principles.\n\n${body}\n─── END OF CONSTITUTION ───\n`;
+}
+
 const AI_PERSONAS = {
   adaeze: {
     name: 'Barrister Adaeze Okafor',
@@ -36,12 +48,12 @@ const AI_PERSONAS = {
 
 const JUDGE_SYSTEM = `You are Judge Orizu, the Honourable Presiding Judge of the AreaConnect Court of Justice. You are wise, fair, dramatic, and occasionally witty. You maintain order and deliver verdicts with gravitas. You consider evidence, jury recommendations, severity, and community impact. Use formal judicial language with occasional dry humour. Format your verdict as a structured legal pronouncement. Keep verdicts to 300-400 words.`;
 
-async function getLawyerArgument({ persona, caseTitle, caseType, charges, plaintiffStatement, evidence, side, context }) {
+async function getLawyerArgument({ persona, caseTitle, caseType, charges, plaintiffStatement, evidence, side, context, constitutionText, estateName }) {
   if (!process.env.GEMINI_API_KEY) return fallbackArgument(persona, side, caseTitle);
   try {
     const model = genAI.getGenerativeModel({
       model: GEMINI_MODEL,
-      systemInstruction: AI_PERSONAS[persona].system,
+      systemInstruction: AI_PERSONAS[persona].system + constitutionBlock(constitutionText, estateName),
     });
     const prompt = `Case: "${caseTitle}" (${caseType})
 Charges: ${charges.join(', ')}
@@ -49,7 +61,7 @@ Plaintiff's Statement: ${plaintiffStatement || 'Not provided'}
 Evidence on record: ${evidence.map(e => `[${e.side}] ${e.label}: ${e.content}`).join('\n') || 'None yet'}
 ${context ? `\nContext: ${context}` : ''}
 
-Deliver your ${side === 'prosecution' ? 'opening argument prosecuting this case' : side === 'defense' ? 'opening argument defending this case' : 'settlement proposal'} to the court.`;
+Deliver your ${side === 'prosecution' ? 'opening argument prosecuting this case' : side === 'defense' ? 'opening argument defending this case' : 'settlement proposal'} to the court. Where applicable, cite the estate constitution by clause.`;
 
     const result = await model.generateContent(prompt);
     return result.response.text();
@@ -59,19 +71,19 @@ Deliver your ${side === 'prosecution' ? 'opening argument prosecuting this case'
   }
 }
 
-async function getLawyerRebuttal({ persona, caseTitle, charges, evidence, opponentArgument, side }) {
+async function getLawyerRebuttal({ persona, caseTitle, charges, evidence, opponentArgument, side, constitutionText, estateName }) {
   if (!process.env.GEMINI_API_KEY) return fallbackArgument(persona, side, caseTitle);
   try {
     const model = genAI.getGenerativeModel({
       model: GEMINI_MODEL,
-      systemInstruction: AI_PERSONAS[persona].system,
+      systemInstruction: AI_PERSONAS[persona].system + constitutionBlock(constitutionText, estateName),
     });
     const prompt = `Case: "${caseTitle}"
 Charges: ${charges.join(', ')}
 Opponent just argued: "${opponentArgument}"
 Evidence: ${evidence.map(e => `[${e.side}] ${e.label}: ${e.content}`).join('\n') || 'None'}
 
-Deliver your rebuttal to the court.`;
+Deliver your rebuttal to the court. Where applicable, cite the estate constitution.`;
 
     const result = await model.generateContent(prompt);
     return result.response.text();
@@ -81,12 +93,12 @@ Deliver your rebuttal to the court.`;
   }
 }
 
-async function getJudgeVerdict({ caseTitle, caseType, charges, severity, plaintiffStatement, evidence, proceedings, juryVerdict, juryTally }) {
+async function getJudgeVerdict({ caseTitle, caseType, charges, severity, plaintiffStatement, evidence, proceedings, juryVerdict, juryTally, constitutionText, estateName }) {
   if (!process.env.GEMINI_API_KEY) return fallbackVerdict(caseTitle);
   try {
     const model = genAI.getGenerativeModel({
       model: GEMINI_MODEL,
-      systemInstruction: JUDGE_SYSTEM,
+      systemInstruction: JUDGE_SYSTEM + constitutionBlock(constitutionText, estateName),
     });
 
     const args = proceedings
@@ -102,9 +114,9 @@ Evidence: ${evidence.map(e => `[${e.side}] ${e.label}: ${e.content}`).join('\n')
 Lawyer Arguments:\n${args || 'None submitted'}
 Jury Recommendation: ${juryVerdict !== 'none' ? `${juryVerdict} (${juryTally.guilty} guilty / ${juryTally.notGuilty} not guilty / ${juryTally.abstain} abstain)` : 'No jury verdict'}
 
-Deliver your final verdict. Include:
+Deliver your final verdict. Ground your reasoning in the estate constitution above where applicable, citing specific clauses. Include:
 1. Your ruling (guilty/not_guilty/dismissed/mistrial)
-2. Reasoning
+2. Reasoning (with constitution clause references where relevant)
 3. If guilty: recommended fine amount in Naira and punishment type (none/warning/fine/marketplace_ban/lounge_suspension/community_suspension/estate_ban) and duration in days
 4. End with "VERDICT: [GUILTY/NOT GUILTY/DISMISSED/MISTRIAL]" and if fine: "FINE: ₦[amount]" and if punishment: "PUNISHMENT: [type] for [N] days"`;
 
@@ -132,18 +144,18 @@ Deliver your final verdict. Include:
   }
 }
 
-async function getJudgeAppealRuling({ caseTitle, originalVerdict, appealReason }) {
+async function getJudgeAppealRuling({ caseTitle, originalVerdict, appealReason, constitutionText, estateName }) {
   if (!process.env.GEMINI_API_KEY) return { granted: false, ruling: 'The appeal is denied. The original verdict stands.' };
   try {
     const model = genAI.getGenerativeModel({
       model: GEMINI_MODEL,
-      systemInstruction: JUDGE_SYSTEM,
+      systemInstruction: JUDGE_SYSTEM + constitutionBlock(constitutionText, estateName),
     });
     const prompt = `Appeal in case "${caseTitle}".
 Original verdict: ${originalVerdict}
 Grounds for appeal: ${appealReason}
 
-Rule on this appeal. Consider whether new grounds justify reconsideration. End with "APPEAL: GRANTED" or "APPEAL: DENIED".`;
+Rule on this appeal. Consider whether new grounds justify reconsideration, and reference the estate constitution where applicable. End with "APPEAL: GRANTED" or "APPEAL: DENIED".`;
 
     const result = await model.generateContent(prompt);
     const text = result.response.text();
@@ -154,7 +166,7 @@ Rule on this appeal. Consider whether new grounds justify reconsideration. End w
   }
 }
 
-async function getLawyerConsultation({ persona, side, caseTitle, caseType, charges, status, evidenceCount, proceedingCount, userMessage }) {
+async function getLawyerConsultation({ persona, side, caseTitle, caseType, charges, status, evidenceCount, proceedingCount, userMessage, constitutionText, estateName }) {
   const p = AI_PERSONAS[persona];
   if (!process.env.GEMINI_API_KEY) {
     return `Understood. As your private counsel, my advice is: ${side === 'prosecution' ? 'focus on the evidence and keep your statement factual and clear.' : 'stay calm, challenge every unproven claim, and remember — the burden of proof is on the plaintiff.'} — ${p.name}`;
@@ -162,7 +174,7 @@ async function getLawyerConsultation({ persona, side, caseTitle, caseType, charg
   try {
     const model = genAI.getGenerativeModel({
       model: GEMINI_MODEL,
-      systemInstruction: `${p.system}\n\nIMPORTANT: You are now in a PRIVATE CONSULTATION with your client — NOT addressing the court. Speak directly and confidentially to your client. Be strategic, practical, and supportive. Help them understand the situation and guide their next steps. Keep responses under 200 words.`,
+      systemInstruction: `${p.system}\n\nIMPORTANT: You are now in a PRIVATE CONSULTATION with your client — NOT addressing the court. Speak directly and confidentially to your client. Be strategic, practical, and supportive. Help them understand the situation and guide their next steps. Keep responses under 200 words.${constitutionBlock(constitutionText, estateName)}`,
     });
     const prompt = `PRIVATE CLIENT CONSULTATION
 Case: "${caseTitle}" (${caseType})
@@ -174,7 +186,7 @@ Proceedings logged: ${proceedingCount} event(s)
 
 Your client says: "${userMessage}"
 
-Give private, strategic legal advice. Be direct and practical.`;
+Give private, strategic legal advice grounded in the estate constitution where relevant. Be direct and practical.`;
     const result = await model.generateContent(prompt);
     return result.response.text();
   } catch (err) {
@@ -183,7 +195,7 @@ Give private, strategic legal advice. Be direct and practical.`;
   }
 }
 
-async function getAdjournmentRuling({ caseTitle, reason, adjournmentCount }) {
+async function getAdjournmentRuling({ caseTitle, reason, adjournmentCount, constitutionText, estateName }) {
   if (!process.env.GEMINI_API_KEY) {
     if (adjournmentCount >= 2) return { granted: false, ruling: `The application for adjournment is DENIED. This court has indulged ${adjournmentCount} delay(s) already. Justice cannot wait indefinitely. We proceed today. — Judge Orizu` };
     return { granted: true, ruling: `The application for adjournment is GRANTED. The hearing is adjourned for 3 days. Both parties are reminded that further delays will not be tolerated. Come prepared. — Judge Orizu` };
@@ -191,7 +203,7 @@ async function getAdjournmentRuling({ caseTitle, reason, adjournmentCount }) {
   try {
     const model = genAI.getGenerativeModel({
       model: GEMINI_MODEL,
-      systemInstruction: JUDGE_SYSTEM,
+      systemInstruction: JUDGE_SYSTEM + constitutionBlock(constitutionText, estateName),
     });
     const prompt = `Application for adjournment in: "${caseTitle}".
 Reason given: "${reason}"

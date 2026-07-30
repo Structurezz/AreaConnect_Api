@@ -3,6 +3,7 @@ const { body } = require('express-validator');
 const ctrl = require('../controllers/estateController');
 const { authenticate, authorize, scopeToEstate } = require('../middleware/auth');
 const validate = require('../middleware/validate');
+const uploadPdf = require('../middleware/uploadPdf');
 
 router.use(authenticate);
 
@@ -29,5 +30,20 @@ router.get('/:estateId', ctrl.getEstate);
 router.patch('/:estateId', authorize('estate_manager', 'super_admin'), [
   body('name').optional().notEmpty(),
 ], validate, ctrl.updateEstate);
+
+// ── Constitution PDF ──────────────────────────────────────────────────────────
+router.post(
+  '/:estateId/constitution',
+  authorize('estate_manager', 'super_admin'),
+  uploadPdf.single('file'),
+  ctrl.uploadConstitution,
+);
+router.get('/:estateId/constitution/meta', ctrl.getConstitutionMeta);
+router.get('/:estateId/constitution/file', ctrl.downloadConstitution);
+router.delete(
+  '/:estateId/constitution',
+  authorize('estate_manager', 'super_admin'),
+  ctrl.deleteConstitution,
+);
 
 module.exports = router;

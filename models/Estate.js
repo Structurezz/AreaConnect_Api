@@ -16,6 +16,15 @@ const estateSchema = new mongoose.Schema({
     marketplaceApproval: { type: Boolean, default: false },
     allowGuestChat: { type: Boolean, default: true },
   },
+  constitution: {
+    fileUrl: { type: String, default: '' },
+    fileName: { type: String, default: '' },
+    sizeBytes: { type: Number, default: 0 },
+    uploadedAt: Date,
+    uploadedById: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    extractedText: { type: String, default: '' }, // used to ground AI judge/lawyers
+    pageCount: { type: Number, default: 0 },
+  },
   isActive: { type: Boolean, default: true },
 }, { timestamps: true });
 

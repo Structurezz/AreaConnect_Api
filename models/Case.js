@@ -12,6 +12,7 @@ const proceedingSchema = new Schema({
     'appeal_filed','appeal_ruled','case_closed','punishment_enforced',
     'default_judgment_warning','default_judgment','adjourned','adjournment_denied',
     'closing_arguments_called','defendant_engaged',
+    'judge_mode_changed','lawyer_mode_changed','manager_verdict','verdict_overridden',
   ], required: true },
   actorId: { type: ObjectId, ref: 'User' },
   actorName: String,      // 'Judge Orizu', 'Barrister Adaeze Okafor', etc.
@@ -86,7 +87,28 @@ const caseSchema = new Schema({
     punishmentDurationDays: { type: Number, default: 0 },
     conditions: String,
     deliveredAt: Date,
+    deliveredBy: { type: String, enum: ['ai_judge','manager'], default: 'ai_judge' },
+    deliveredById: { type: ObjectId, ref: 'User' },
   },
+
+  // Judge/Lawyer control (manager can bypass AI)
+  judgeMode:  { type: String, enum: ['ai','manager'], default: 'ai' },
+  lawyerMode: { type: String, enum: ['ai','off'],     default: 'ai' },
+
+  // Preserved history of overridden verdicts (AI verdict kept when manager overrides)
+  verdictHistory: [{
+    decision: { type: String, enum: ['guilty','not_guilty','dismissed','settled','mistrial'] },
+    summary: String,
+    fine: { type: Number, default: 0 },
+    punishment: String,
+    punishmentDurationDays: { type: Number, default: 0 },
+    deliveredBy: { type: String, enum: ['ai_judge','manager'] },
+    deliveredById: { type: ObjectId, ref: 'User' },
+    deliveredAt: Date,
+    overriddenAt: Date,
+    overriddenById: { type: ObjectId, ref: 'User' },
+    overrideReason: String,
+  }],
 
   fine: {
     amount: { type: Number, default: 0 },

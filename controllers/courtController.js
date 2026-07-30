@@ -1,9 +1,24 @@
 const Case = require('../models/Case');
 const User = require('../models/User');
+const Estate = require('../models/Estate');
 const {
   getLawyerArgument, getLawyerRebuttal, getJudgeVerdict,
   getJudgeAppealRuling, getLawyerConsultation, getAdjournmentRuling, AI_PERSONAS,
 } = require('../services/courtAI');
+
+// Fetch the constitution context (text + estate name) for AI grounding.
+// Returns { constitutionText, estateName } — both empty strings if unavailable.
+async function loadEstateContext(estateId) {
+  try {
+    const est = await Estate.findById(estateId).select('name constitution.extractedText').lean();
+    return {
+      constitutionText: est?.constitution?.extractedText || '',
+      estateName: est?.name || '',
+    };
+  } catch {
+    return { constitutionText: '', estateName: '' };
+  }
+}
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -260,16 +275,19 @@ exports.fileCase = async (req, res) => {
 
     // Generate AI opening statements (synchronous — Gemini flash is fast)
     try {
+      const { constitutionText, estateName } = await loadEstateContext(estateId);
       const [prosArg, defArg] = await Promise.all([
         getLawyerArgument({
           persona: prosecutionPersona, caseTitle: title, caseType: type,
           charges: charges || [], plaintiffStatement: plaintiffStatement || '',
           evidence: [], side: 'prosecution',
+          constitutionText, estateName,
         }),
         getLawyerArgument({
           persona: defensePersona, caseTitle: title, caseType: type,
           charges: charges || [], plaintiffStatement: plaintiffStatement || '',
           evidence: [], side: 'defense',
+          constitutionText, estateName,
         }),
       ]);
 
@@ -352,7 +370,8 @@ exports.chatWithLawyer = async (req, res) => {
     courtCase.lawyerChats[side].push({ from: 'user', content: message.trim(), timestamp: new Date() });
     courtCase.markModified(`lawyerChats.${side}`);
 
-    // Get AI reply
+    // Get AI reply (grounded on estate constitution if uploaded)
+    const { constitutionText, estateName } = await loadEstateContext(estateId);
     const reply = await getLawyerConsultation({
       persona, side,
       caseTitle: courtCase.title,
@@ -362,6 +381,7 @@ exports.chatWithLawyer = async (req, res) => {
       evidenceCount: courtCase.evidence.length,
       proceedingCount: courtCase.proceedings.length,
       userMessage: message.trim(),
+      constitutionText, estateName,
     });
 
     courtCase.lawyerChats[side].push({ from: 'ai', content: reply, timestamp: new Date() });
@@ -403,8 +423,10 @@ exports.requestAdjournment = async (req, res) => {
     const side = isPlaintiff ? 'prosecution' : 'defense';
     const adjCount = courtCase.adjournments?.length || 0;
 
+    const { constitutionText, estateName } = await loadEstateContext(estateId);
     const { granted, ruling } = await getAdjournmentRuling({
       caseTitle: courtCase.title, reason: reason.trim(), adjournmentCount: adjCount,
+      constitutionText, estateName,
     });
 
     courtCase.adjournments.push({
@@ -475,12 +497,14 @@ exports.hireLawyer = async (req, res) => {
       content: `${req.user.name} has changed ${side} counsel${prev ? ` from ${AI_PERSONAS[prev]?.name}` : ''} to ${info.name}.`,
     });
 
-    // New counsel delivers a fresh opening statement
+    // New counsel delivers a fresh opening statement (grounded on constitution)
+    const { constitutionText, estateName } = await loadEstateContext(estateId);
     const argument = await getLawyerArgument({
       persona, caseTitle: courtCase.title, caseType: courtCase.type,
       charges: courtCase.charges, plaintiffStatement: courtCase.plaintiffStatement,
       evidence: courtCase.evidence, side,
       context: prev ? `You are replacing ${AI_PERSONAS[prev]?.name} as ${side} counsel. Acknowledge the change and reinforce the case.` : undefined,
+      constitutionText, estateName,
     });
 
     addProceeding(courtCase, {
@@ -534,10 +558,12 @@ exports.submitArgument = async (req, res) => {
 
     if (courtCase.status === 'open') courtCase.status = 'in_hearing';
 
-    // Opposing AI lawyer auto-rebuts
+    // Opposing AI lawyer auto-rebuts — only if lawyer mode is 'ai' (default)
     const opposingSide = side === 'prosecution' ? 'defense' : 'prosecution';
     const opposingLawyer = courtCase.lawyers[opposingSide];
-    if (opposingLawyer?.type === 'ai' && opposingLawyer?.aiPersona) {
+    const lawyersEnabled = (courtCase.lawyerMode || 'ai') === 'ai';
+    if (lawyersEnabled && opposingLawyer?.type === 'ai' && opposingLawyer?.aiPersona) {
+      const { constitutionText, estateName } = await loadEstateContext(estateId);
       const rebuttal = await getLawyerRebuttal({
         persona: opposingLawyer.aiPersona,
         caseTitle: courtCase.title,
@@ -545,6 +571,7 @@ exports.submitArgument = async (req, res) => {
         evidence: courtCase.evidence,
         opponentArgument: content,
         side: opposingSide,
+        constitutionText, estateName,
       });
       const opInfo = AI_PERSONAS[opposingLawyer.aiPersona];
       addProceeding(courtCase, {
@@ -680,11 +707,13 @@ exports.deliverVerdict = async (req, res) => {
     });
 
     const juryTally = courtCase.jury.tally || { guilty: 0, notGuilty: 0, abstain: 0 };
+    const { constitutionText, estateName } = await loadEstateContext(estateId);
     const verdictResult = await getJudgeVerdict({
       caseTitle: courtCase.title, caseType: courtCase.type, charges: courtCase.charges,
       severity: courtCase.severity, plaintiffStatement: courtCase.plaintiffStatement,
       evidence: courtCase.evidence, proceedings: courtCase.proceedings,
       juryVerdict: courtCase.jury.verdict || 'none', juryTally,
+      constitutionText, estateName,
     });
 
     const now = new Date();
@@ -803,10 +832,12 @@ exports.fileAppeal = async (req, res) => {
 
     await courtCase.save();
 
+    const { constitutionText, estateName } = await loadEstateContext(estateId);
     const appealResult = await getJudgeAppealRuling({
       caseTitle: courtCase.title,
       originalVerdict: courtCase.verdict?.decision || 'unknown',
       appealReason: reason,
+      constitutionText, estateName,
     });
 
     courtCase.appeal.status = appealResult.granted ? 'granted' : 'denied';
@@ -897,6 +928,222 @@ exports.getPublicStats = async (req, res) => {
     byType.forEach(t => { typeCounts[t._id] = t.count; });
     return res.json({ success: true, data: { total, byStatus: statusCounts, byType: typeCounts } });
   } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── PATCH /api/court/:id/mode ───────────────────────────────────────────────
+// Manager toggles AI judge on/off and AI lawyers on/off
+
+exports.setMode = async (req, res) => {
+  try {
+    const { judgeMode, lawyerMode } = req.body;
+    if (judgeMode && !['ai','manager'].includes(judgeMode))
+      return res.status(400).json({ success: false, message: 'judgeMode must be ai or manager' });
+    if (lawyerMode && !['ai','off'].includes(lawyerMode))
+      return res.status(400).json({ success: false, message: 'lawyerMode must be ai or off' });
+    if (!judgeMode && !lawyerMode)
+      return res.status(400).json({ success: false, message: 'Provide judgeMode and/or lawyerMode' });
+
+    const estateId = req.user.estateId;
+    const courtCase = await Case.findOne({ _id: req.params.id, estateId });
+    if (!courtCase) return res.status(404).json({ success: false, message: 'Case not found' });
+
+    if (judgeMode && judgeMode !== courtCase.judgeMode) {
+      const prev = courtCase.judgeMode || 'ai';
+      courtCase.judgeMode = judgeMode;
+      addProceeding(courtCase, {
+        event: 'judge_mode_changed',
+        actorId: req.user._id, actorName: req.user.name, role: 'Estate Manager',
+        content: `Judge mode changed from ${prev.toUpperCase()} to ${judgeMode.toUpperCase()} by ${req.user.name}. ${judgeMode === 'manager' ? 'The Estate Manager will preside over this case in place of the AI judge.' : 'AI Judge Orizu resumes presiding over this case.'}`,
+      });
+    }
+    if (lawyerMode && lawyerMode !== courtCase.lawyerMode) {
+      const prev = courtCase.lawyerMode || 'ai';
+      courtCase.lawyerMode = lawyerMode;
+      addProceeding(courtCase, {
+        event: 'lawyer_mode_changed',
+        actorId: req.user._id, actorName: req.user.name, role: 'Estate Manager',
+        content: `AI counsel is now ${lawyerMode === 'ai' ? 'ENABLED' : 'DISABLED'} for this case by ${req.user.name}. ${lawyerMode === 'off' ? 'Parties must argue for themselves — AI barristers will not rebut.' : 'AI barristers will engage as normal.'}`,
+      });
+    }
+
+    await courtCase.save();
+    return res.json({ success: true, data: courtCase });
+  } catch (err) {
+    console.error('setMode error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── POST /api/court/:id/manager-verdict ─────────────────────────────────────
+// Manager delivers their own verdict (bypasses AI judge)
+
+exports.managerVerdict = async (req, res) => {
+  try {
+    const { decision, summary, fine, punishment, punishmentDurationDays, conditions } = req.body;
+
+    if (!['guilty','not_guilty','dismissed','mistrial'].includes(decision))
+      return res.status(400).json({ success: false, message: 'decision must be guilty, not_guilty, dismissed, or mistrial' });
+    if (!summary || !summary.trim())
+      return res.status(400).json({ success: false, message: 'summary (verdict reasoning) is required' });
+
+    const validPunishments = ['none','warning','fine','marketplace_ban','lounge_suspension','community_suspension','estate_ban'];
+    if (punishment && !validPunishments.includes(punishment))
+      return res.status(400).json({ success: false, message: `punishment must be one of: ${validPunishments.join(', ')}` });
+
+    const estateId = req.user.estateId;
+    const courtCase = await Case.findOne({ _id: req.params.id, estateId });
+    if (!courtCase) return res.status(404).json({ success: false, message: 'Case not found' });
+
+    if (['closed','settled','verdict_delivered'].includes(courtCase.status))
+      return res.status(400).json({ success: false, message: 'Verdict already delivered or case concluded. Use /override-verdict instead.' });
+
+    const now = new Date();
+    const fineAmount = Number(fine) || 0;
+    const durationDays = Number(punishmentDurationDays) || 0;
+    const punish = punishment || 'none';
+
+    courtCase.verdict = {
+      decision,
+      summary: summary.trim(),
+      fine: fineAmount,
+      punishment: punish,
+      punishmentDurationDays: durationDays,
+      conditions: conditions || '',
+      deliveredAt: now,
+      deliveredBy: 'manager',
+      deliveredById: req.user._id,
+    };
+    courtCase.status = 'verdict_delivered';
+    courtCase.judgeMode = 'manager';
+
+    addProceeding(courtCase, {
+      event: 'manager_verdict',
+      actorId: req.user._id, actorName: req.user.name, role: 'Presiding Judge (Estate Manager)',
+      content: summary.trim(),
+    });
+    addProceeding(courtCase, {
+      event: 'verdict_delivered',
+      actorId: req.user._id, actorName: req.user.name, role: 'Presiding Judge (Estate Manager)',
+      content: summary.trim(),
+    });
+
+    if (fineAmount > 0) {
+      const dueDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      courtCase.fine = { amount: fineAmount, status: 'pending', dueDate };
+      addProceeding(courtCase, {
+        event: 'fine_issued',
+        actorId: req.user._id, actorName: req.user.name, role: 'Presiding Judge (Estate Manager)',
+        content: `Fine of ₦${fineAmount.toLocaleString()} issued, due by ${dueDate.toDateString()}.`,
+      });
+    }
+
+    if (courtCase.relatedAction?.feature && decision === 'guilty')
+      courtCase.relatedAction.isEnforced = true;
+
+    await courtCase.save();
+    return res.json({ success: true, data: courtCase });
+  } catch (err) {
+    console.error('managerVerdict error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── POST /api/court/:id/override-verdict ────────────────────────────────────
+// Manager overrides an existing verdict; original is preserved in verdictHistory
+
+exports.overrideVerdict = async (req, res) => {
+  try {
+    const { decision, summary, fine, punishment, punishmentDurationDays, conditions, overrideReason } = req.body;
+
+    if (!['guilty','not_guilty','dismissed','mistrial'].includes(decision))
+      return res.status(400).json({ success: false, message: 'decision must be guilty, not_guilty, dismissed, or mistrial' });
+    if (!summary || !summary.trim())
+      return res.status(400).json({ success: false, message: 'summary is required' });
+    if (!overrideReason || !overrideReason.trim())
+      return res.status(400).json({ success: false, message: 'overrideReason is required for audit trail' });
+
+    const validPunishments = ['none','warning','fine','marketplace_ban','lounge_suspension','community_suspension','estate_ban'];
+    if (punishment && !validPunishments.includes(punishment))
+      return res.status(400).json({ success: false, message: `punishment must be one of: ${validPunishments.join(', ')}` });
+
+    const estateId = req.user.estateId;
+    const courtCase = await Case.findOne({ _id: req.params.id, estateId });
+    if (!courtCase) return res.status(404).json({ success: false, message: 'Case not found' });
+
+    if (!courtCase.verdict?.decision)
+      return res.status(400).json({ success: false, message: 'No existing verdict to override. Use /manager-verdict for a fresh ruling.' });
+
+    const now = new Date();
+
+    // Preserve the previous verdict in history
+    courtCase.verdictHistory.push({
+      decision: courtCase.verdict.decision,
+      summary: courtCase.verdict.summary,
+      fine: courtCase.verdict.fine || 0,
+      punishment: courtCase.verdict.punishment || 'none',
+      punishmentDurationDays: courtCase.verdict.punishmentDurationDays || 0,
+      deliveredBy: courtCase.verdict.deliveredBy || 'ai_judge',
+      deliveredById: courtCase.verdict.deliveredById,
+      deliveredAt: courtCase.verdict.deliveredAt,
+      overriddenAt: now,
+      overriddenById: req.user._id,
+      overrideReason: overrideReason.trim(),
+    });
+
+    // Rollback any pending fine tied to the old verdict — new verdict will re-issue
+    if (courtCase.fine?.status === 'pending') {
+      courtCase.fine = { amount: 0, status: 'none' };
+    }
+
+    const fineAmount = Number(fine) || 0;
+    const durationDays = Number(punishmentDurationDays) || 0;
+    const punish = punishment || 'none';
+
+    courtCase.verdict = {
+      decision,
+      summary: summary.trim(),
+      fine: fineAmount,
+      punishment: punish,
+      punishmentDurationDays: durationDays,
+      conditions: conditions || '',
+      deliveredAt: now,
+      deliveredBy: 'manager',
+      deliveredById: req.user._id,
+    };
+    courtCase.status = 'verdict_delivered';
+    courtCase.judgeMode = 'manager';
+
+    addProceeding(courtCase, {
+      event: 'verdict_overridden',
+      actorId: req.user._id, actorName: req.user.name, role: 'Presiding Judge (Estate Manager)',
+      content: `The prior verdict has been overridden by ${req.user.name}. Grounds for override: ${overrideReason.trim()}`,
+    });
+    addProceeding(courtCase, {
+      event: 'verdict_delivered',
+      actorId: req.user._id, actorName: req.user.name, role: 'Presiding Judge (Estate Manager)',
+      content: summary.trim(),
+    });
+
+    if (fineAmount > 0) {
+      const dueDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      courtCase.fine = { amount: fineAmount, status: 'pending', dueDate };
+      addProceeding(courtCase, {
+        event: 'fine_issued',
+        actorId: req.user._id, actorName: req.user.name, role: 'Presiding Judge (Estate Manager)',
+        content: `Fine of ₦${fineAmount.toLocaleString()} issued, due by ${dueDate.toDateString()}.`,
+      });
+    }
+
+    if (courtCase.relatedAction) {
+      courtCase.relatedAction.isEnforced = decision === 'guilty';
+    }
+
+    await courtCase.save();
+    return res.json({ success: true, data: courtCase });
+  } catch (err) {
+    console.error('overrideVerdict error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };

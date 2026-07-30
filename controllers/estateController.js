@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+const pdfParse = require('pdf-parse');
 const Estate = require('../models/Estate');
 const User = require('../models/User');
 const Unit = require('../models/Unit');
@@ -212,6 +215,146 @@ exports.addEstate = async (req, res) => {
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// ─── Constitution PDF ─────────────────────────────────────────────────────────
+
+function assertEstateAccess(user, estate) {
+  if (user.role === 'super_admin') return true;
+  if (user.role === 'estate_manager') {
+    if (estate.managerId?.toString() === user._id.toString()) return true;
+    if ((user.managedEstates || []).some(id => id.toString() === estate._id.toString())) return true;
+  }
+  return user.estateId?.toString() === estate._id.toString();
+}
+
+exports.uploadConstitution = async (req, res) => {
+  try {
+    const { estateId } = req.params;
+    const estate = await Estate.findById(estateId);
+    if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
+
+    const isManager = req.user.role === 'super_admin'
+      || estate.managerId?.toString() === req.user._id.toString()
+      || (req.user.managedEstates || []).some(id => id.toString() === estateId);
+    if (!isManager) return res.status(403).json({ success: false, message: 'Only the estate manager can upload the constitution' });
+
+    if (!req.file) return res.status(400).json({ success: false, message: 'PDF file required' });
+
+    // Parse PDF text for AI grounding
+    let extractedText = '';
+    let pageCount = 0;
+    try {
+      const buf = fs.readFileSync(req.file.path);
+      const parsed = await pdfParse(buf);
+      extractedText = (parsed.text || '').trim();
+      pageCount = parsed.numpages || 0;
+    } catch (parseErr) {
+      console.error('constitution parse error:', parseErr.message);
+      // Delete the uploaded file since we couldn't parse it
+      try { fs.unlinkSync(req.file.path); } catch {}
+      return res.status(400).json({ success: false, message: 'Could not read the PDF. Please ensure it is a valid, non-encrypted PDF.' });
+    }
+
+    // Delete previous file if present
+    if (estate.constitution?.fileUrl) {
+      const prev = path.join(__dirname, '..', estate.constitution.fileUrl.replace(/^\/+/, ''));
+      try { if (fs.existsSync(prev)) fs.unlinkSync(prev); } catch {}
+    }
+
+    estate.constitution = {
+      fileUrl: `/uploads/constitutions/${req.file.filename}`,
+      fileName: req.file.originalname,
+      sizeBytes: req.file.size,
+      uploadedAt: new Date(),
+      uploadedById: req.user._id,
+      extractedText,
+      pageCount,
+    };
+    await estate.save();
+
+    return res.json({
+      success: true,
+      message: 'Constitution uploaded and indexed for the AI court.',
+      data: {
+        fileName: estate.constitution.fileName,
+        fileUrl: estate.constitution.fileUrl,
+        sizeBytes: estate.constitution.sizeBytes,
+        uploadedAt: estate.constitution.uploadedAt,
+        pageCount: estate.constitution.pageCount,
+        textLength: extractedText.length,
+      },
+    });
+  } catch (err) {
+    console.error('uploadConstitution error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Server error' });
+  }
+};
+
+exports.getConstitutionMeta = async (req, res) => {
+  try {
+    const { estateId } = req.params;
+    const estate = await Estate.findById(estateId).select('constitution managerId name');
+    if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
+    if (!assertEstateAccess(req.user, estate)) return res.status(403).json({ success: false, message: 'Forbidden' });
+
+    const c = estate.constitution || {};
+    return res.json({
+      success: true,
+      data: {
+        hasConstitution: !!c.fileUrl,
+        fileName: c.fileName || '',
+        fileUrl: c.fileUrl || '',
+        sizeBytes: c.sizeBytes || 0,
+        pageCount: c.pageCount || 0,
+        uploadedAt: c.uploadedAt || null,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.downloadConstitution = async (req, res) => {
+  try {
+    const { estateId } = req.params;
+    const estate = await Estate.findById(estateId).select('constitution managerId name');
+    if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
+    if (!assertEstateAccess(req.user, estate)) return res.status(403).json({ success: false, message: 'Forbidden' });
+    if (!estate.constitution?.fileUrl) return res.status(404).json({ success: false, message: 'No constitution uploaded' });
+
+    const filePath = path.join(__dirname, '..', estate.constitution.fileUrl.replace(/^\/+/, ''));
+    if (!fs.existsSync(filePath)) return res.status(404).json({ success: false, message: 'File missing on server' });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${estate.constitution.fileName || 'constitution.pdf'}"`);
+    return fs.createReadStream(filePath).pipe(res);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.deleteConstitution = async (req, res) => {
+  try {
+    const { estateId } = req.params;
+    const estate = await Estate.findById(estateId);
+    if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
+
+    const isManager = req.user.role === 'super_admin'
+      || estate.managerId?.toString() === req.user._id.toString()
+      || (req.user.managedEstates || []).some(id => id.toString() === estateId);
+    if (!isManager) return res.status(403).json({ success: false, message: 'Only the estate manager can remove the constitution' });
+
+    if (estate.constitution?.fileUrl) {
+      const filePath = path.join(__dirname, '..', estate.constitution.fileUrl.replace(/^\/+/, ''));
+      try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch {}
+    }
+    estate.constitution = { fileUrl: '', fileName: '', sizeBytes: 0, uploadedAt: undefined, uploadedById: undefined, extractedText: '', pageCount: 0 };
+    await estate.save();
+    return res.json({ success: true, message: 'Constitution removed' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 
