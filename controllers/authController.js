@@ -200,6 +200,42 @@ exports.getMe = async (req, res) => {
   }
 };
 
+exports.updateProfile = async (req, res) => {
+  try {
+    const { name, phone, profilePhoto, isDiscoverable } = req.body;
+    const update = {};
+    if (typeof name === 'string' && name.trim()) update.name = name.trim();
+    if (typeof phone === 'string') update.phone = phone.trim();
+    if (typeof isDiscoverable === 'boolean') update.isDiscoverable = isDiscoverable;
+    if (typeof profilePhoto === 'string') {
+      // Accept a data URL, an https URL, or empty string (to clear)
+      if (profilePhoto === '' || /^(data:image\/(png|jpe?g|webp|gif);base64,|https?:\/\/)/i.test(profilePhoto)) {
+        // Cap base64 payload at ~200KB after encoding to prevent bloating the doc
+        if (profilePhoto.startsWith('data:') && profilePhoto.length > 280000) {
+          return res.status(400).json({ success: false, message: 'Avatar too large. Please choose a smaller image.' });
+        }
+        update.profilePhoto = profilePhoto;
+      } else {
+        return res.status(400).json({ success: false, message: 'Invalid profile photo format' });
+      }
+    }
+
+    if (Object.keys(update).length === 0) {
+      return res.status(400).json({ success: false, message: 'No changes provided' });
+    }
+
+    const user = await User.findByIdAndUpdate(req.user._id, update, { new: true })
+      .populate('estateId', 'name estateCode logoUrl settings')
+      .populate('managedEstates', 'name estateCode logoUrl isActive')
+      .populate('unitId', 'unitNumber block type');
+
+    return res.json({ success: true, data: user.toSafeObject() });
+  } catch (err) {
+    console.error('updateProfile error', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
 exports.switchEstate = async (req, res) => {
   try {
     const { estateId } = req.body;

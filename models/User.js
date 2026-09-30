@@ -16,6 +16,7 @@ const userSchema = new mongoose.Schema({
   unitId: { type: mongoose.Schema.Types.ObjectId, ref: 'Unit' },
   profilePhoto: { type: String, default: '' },
   isActive: { type: Boolean, default: true },
+  isDiscoverable: { type: Boolean, default: true },
   refreshToken: { type: String, default: null },
   lastSeen: { type: Date, default: Date.now },
   walletBalance: { type: Number, default: 0 },

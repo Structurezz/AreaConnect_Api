@@ -19,6 +19,12 @@ router.post('/login', [
 router.post('/refresh', ctrl.refresh);
 router.post('/logout', ctrl.logout);
 router.get('/me', authenticate, ctrl.getMe);
+router.patch('/me', authenticate, [
+  body('name').optional().isString().trim().isLength({ min: 1, max: 100 }),
+  body('phone').optional().isString().isLength({ max: 40 }),
+  body('isDiscoverable').optional().isBoolean(),
+  body('profilePhoto').optional().isString().isLength({ max: 300000 }),
+], validate, ctrl.updateProfile);
 router.post('/switch-estate', authenticate, ctrl.switchEstate);
 
 module.exports = router;

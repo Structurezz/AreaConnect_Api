@@ -231,6 +231,9 @@ exports.getEstateUsers = async (req, res) => {
       estateId: req.estateId,
       isActive: true,
       _id: { $ne: req.user._id },
+      // Hide users who've marked themselves invisible in the DM picker.
+      // A missing field means legacy account → treat as discoverable.
+      isDiscoverable: { $ne: false },
     };
     if (q) {
       filter.$or = [
