@@ -29,9 +29,16 @@ const initSocket = (server) => {
   io.on('connection', (socket) => {
     console.log('Socket connected:', socket.id);
 
-    socket.on('join', ({ userId, estateId }) => {
+    socket.on('join', ({ userId, estateId, role }) => {
       socket.join(`estate:${estateId}`);
       socket.join(`user:${userId}`);
+      if (role === 'security') {
+        socket.join(`estate:${estateId}:security`);
+        socket.join(`estate:${estateId}:staff`);
+      } else if (role === 'estate_manager' || role === 'super_admin') {
+        socket.join(`estate:${estateId}:estate_manager`);
+        socket.join(`estate:${estateId}:staff`);
+      }
       connectedUsers.set(userId, socket.id);
     });
 
@@ -65,11 +72,22 @@ const initSocket = (server) => {
   return io;
 };
 
-/** Emit a security alert to all security/manager sockets in an estate */
+/**
+ * Emit a security alert. Room targeting is derived from alert.audience:
+ *   'all'            → everyone in the estate
+ *   'staff'          → security + estate_manager
+ *   'estate_manager' → estate_manager only
+ *   'security'       → security only
+ * Legacy alerts without an audience field are treated as 'all'.
+ */
 const emitAlert = (estateId, alert) => {
-  if (io) {
-    io.to(`estate:${estateId}`).emit('new_alert', alert);
-  }
+  if (!io) return;
+  const audience = alert && alert.audience;
+  let room = `estate:${estateId}`;
+  if (audience === 'staff') room = `estate:${estateId}:staff`;
+  else if (audience === 'estate_manager') room = `estate:${estateId}:estate_manager`;
+  else if (audience === 'security') room = `estate:${estateId}:security`;
+  io.to(room).emit('new_alert', alert);
 };
 
 /** Emit visitor check-in/out event */

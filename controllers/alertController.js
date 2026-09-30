@@ -1,9 +1,15 @@
 const Alert = require('../models/Alert');
 const { emitAlert } = require('../services/socketService');
 
+const AUDIENCES = ['all', 'staff', 'estate_manager', 'security'];
+const normalizeAudience = (v) => (AUDIENCES.includes(v) ? v : 'all');
+
 exports.createAlert = async (req, res) => {
   try {
-    const { type, note } = req.body;
+    const { type, note, audience } = req.body;
+    const role = req.user.role || 'resident';
+    // Residents can't target staff-only channels — force 'all'.
+    const resolvedAudience = role === 'resident' ? 'all' : normalizeAudience(audience);
     const alert = await Alert.create({
       estateId: req.estateId,
       residentId: req.user._id,
@@ -11,7 +17,8 @@ exports.createAlert = async (req, res) => {
       type: type || 'security',
       note,
       status: 'open',
-      raisedByRole: req.user.role || 'resident',
+      raisedByRole: role,
+      audience: resolvedAudience,
     });
 
     await alert.populate([
@@ -38,11 +45,16 @@ exports.getAlerts = async (req, res) => {
     const filter = { estateId: req.estateId };
     if (status) filter.status = status;
 
-    if (req.user.role === 'resident') {
+    const role = req.user.role;
+    if (role === 'resident') {
       filter.$or = [
         { residentId: req.user._id },
-        { isEmergencyBroadcast: true },
+        { isEmergencyBroadcast: true, audience: { $in: ['all', null] } },
       ];
+    } else if (role === 'security') {
+      filter.audience = { $in: ['all', 'staff', 'security', null] };
+    } else if (role === 'estate_manager' || role === 'super_admin') {
+      filter.audience = { $in: ['all', 'staff', 'estate_manager', null] };
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -106,7 +118,8 @@ exports.resolveAlert = async (req, res) => {
 
 exports.broadcastEmergency = async (req, res) => {
   try {
-    const { note, type, title, severity, location, actionRequired, contactNumber } = req.body;
+    const { note, type, title, severity, location, actionRequired, contactNumber, audience } = req.body;
+    const resolvedAudience = normalizeAudience(audience);
     const alert = await Alert.create({
       estateId: req.estateId,
       residentId: req.user._id,
@@ -121,6 +134,7 @@ exports.broadcastEmergency = async (req, res) => {
       status: 'open',
       isEmergencyBroadcast: true,
       raisedByRole: req.user.role || 'security',
+      audience: resolvedAudience,
     });
 
     await alert.populate([

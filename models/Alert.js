@@ -25,6 +25,11 @@ const alertSchema = new mongoose.Schema({
   acknowledgedAt: { type: Date },
   isEmergencyBroadcast: { type: Boolean, default: false },
   raisedByRole: { type: String, enum: ['resident', 'security', 'estate_manager', 'super_admin'], default: 'resident' },
+  audience: {
+    type: String,
+    enum: ['all', 'staff', 'estate_manager', 'security'],
+    default: 'all',
+  },
 }, { timestamps: true });
 
 alertSchema.index({ estateId: 1, status: 1, createdAt: -1 });

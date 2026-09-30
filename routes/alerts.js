@@ -8,6 +8,7 @@ router.use(authenticate, scopeToEstate, requireEstate, requireActiveSubscription
 
 router.post('/', [
   body('type').optional().isIn(['security', 'fire', 'medical', 'noise', 'other']),
+  body('audience').optional().isIn(['all', 'staff', 'estate_manager', 'security']),
 ], validate, ctrl.createAlert);
 
 router.get('/', ctrl.getAlerts);
@@ -20,6 +21,7 @@ router.post('/broadcast', authorize('security', 'estate_manager', 'super_admin')
   body('note').notEmpty().withMessage('Message is required'),
   body('type').optional().isIn(['security', 'fire', 'medical', 'noise', 'other']),
   body('severity').optional().isIn(['low', 'medium', 'high', 'critical']),
+  body('audience').optional().isIn(['all', 'staff', 'estate_manager', 'security']),
 ], validate, ctrl.broadcastEmergency);
 
 module.exports = router;
