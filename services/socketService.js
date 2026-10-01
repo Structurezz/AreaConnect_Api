@@ -97,6 +97,19 @@ const emitVisitorUpdate = (estateId, visitor) => {
   }
 };
 
+/** A visitor has shown up early and the guard is waiting for the host's call */
+const emitEarlyArrival = (hostUserId, payload) => {
+  if (!io || !hostUserId) return;
+  io.to(`user:${hostUserId}`).emit('visitor_early_arrival', payload);
+};
+
+/** Host has approved early entry — tell any guard on duty in the estate */
+const emitEarlyApproved = (estateId, payload) => {
+  if (!io) return;
+  io.to(`estate:${estateId}:security`).emit('visitor_early_approved', payload);
+  io.to(`estate:${estateId}:staff`).emit('visitor_early_approved', payload);
+};
+
 const emitAnnouncement = (estateId, announcement) => {
   if (io) {
     io.to(`estate:${estateId}`).emit('new_announcement', announcement);
@@ -132,4 +145,4 @@ const emitNotification = (estateId, notification, userId = null) => {
 
 const getIO = () => io;
 
-module.exports = { initSocket, emitAlert, emitVisitorUpdate, emitAnnouncement, emitNkechiTyping, emitGroupMessage, emitNotification, getIO };
+module.exports = { initSocket, emitAlert, emitVisitorUpdate, emitEarlyArrival, emitEarlyApproved, emitAnnouncement, emitNkechiTyping, emitGroupMessage, emitNotification, getIO };

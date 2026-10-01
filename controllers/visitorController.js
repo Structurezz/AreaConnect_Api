@@ -4,7 +4,9 @@ const SecurityLog = require('../models/SecurityLog');
 const { generateQRCode, generateVisitorCode } = require('../services/qrService');
 const { sendVisitorPass } = require('../services/emailService');
 const { sendVisitorCodeSMS } = require('../services/smsService');
-const { emitVisitorUpdate } = require('../services/socketService');
+const { emitVisitorUpdate, emitEarlyArrival, emitEarlyApproved } = require('../services/socketService');
+
+const EARLY_GRACE_MIN = 30; // minutes allowed before expectedDate without host approval
 
 /** Generate a unique visitor code (retry on collision) */
 const makeUniqueCode = async () => {
@@ -146,8 +148,75 @@ exports.verifyVisitorCode = async (req, res) => {
       return res.status(409).json({ success: false, message: 'Visitor already checked out', data: visitor });
     }
 
+    // Detect early arrival (> 30 min before expectedDate, not yet checked in).
+    // We ping the host so they can grant early entry without the guard having
+    // to call them. If approval already granted, fall through to normal flow.
+    const now = new Date();
+    const expectedAt = new Date(visitor.expectedDate);
+    const minsEarly = Math.ceil((expectedAt - now) / 60000);
+
+    if (
+      minsEarly > EARLY_GRACE_MIN &&
+      !visitor.earlyEntryApproved &&
+      visitor.status !== 'checked-in'
+    ) {
+      const hostId = visitor.hostResidentId?._id || visitor.hostResidentId;
+      emitEarlyArrival(hostId?.toString(), {
+        visitorId:    visitor._id,
+        visitorName:  visitor.visitorName,
+        visitorPhone: visitor.visitorPhone,
+        visitorCode:  visitor.visitorCode,
+        purpose:      visitor.purpose,
+        expectedDate: visitor.expectedDate,
+        minsEarly,
+        estateId:     visitor.estateId?._id || visitor.estateId,
+      });
+      return res.json({
+        success: true,
+        state: 'early_arrival',
+        data: visitor,
+        minsEarly,
+      });
+    }
+
     return res.json({ success: true, data: visitor });
   } catch (err) {
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+exports.approveEarlyEntry = async (req, res) => {
+  try {
+    const visitor = await Visitor.findById(req.params.id);
+    if (!visitor) return res.status(404).json({ success: false, message: 'Visitor not found' });
+
+    // Only the host of this visitor can approve
+    const hostId = visitor.hostResidentId?.toString();
+    if (hostId !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Only the host can approve early entry' });
+    }
+
+    visitor.earlyEntryApproved   = true;
+    visitor.earlyEntryApprovedBy = req.user._id;
+    visitor.earlyEntryApprovedAt = new Date();
+    await visitor.save();
+    await visitor.populate([
+      { path: 'hostResidentId', select: 'name phone' },
+      { path: 'hostUnitId',     select: 'unitNumber block' },
+    ]);
+
+    const estateId = (visitor.estateId?._id || visitor.estateId)?.toString();
+    emitEarlyApproved(estateId, {
+      visitorId:   visitor._id,
+      visitorCode: visitor.visitorCode,
+      visitorName: visitor.visitorName,
+      approvedBy:  req.user.name,
+      visitor,
+    });
+
+    return res.json({ success: true, message: 'Early entry approved', data: visitor });
+  } catch (err) {
+    console.error('approveEarlyEntry error', err);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
@@ -165,18 +234,20 @@ exports.checkIn = async (req, res) => {
     const duration = visitor.expectedDuration || 720; // minutes
     const expiresAt = new Date(expectedAt.getTime() + duration * 60 * 1000);
 
-    // Too early — visitor not yet expected
-    if (now < expectedAt) {
+    // Too early — visitor not yet expected, and no host approval yet
+    if (now < expectedAt && !visitor.earlyEntryApproved) {
       const diffMs = expectedAt - now;
       const diffMins = Math.ceil(diffMs / 60000);
-      const hrs  = Math.floor(diffMins / 60);
-      const mins = diffMins % 60;
-      const when = hrs > 0 ? `${hrs}h ${mins}m` : `${mins} min`;
-      return res.status(425).json({
-        success: false,
-        code: 'TOO_EARLY',
-        message: `Visitor is expected at ${expectedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — ${when} from now. Please contact the resident to grant early entry.`,
-      });
+      if (diffMins > EARLY_GRACE_MIN) {
+        const hrs  = Math.floor(diffMins / 60);
+        const mins = diffMins % 60;
+        const when = hrs > 0 ? `${hrs}h ${mins}m` : `${mins} min`;
+        return res.status(425).json({
+          success: false,
+          code: 'TOO_EARLY',
+          message: `Visitor is expected at ${expectedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — ${when} from now. The resident has been pinged to approve early entry.`,
+        });
+      }
     }
 
     // Pass expired

@@ -21,5 +21,6 @@ router.post('/', authorize('resident', 'estate_manager'), [
 router.patch('/:id/checkin', authorize('security', 'estate_manager'), ctrl.checkIn);
 router.patch('/:id/checkout', authorize('security', 'estate_manager'), ctrl.checkOut);
 router.patch('/:id/blacklist', authorize('estate_manager', 'super_admin'), ctrl.blacklistVisitor);
+router.post('/:id/approve-early', authorize('resident', 'estate_manager'), ctrl.approveEarlyEntry);
 
 module.exports = router;

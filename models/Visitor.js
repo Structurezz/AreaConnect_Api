@@ -22,6 +22,11 @@ const visitorSchema = new mongoose.Schema({
   verifiedBySecurityId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   notes: { type: String, default: '' },
   isRecurring: { type: Boolean, default: false },
+  // Early-arrival approval — set when the host grants the guard permission
+  // to check the visitor in before expectedDate.
+  earlyEntryApproved: { type: Boolean, default: false },
+  earlyEntryApprovedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  earlyEntryApprovedAt: { type: Date, default: null },
 }, { timestamps: true });
 
 visitorSchema.index({ estateId: 1, status: 1 });
