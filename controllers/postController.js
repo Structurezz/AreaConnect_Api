@@ -2,8 +2,8 @@ const Post = require('../models/Post');
 const { emitNotification } = require('../services/socketService');
 const { deleteGridFSFiles } = require('../utils/gridfs');
 
-const POPULATE_AUTHOR   = { path: 'author',           select: 'name role avatar' };
-const POPULATE_COMMENTS = { path: 'comments.author',  select: 'name role avatar' };
+const POPULATE_AUTHOR   = { path: 'author',           select: 'name role profilePhoto' };
+const POPULATE_COMMENTS = { path: 'comments.author',  select: 'name role profilePhoto' };
 
 // GET /api/posts?page=1&limit=20
 exports.getPosts = async (req, res) => {
