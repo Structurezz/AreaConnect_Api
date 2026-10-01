@@ -329,7 +329,7 @@ exports.uploadConstitution = async (req, res) => {
     }
 
     estate.constitution = {
-      fileUrl: `/uploads/constitutions/${req.file.filename}`,
+      fileUrl: req.file.url,
       fileName: req.file.originalname,
       sizeBytes: req.file.size,
       uploadedAt: new Date(),

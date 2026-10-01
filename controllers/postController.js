@@ -1,5 +1,6 @@
 const Post = require('../models/Post');
 const { emitNotification } = require('../services/socketService');
+const { deleteGridFSFiles } = require('../utils/gridfs');
 
 const POPULATE_AUTHOR   = { path: 'author',           select: 'name role avatar' };
 const POPULATE_COMMENTS = { path: 'comments.author',  select: 'name role avatar' };
@@ -31,7 +32,7 @@ exports.getPosts = async (req, res) => {
 exports.createPost = async (req, res) => {
   try {
     const { content } = req.body;
-    const images = (req.files || []).map(f => `/uploads/${f.filename}`);
+    const images = (req.files || []).map(f => f.url);
 
     if (!content?.trim() && images.length === 0) {
       return res.status(400).json({ success: false, message: 'Post must have text or an image' });
@@ -73,7 +74,11 @@ exports.deletePost = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Not authorised' });
     }
 
+    const imageUrls = post.images || [];
     await post.deleteOne();
+    // Best-effort cleanup of the underlying GridFS blobs so storage doesn't
+    // creep up over time. Failure to delete a file doesn't affect the response.
+    deleteGridFSFiles(imageUrls).catch(() => {});
     return res.json({ success: true });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });

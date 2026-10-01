@@ -57,7 +57,7 @@ exports.getSaved = async (req, res) => {
 exports.createListing = async (req, res) => {
   try {
     const { title, description, price, category, contactPhone, condition, isNegotiable } = req.body;
-    const images = req.files ? req.files.map(f => `/uploads/${f.filename}`) : [];
+    const images = req.files ? req.files.map(f => f.url) : [];
 
     const listing = await MarketplaceListing.create({
       estateId: req.estateId,

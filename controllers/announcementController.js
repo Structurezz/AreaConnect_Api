@@ -31,7 +31,7 @@ exports.createAnnouncement = async (req, res) => {
       body,
       category: category || 'general',
       isPinned: isPinned || false,
-      imageUrl: req.file ? `/uploads/${req.file.filename}` : '',
+      imageUrl: req.file ? req.file.url : '',
     });
 
     await announcement.populate('authorId', 'name profilePhoto');

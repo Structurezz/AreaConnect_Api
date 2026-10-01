@@ -59,8 +59,14 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 // Static files
+// Legacy disk-based uploads (pre-GridFS). Kept so any old URL still floating
+// around keeps working on dev; Railway wipes this on redeploy so most will
+// 404 in prod — new uploads go through /files which hits GridFS.
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/public', express.static(path.join(__dirname, 'public')));
+
+// GridFS-backed uploads (persistent, survives redeploys)
+app.use('/files', require('./routes/files'));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));

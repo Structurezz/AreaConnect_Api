@@ -68,7 +68,7 @@ exports.sendMessage = async (req, res) => {
       receiverId: isGroupMessage ? null : recipient,
       content,
       isGroupMessage: Boolean(isGroupMessage),
-      imageUrl: req.file ? `/uploads/${req.file.filename}` : '',
+      imageUrl: req.file ? req.file.url : '',
       readBy: [req.user._id],
     });
 
