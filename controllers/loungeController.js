@@ -233,6 +233,10 @@ exports.resetDefaults = async (req, res) => {
 
 exports.listDefaults = async (req, res) => {
   try {
+    // Trigger the auto-seed first so an admin visiting a fresh install
+    // sees the starter playlist instead of an empty table.
+    await loadDefaults();
+
     const tracks = await DefaultTrack.find()
       .sort({ order: 1, createdAt: 1 })
       .populate('createdBy', 'name')
