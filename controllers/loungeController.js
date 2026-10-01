@@ -1,14 +1,50 @@
 const LoungeSession  = require('../models/LoungeSession');
-const DEFAULT_TRACKS = require('../data/defaultTracks');
+const DefaultTrack   = require('../models/DefaultTrack');
+const SEED_TRACKS    = require('../data/defaultTracks');
 
-// Synthesise the default tracks as suggestion-shaped entries so the frontend
-// can keep rendering them without any changes. These are NOT persisted — they
-// come from the single shared source (data/defaultTracks.js) on every call.
-// IDs are deterministic (prefixed) so React keys stay stable across renders.
-function buildVirtualDefaults() {
-  // One pass through the shared list — keep deterministic order so clients
-  // can paginate it consistently. Shuffling is now a client concern.
-  return DEFAULT_TRACKS.map((t) => ({
+// ── Shared defaults source ────────────────────────────────────────────────────
+// Defaults now live in the DefaultTrack collection and are managed via the
+// admin UI. We cache them in-memory for 60s to keep the hot getSession path
+// cheap. Call invalidateDefaults() after any admin mutation.
+const CACHE_TTL = 60 * 1000;
+let defaultCache   = null;
+let defaultCacheAt = 0;
+
+const invalidateDefaults = () => { defaultCache = null; defaultCacheAt = 0; };
+
+async function loadDefaults() {
+  if (defaultCache && Date.now() - defaultCacheAt < CACHE_TTL) return defaultCache;
+
+  let tracks = await DefaultTrack.find({ isActive: true })
+    .sort({ order: 1, createdAt: 1 })
+    .lean();
+
+  // One-shot migration — the collection is empty on first run after this
+  // refactor, so seed it from data/defaultTracks.js so we don't lose the
+  // starter playlist.
+  if (tracks.length === 0 && SEED_TRACKS.length) {
+    try {
+      const docs = SEED_TRACKS.map((t, i) => ({
+        videoId: t.videoId,
+        title:   t.title,
+        artist:  t.artist || '',
+        order:   i,
+      }));
+      await DefaultTrack.insertMany(docs, { ordered: false });
+      tracks = await DefaultTrack.find({ isActive: true })
+        .sort({ order: 1, createdAt: 1 })
+        .lean();
+    } catch { /* duplicate key etc. — ignore, we'll just use whatever's in the db */ }
+  }
+
+  defaultCache   = tracks;
+  defaultCacheAt = Date.now();
+  return defaultCache;
+}
+
+async function buildVirtualDefaults() {
+  const tracks = await loadDefaults();
+  return tracks.map((t) => ({
     _id:         `default:${t.videoId}`,
     videoId:     t.videoId,
     title:       t.title,
@@ -20,10 +56,16 @@ function buildVirtualDefaults() {
   }));
 }
 
-// Legacy sessions may still have isDefault entries baked into their
-// suggestions array (from before the refactor). Strip them on read so the
-// document converges to community-only over time, and we never
-// double-render defaults.
+async function withDefaults(session) {
+  const obj = session.toObject();
+  const defaults = await buildVirtualDefaults();
+  obj.suggestions = [...obj.suggestions, ...defaults];
+  return obj;
+}
+
+// Legacy sessions may still have isDefault entries baked into their suggestions
+// array (from before the refactor). Strip them on read so documents converge
+// to community-only over time.
 async function stripLegacyDefaults(session) {
   if (!session) return;
   const hadDefaults = session.suggestions.some((s) => s.isDefault);
@@ -32,14 +74,12 @@ async function stripLegacyDefaults(session) {
   try { await session.save(); } catch { /* best effort */ }
 }
 
-// Returns the response shape the frontend expects: a single `suggestions`
-// array with community adds first (newest first already), then the shared
-// defaults appended as virtual entries.
-function withDefaults(session) {
-  const obj = session.toObject();
-  obj.suggestions = [...obj.suggestions, ...buildVirtualDefaults()];
-  return obj;
+async function isTrackInHousePlaylist(videoId) {
+  const tracks = await loadDefaults();
+  return tracks.some((t) => t.videoId === videoId);
 }
+
+// ── Session endpoints (per-estate) ────────────────────────────────────────────
 
 exports.getSession = async (req, res) => {
   try {
@@ -47,15 +87,13 @@ exports.getSession = async (req, res) => {
       .populate('suggestions.suggestedBy', 'name');
 
     if (!session) {
-      // Create a brand-new session with no persisted suggestions —
-      // defaults are merged in at response time from the shared source.
       session = await LoungeSession.create({ estateId: req.estateId, suggestions: [] });
       await session.populate('suggestions.suggestedBy', 'name');
     } else {
       await stripLegacyDefaults(session);
     }
 
-    res.json({ success: true, data: withDefaults(session) });
+    res.json({ success: true, data: await withDefaults(session) });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
   }
@@ -73,7 +111,7 @@ exports.updateMood = async (req, res) => {
       { new: true, upsert: true },
     ).populate('suggestions.suggestedBy', 'name');
 
-    res.json({ success: true, data: withDefaults(session) });
+    res.json({ success: true, data: await withDefaults(session) });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
   }
@@ -85,9 +123,7 @@ exports.suggestVideo = async (req, res) => {
     if (!videoId || !title)
       return res.status(400).json({ success: false, message: 'videoId and title are required' });
 
-    // Prevent duplicates against both community adds AND defaults.
-    const isDefaultTrack = DEFAULT_TRACKS.some((d) => d.videoId === videoId);
-    if (isDefaultTrack)
+    if (await isTrackInHousePlaylist(videoId))
       return res.status(400).json({ success: false, message: 'That track is already in the house playlist' });
 
     let session = await LoungeSession.findOne({ estateId: req.estateId });
@@ -98,7 +134,6 @@ exports.suggestVideo = async (req, res) => {
     if (session.suggestions.some((s) => s.videoId === videoId))
       return res.status(400).json({ success: false, message: 'Video already in queue' });
 
-    // Community suggestions go to the front.
     session.suggestions.unshift({
       videoId,
       title,
@@ -110,7 +145,7 @@ exports.suggestVideo = async (req, res) => {
     await session.save();
     await session.populate('suggestions.suggestedBy', 'name');
 
-    res.json({ success: true, data: withDefaults(session) });
+    res.json({ success: true, data: await withDefaults(session) });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
   }
@@ -120,7 +155,6 @@ exports.voteVideo = async (req, res) => {
   try {
     const { suggestionId } = req.params;
 
-    // Defaults are virtual (not persisted) so they can't be voted on.
     if (typeof suggestionId === 'string' && suggestionId.startsWith('default:')) {
       return res.status(400).json({
         success: false,
@@ -142,7 +176,7 @@ exports.voteVideo = async (req, res) => {
     await session.save();
     await session.populate('suggestions.suggestedBy', 'name');
 
-    res.json({ success: true, data: withDefaults(session), voted: !hasVoted });
+    res.json({ success: true, data: await withDefaults(session), voted: !hasVoted });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
   }
@@ -152,12 +186,10 @@ exports.removeSuggestion = async (req, res) => {
   try {
     const { suggestionId } = req.params;
 
-    // Defaults are read-only — anyone wanting to add/remove defaults does so
-    // in data/defaultTracks.js (code change, applies to every estate).
     if (typeof suggestionId === 'string' && suggestionId.startsWith('default:')) {
       return res.status(403).json({
         success: false,
-        message: 'Default tracks are part of the house playlist and cannot be removed',
+        message: 'Default tracks are part of the house playlist — manage them in the admin dashboard',
       });
     }
 
@@ -181,7 +213,6 @@ exports.removeSuggestion = async (req, res) => {
   }
 };
 
-// Kept for API compatibility — no-op now that defaults are not persisted.
 exports.resetDefaults = async (req, res) => {
   try {
     const session = await LoungeSession.findOne({ estateId: req.estateId });
@@ -191,8 +222,123 @@ exports.resetDefaults = async (req, res) => {
     res.json({
       success: true,
       message: 'Defaults are managed centrally — nothing to reset',
-      data: withDefaults(fresh),
+      data: await withDefaults(fresh),
     });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+};
+
+// ── Admin default-track CRUD ──────────────────────────────────────────────────
+
+exports.listDefaults = async (req, res) => {
+  try {
+    const tracks = await DefaultTrack.find()
+      .sort({ order: 1, createdAt: 1 })
+      .populate('createdBy', 'name')
+      .lean();
+    res.json({ success: true, data: tracks });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+};
+
+exports.createDefault = async (req, res) => {
+  try {
+    const { videoId, title, artist, order, isActive } = req.body;
+    if (!videoId || !title)
+      return res.status(400).json({ success: false, message: 'videoId and title are required' });
+
+    const exists = await DefaultTrack.findOne({ videoId: videoId.trim() });
+    if (exists)
+      return res.status(409).json({ success: false, message: 'That videoId is already in the house playlist' });
+
+    // Compute next order if not provided — put at the end.
+    let resolvedOrder = order;
+    if (typeof resolvedOrder !== 'number') {
+      const last = await DefaultTrack.findOne().sort({ order: -1 }).select('order').lean();
+      resolvedOrder = (last?.order ?? -1) + 1;
+    }
+
+    const track = await DefaultTrack.create({
+      videoId:   videoId.trim(),
+      title:     title.trim(),
+      artist:    (artist || '').trim(),
+      order:     resolvedOrder,
+      isActive:  isActive !== false,
+      createdBy: req.user._id,
+    });
+
+    invalidateDefaults();
+    res.status(201).json({ success: true, data: track });
+  } catch (e) {
+    if (e.code === 11000) {
+      return res.status(409).json({ success: false, message: 'videoId already exists' });
+    }
+    res.status(500).json({ success: false, message: e.message });
+  }
+};
+
+exports.updateDefault = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, artist, order, isActive, videoId } = req.body;
+    const update = {};
+    if (typeof title === 'string')    update.title    = title.trim();
+    if (typeof artist === 'string')   update.artist   = artist.trim();
+    if (typeof order === 'number')    update.order    = order;
+    if (typeof isActive === 'boolean') update.isActive = isActive;
+    if (typeof videoId === 'string' && videoId.trim()) update.videoId = videoId.trim();
+
+    const track = await DefaultTrack.findByIdAndUpdate(id, update, { new: true, runValidators: true });
+    if (!track) return res.status(404).json({ success: false, message: 'Track not found' });
+
+    invalidateDefaults();
+    res.json({ success: true, data: track });
+  } catch (e) {
+    if (e.code === 11000) {
+      return res.status(409).json({ success: false, message: 'videoId already exists' });
+    }
+    res.status(500).json({ success: false, message: e.message });
+  }
+};
+
+exports.deleteDefault = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const track = await DefaultTrack.findByIdAndDelete(id);
+    if (!track) return res.status(404).json({ success: false, message: 'Track not found' });
+
+    invalidateDefaults();
+    res.json({ success: true, message: 'Removed from house playlist' });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+};
+
+// Re-import from data/defaultTracks.js (admin-triggered). Skips videoIds that
+// are already in the collection so we don't duplicate the admin's own additions.
+exports.reseedDefaults = async (req, res) => {
+  try {
+    const existing = await DefaultTrack.find().select('videoId').lean();
+    const have = new Set(existing.map((t) => t.videoId));
+
+    const toInsert = SEED_TRACKS
+      .filter((t) => !have.has(t.videoId))
+      .map((t, i) => ({
+        videoId: t.videoId,
+        title:   t.title,
+        artist:  t.artist || '',
+        order:   (existing.length + i),
+      }));
+
+    if (toInsert.length === 0) {
+      return res.json({ success: true, message: 'Nothing new to seed', inserted: 0 });
+    }
+
+    const docs = await DefaultTrack.insertMany(toInsert, { ordered: false });
+    invalidateDefaults();
+    res.json({ success: true, message: `Imported ${docs.length} tracks`, inserted: docs.length });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
   }
