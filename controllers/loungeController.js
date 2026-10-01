@@ -84,11 +84,11 @@ async function isTrackInHousePlaylist(videoId) {
 exports.getSession = async (req, res) => {
   try {
     let session = await LoungeSession.findOne({ estateId: req.estateId })
-      .populate('suggestions.suggestedBy', 'name');
+      .populate('suggestions.suggestedBy', 'name profilePhoto');
 
     if (!session) {
       session = await LoungeSession.create({ estateId: req.estateId, suggestions: [] });
-      await session.populate('suggestions.suggestedBy', 'name');
+      await session.populate('suggestions.suggestedBy', 'name profilePhoto');
     } else {
       await stripLegacyDefaults(session);
     }
@@ -109,7 +109,7 @@ exports.updateMood = async (req, res) => {
       { estateId: req.estateId },
       { $set: update },
       { new: true, upsert: true },
-    ).populate('suggestions.suggestedBy', 'name');
+    ).populate('suggestions.suggestedBy', 'name profilePhoto');
 
     res.json({ success: true, data: await withDefaults(session) });
   } catch (e) {
@@ -143,7 +143,7 @@ exports.suggestVideo = async (req, res) => {
     });
 
     await session.save();
-    await session.populate('suggestions.suggestedBy', 'name');
+    await session.populate('suggestions.suggestedBy', 'name profilePhoto');
 
     res.json({ success: true, data: await withDefaults(session) });
   } catch (e) {
@@ -174,7 +174,7 @@ exports.voteVideo = async (req, res) => {
     else sg.votes.push(req.user._id);
 
     await session.save();
-    await session.populate('suggestions.suggestedBy', 'name');
+    await session.populate('suggestions.suggestedBy', 'name profilePhoto');
 
     res.json({ success: true, data: await withDefaults(session), voted: !hasVoted });
   } catch (e) {
@@ -218,7 +218,7 @@ exports.resetDefaults = async (req, res) => {
     const session = await LoungeSession.findOne({ estateId: req.estateId });
     if (session) await stripLegacyDefaults(session);
     const fresh = session || await LoungeSession.create({ estateId: req.estateId, suggestions: [] });
-    await fresh.populate('suggestions.suggestedBy', 'name');
+    await fresh.populate('suggestions.suggestedBy', 'name profilePhoto');
     res.json({
       success: true,
       message: 'Defaults are managed centrally — nothing to reset',

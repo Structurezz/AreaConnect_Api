@@ -3,7 +3,7 @@ const Event = require('../models/Event');
 exports.getEvents = async (req, res) => {
   try {
     const events = await Event.find({ estateId: req.estateId, isActive: true })
-      .populate('createdBy', 'name')
+      .populate('createdBy', 'name profilePhoto')
       .sort({ date: 1 });
     return res.json({ success: true, data: events });
   } catch (err) {
@@ -20,7 +20,7 @@ exports.createEvent = async (req, res) => {
       isFridayFunTimes: isFridayFunTimes || false,
       createdBy: req.user._id,
     });
-    await event.populate('createdBy', 'name');
+    await event.populate('createdBy', 'name profilePhoto');
     return res.status(201).json({ success: true, data: event });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
@@ -33,7 +33,7 @@ exports.updateEvent = async (req, res) => {
       { _id: req.params.id, estateId: req.estateId },
       req.body,
       { new: true, runValidators: true }
-    ).populate('createdBy', 'name');
+    ).populate('createdBy', 'name profilePhoto');
     if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
     return res.json({ success: true, data: event });
   } catch (err) {
@@ -64,7 +64,7 @@ exports.rsvp = async (req, res) => {
       await Event.findByIdAndUpdate(req.params.id, { $addToSet: { rsvps: userId } });
     }
 
-    const updated = await Event.findById(req.params.id).populate('createdBy', 'name');
+    const updated = await Event.findById(req.params.id).populate('createdBy', 'name profilePhoto');
     return res.json({ success: true, data: updated, rsvped: !hasRsvp });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });

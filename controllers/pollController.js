@@ -3,7 +3,7 @@ const Poll = require('../models/Poll');
 exports.getPolls = async (req, res) => {
   try {
     const polls = await Poll.find({ estateId: req.estateId })
-      .populate('createdBy', 'name')
+      .populate('createdBy', 'name profilePhoto')
       .sort({ createdAt: -1 });
     return res.json({ success: true, data: polls });
   } catch (err) {
@@ -22,7 +22,7 @@ exports.createPoll = async (req, res) => {
       allowMultiple: allowMultiple || false,
       createdBy: req.user._id,
     });
-    await poll.populate('createdBy', 'name');
+    await poll.populate('createdBy', 'name profilePhoto');
     return res.status(201).json({ success: true, data: poll });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
@@ -60,7 +60,7 @@ exports.vote = async (req, res) => {
 
     poll.markModified('options');
     await poll.save();
-    await poll.populate('createdBy', 'name');
+    await poll.populate('createdBy', 'name profilePhoto');
     return res.json({ success: true, data: poll });
   } catch (err) {
     console.error(err);
@@ -74,7 +74,7 @@ exports.closePoll = async (req, res) => {
       { _id: req.params.id, estateId: req.estateId },
       { isActive: false },
       { new: true }
-    ).populate('createdBy', 'name');
+    ).populate('createdBy', 'name profilePhoto');
     if (!poll) return res.status(404).json({ success: false, message: 'Poll not found' });
     return res.json({ success: true, data: poll });
   } catch (err) {

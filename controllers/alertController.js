@@ -22,7 +22,7 @@ exports.createAlert = async (req, res) => {
     });
 
     await alert.populate([
-      { path: 'residentId', select: 'name phone role' },
+      { path: 'residentId', select: 'name phone role profilePhoto' },
       { path: 'unitId', select: 'unitNumber block' },
     ]);
 
@@ -60,7 +60,7 @@ exports.getAlerts = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const [alerts, total] = await Promise.all([
       Alert.find(filter)
-        .populate('residentId', 'name phone role')
+        .populate('residentId', 'name phone role profilePhoto')
         .populate('unitId', 'unitNumber block')
         .populate('resolvedBy', 'name')
         .sort({ createdAt: -1 })
@@ -86,7 +86,7 @@ exports.acknowledgeAlert = async (req, res) => {
       { _id: req.params.id, estateId: req.estateId },
       { status: 'acknowledged', acknowledgedAt: new Date() },
       { new: true }
-    ).populate('residentId', 'name phone').populate('unitId', 'unitNumber block');
+    ).populate('residentId', 'name phone profilePhoto').populate('unitId', 'unitNumber block');
 
     if (!alert) return res.status(404).json({ success: false, message: 'Alert not found' });
 
@@ -104,7 +104,7 @@ exports.resolveAlert = async (req, res) => {
       { _id: req.params.id, estateId: req.estateId },
       { status: 'resolved', resolvedBy: req.user._id, resolvedAt: new Date() },
       { new: true }
-    ).populate('residentId', 'name phone').populate('resolvedBy', 'name');
+    ).populate('residentId', 'name phone profilePhoto').populate('resolvedBy', 'name');
 
     if (!alert) return res.status(404).json({ success: false, message: 'Alert not found' });
 
@@ -138,7 +138,7 @@ exports.broadcastEmergency = async (req, res) => {
     });
 
     await alert.populate([
-      { path: 'residentId', select: 'name phone role' },
+      { path: 'residentId', select: 'name phone role profilePhoto' },
       { path: 'unitId', select: 'unitNumber block' },
     ]);
     emitAlert(req.estateId.toString(), { ...alert.toObject(), isEmergencyBroadcast: true });
