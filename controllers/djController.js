@@ -89,7 +89,12 @@ exports.start = async (req, res) => {
       type:  sessionKind === 'announcement' ? 'live_announcement' : 'live_dj',
       title: notifTitles[sessionKind] || notifTitles.dj,
       body:  notifBodies[sessionKind] || notifBodies.dj,
-      meta:  { kind: 'dj_session', sessionId: session._id.toString(), sessionKind },
+      meta:  {
+        kind: 'dj_session',
+        sessionId: session._id.toString(),
+        sessionKind,
+        hostUserId: session.hostUserId.toString(),  // frontend uses this to suppress for the host
+      },
     });
 
     return res.status(201).json({ success: true, data: session });

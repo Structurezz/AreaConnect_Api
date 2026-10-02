@@ -101,7 +101,11 @@ exports.goLive = async (req, res) => {
       type:  'live_podcast',
       title: '📻 AreaConnect FM is LIVE — tap to tune in',
       body:  `${show.hostName} just started "${show.title}"`,
-      meta:  { kind: 'podcast_show', showId: show._id.toString() },
+      meta:  {
+        kind: 'podcast_show',
+        showId: show._id.toString(),
+        hostUserId: show.hostUserId.toString(),  // frontend suppresses for the host
+      },
     });
 
     return res.json({ success: true, data: show });
