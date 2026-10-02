@@ -192,6 +192,18 @@ const initSocket = (server) => {
       broadcastPodcastCount(showId);
     });
 
+    // Persist music volume so late joiners get the current level.
+    // Clients emit dj:volume → server writes it to the session and broadcasts.
+    socket.on('dj:volume', async ({ sessionId, volume }) => {
+      if (!sessionId || typeof volume !== 'number') return;
+      const vol = Math.max(0, Math.min(100, Math.round(volume)));
+      try {
+        const DJSession = require('../models/DJSession');
+        await DJSession.updateOne({ _id: sessionId, isLive: true }, { musicVolume: vol });
+      } catch (_) { /* best-effort persist */ }
+      io.to(`dj:${sessionId}`).emit('dj:volume', { sessionId, volume: vol });
+    });
+
     // Generic WebRTC signaling relay (works for DJ + Podcast)
     socket.on('rtc:offer',  ({ to, sdp, meta }) => {
       if (!to) return;

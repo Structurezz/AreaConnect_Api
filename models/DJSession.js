@@ -20,6 +20,7 @@ const djSessionSchema = new mongoose.Schema({
   startedAt:   { type: Date, default: Date.now },
   endedAt:     { type: Date, default: null },
   nowPlaying:  { type: nowPlayingSchema, default: () => ({}) },
+  musicVolume: { type: Number, default: 60, min: 0, max: 100 },
   peakListeners: { type: Number, default: 0 },
 }, { timestamps: true });
 
