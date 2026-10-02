@@ -49,7 +49,8 @@ exports.start = async (req, res) => {
       title:      title?.trim() || (sessionKind === 'announcement' ? `Announcement from ${req.user.name}` : `${req.user.name}'s Live Set`),
       kind:       sessionKind,
       message:    (message || '').trim(),
-      nowPlaying: sessionKind === 'announcement' ? {} : (nowPlaying || {}),
+      // Announcements may optionally carry a background track; keep nowPlaying for all kinds
+      nowPlaying: nowPlaying && nowPlaying.videoId ? nowPlaying : {},
       startedAt:  new Date(),
       isLive:     true,
     });
