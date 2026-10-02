@@ -59,7 +59,168 @@ const initSocket = (server) => {
       }
     });
 
+    // ── Live audio (DJ + Podcast) ──────────────────────────────────────────
+    // socket.data.live tracks what live rooms this socket is in so we can
+    // clean up listener counts on disconnect.
+    socket.data.live = { dj: null, podcast: null, role: null };
+
+    const broadcastDJCount = (sessionId) => {
+      const room = `dj:${sessionId}:listeners`;
+      const size = io.sockets.adapter.rooms.get(room)?.size || 0;
+      io.to(`dj:${sessionId}`).emit('dj:listener-count', { sessionId, count: size });
+    };
+
+    const broadcastPodcastCount = (showId) => {
+      const room = `podcast:${showId}:listeners`;
+      const size = io.sockets.adapter.rooms.get(room)?.size || 0;
+      io.to(`podcast:${showId}`).emit('podcast:listener-count', { showId, count: size });
+    };
+
+    // DJ host — announces themselves so listeners can address offers
+    socket.on('dj:host-ready', ({ sessionId }) => {
+      if (!sessionId) return;
+      socket.join(`dj:${sessionId}`);
+      socket.join(`dj:${sessionId}:host`);
+      socket.data.live.dj = sessionId;
+      socket.data.live.role = 'host';
+      broadcastDJCount(sessionId);
+    });
+
+    // Listener joining a DJ session
+    socket.on('dj:listener-ready', ({ sessionId }) => {
+      if (!sessionId) return;
+      socket.join(`dj:${sessionId}`);
+      socket.join(`dj:${sessionId}:listeners`);
+      socket.data.live.dj = sessionId;
+      socket.data.live.role = 'listener';
+      // Tell the host a new listener is waiting for an offer
+      io.to(`dj:${sessionId}:host`).emit('dj:new-listener', { socketId: socket.id });
+      broadcastDJCount(sessionId);
+    });
+
+    socket.on('dj:leave', ({ sessionId }) => {
+      if (!sessionId) return;
+      socket.leave(`dj:${sessionId}`);
+      socket.leave(`dj:${sessionId}:listeners`);
+      socket.leave(`dj:${sessionId}:host`);
+      socket.data.live.dj = null;
+      broadcastDJCount(sessionId);
+    });
+
+    // Podcast host — same shape
+    socket.on('podcast:host-ready', ({ showId }) => {
+      if (!showId) return;
+      socket.join(`podcast:${showId}`);
+      socket.join(`podcast:${showId}:host`);
+      socket.data.live.podcast = showId;
+      socket.data.live.role = 'host';
+      broadcastPodcastCount(showId);
+    });
+
+    socket.on('podcast:guest-ready', ({ showId, guestId, name }) => {
+      if (!showId) return;
+      socket.join(`podcast:${showId}`);
+      socket.join(`podcast:${showId}:speakers`);
+      socket.data.live.podcast = showId;
+      socket.data.live.role = 'guest';
+      socket.data.live.guestId = guestId;
+      socket.data.live.guestName = name;
+      io.to(`podcast:${showId}:host`).emit('podcast:new-guest', { socketId: socket.id, guestId, name });
+    });
+
+    socket.on('podcast:listener-ready', ({ showId }) => {
+      if (!showId) return;
+      socket.join(`podcast:${showId}`);
+      socket.join(`podcast:${showId}:listeners`);
+      socket.data.live.podcast = showId;
+      socket.data.live.role = 'listener';
+      io.to(`podcast:${showId}:host`).emit('podcast:new-listener', { socketId: socket.id });
+      broadcastPodcastCount(showId);
+    });
+
+    socket.on('podcast:leave', ({ showId }) => {
+      if (!showId) return;
+      ['', ':host', ':speakers', ':listeners'].forEach(suffix =>
+        socket.leave(`podcast:${showId}${suffix}`));
+      socket.data.live.podcast = null;
+      broadcastPodcastCount(showId);
+    });
+
+    // ── Call-ins (listener → raise hand → host approves → promoted to speaker) ─
+    socket.on('podcast:raise-hand', ({ showId, userId, userName, userPhoto }) => {
+      if (!showId) return;
+      io.to(`podcast:${showId}:host`).emit('podcast:hand-raised', {
+        socketId: socket.id, userId, userName, userPhoto, at: Date.now(),
+      });
+    });
+
+    socket.on('podcast:lower-hand', ({ showId }) => {
+      if (!showId) return;
+      io.to(`podcast:${showId}:host`).emit('podcast:hand-lowered', { socketId: socket.id });
+    });
+
+    // Host approves/denies a raised hand
+    socket.on('podcast:approve-hand', ({ showId, socketId }) => {
+      if (!showId || !socketId) return;
+      // Promote target listener to speaker
+      const targetSocket = io.sockets.sockets.get(socketId);
+      if (targetSocket) {
+        targetSocket.leave(`podcast:${showId}:listeners`);
+        targetSocket.join(`podcast:${showId}:speakers`);
+        targetSocket.data.live.role = 'caller';
+      }
+      io.to(socketId).emit('podcast:hand-approved', { showId });
+      io.to(`podcast:${showId}:host`).emit('podcast:caller-promoted', { socketId });
+      broadcastPodcastCount(showId);
+    });
+
+    socket.on('podcast:deny-hand', ({ showId, socketId }) => {
+      if (!showId || !socketId) return;
+      io.to(socketId).emit('podcast:hand-denied', { showId });
+    });
+
+    // Host removes a caller (demote back to listener)
+    socket.on('podcast:remove-caller', ({ showId, socketId }) => {
+      if (!showId || !socketId) return;
+      const targetSocket = io.sockets.sockets.get(socketId);
+      if (targetSocket) {
+        targetSocket.leave(`podcast:${showId}:speakers`);
+        targetSocket.join(`podcast:${showId}:listeners`);
+        targetSocket.data.live.role = 'listener';
+      }
+      io.to(socketId).emit('podcast:caller-removed', { showId });
+      broadcastPodcastCount(showId);
+    });
+
+    // Generic WebRTC signaling relay (works for DJ + Podcast)
+    socket.on('rtc:offer',  ({ to, sdp, meta }) => {
+      if (!to) return;
+      io.to(to).emit('rtc:offer', { from: socket.id, sdp, meta });
+    });
+    socket.on('rtc:answer', ({ to, sdp, meta }) => {
+      if (!to) return;
+      io.to(to).emit('rtc:answer', { from: socket.id, sdp, meta });
+    });
+    socket.on('rtc:ice',    ({ to, candidate, meta }) => {
+      if (!to) return;
+      io.to(to).emit('rtc:ice', { from: socket.id, candidate, meta });
+    });
+
+    // Live reactions (💃🔥👏 etc.) — ephemeral, no persistence
+    socket.on('live:reaction', ({ roomType, roomId, emoji, userName }) => {
+      if (!roomType || !roomId || !emoji) return;
+      const room = `${roomType}:${roomId}`;
+      io.to(room).emit('live:reaction', { emoji, userName, at: Date.now() });
+    });
+
     socket.on('disconnect', () => {
+      // Cleanup live-audio room membership (counts are tracked by room size,
+      // so leaving via socket.leave on disconnect is implicit — but we still
+      // need to broadcast the updated count to the room).
+      const { dj, podcast } = socket.data.live || {};
+      if (dj) setTimeout(() => broadcastDJCount(dj), 0);
+      if (podcast) setTimeout(() => broadcastPodcastCount(podcast), 0);
+
       for (const [userId, socketId] of connectedUsers.entries()) {
         if (socketId === socket.id) {
           connectedUsers.delete(userId);
@@ -145,4 +306,16 @@ const emitNotification = (estateId, notification, userId = null) => {
 
 const getIO = () => io;
 
-module.exports = { initSocket, emitAlert, emitVisitorUpdate, emitEarlyArrival, emitEarlyApproved, emitAnnouncement, emitNkechiTyping, emitGroupMessage, emitNotification, getIO };
+/**
+ * Broadcast a notification to every connected client (across all estates).
+ * Used for platform-wide events like AreaConnect FM going live.
+ */
+const emitGlobalNotification = (notification) => {
+  if (!io) return;
+  io.emit('notification', {
+    ...notification,
+    createdAt: notification.createdAt || new Date().toISOString(),
+  });
+};
+
+module.exports = { initSocket, emitAlert, emitVisitorUpdate, emitEarlyArrival, emitEarlyApproved, emitAnnouncement, emitNkechiTyping, emitGroupMessage, emitNotification, emitGlobalNotification, getIO };
