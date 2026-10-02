@@ -48,6 +48,8 @@ const caseSchema = new Schema({
     label: String,
     content: String,
     mediaUrl: String,
+    mediaKind: { type: String, enum: ['image','pdf','document','audio','video'] },
+    mediaName: String,
     submittedAt: { type: Date, default: Date.now },
   }],
 

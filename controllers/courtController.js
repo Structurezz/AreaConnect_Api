@@ -1,10 +1,78 @@
 const Case = require('../models/Case');
 const User = require('../models/User');
 const Estate = require('../models/Estate');
+const { getIO } = require('../services/socketService');
+const { autoRunCase } = require('../services/caseOrchestrator');
 const {
   getLawyerArgument, getLawyerRebuttal, getJudgeVerdict,
   getJudgeAppealRuling, getLawyerConsultation, getAdjournmentRuling, AI_PERSONAS,
 } = require('../services/courtAI');
+
+// ─── Live update broadcaster ────────────────────────────────────────────────
+// Any mutation that changes the case's visible state should call this.
+// Residents' Courtroom UI listens for `court:case-updated` and merges the
+// updated case so they never have to refresh.
+
+// Short narrator lines keyed by the last proceeding event. Keeps the ticker
+// alive without hand-wiring commentary into every handler.
+const COMMENTARY_FOR_EVENT = {
+  case_filed:                p => `🚨 New case filed: "${p.caseTitle}".`,
+  case_opened:               _ => `📜 The court is now open.`,
+  lawyer_hired_prosecution:  p => `⚖️ ${p.actorName || 'Prosecution'} engages new counsel.`,
+  lawyer_hired_defense:      p => `⚖️ ${p.actorName || 'Defense'} engages new counsel.`,
+  opening_statement:         p => `💬 ${p.actorName || 'Counsel'} delivers an opening statement.`,
+  rebuttal:                  p => `💬 ${p.actorName || 'Counsel'} responds to the other side.`,
+  evidence_submitted:        p => `📎 ${p.actorName || 'Counsel'} tenders evidence.`,
+  cross_examination:         _ => `❓ Cross-examination is underway.`,
+  closing_argument:          p => `🗣️ ${p.actorName || 'Counsel'} delivers closing arguments.`,
+  jury_summoned:             _ => `👥 A jury of neighbours is being summoned.`,
+  jury_deliberation_started: _ => `⚖️ The jury retires to deliberate.`,
+  jury_vote_cast:            _ => `✋ A juror casts their vote.`,
+  jury_verdict:              _ => `📣 The jury has returned a verdict.`,
+  judge_deliberation:        _ => `🤔 Judge Orizu considers the arguments.`,
+  verdict_delivered:         p => `🔨 Verdict handed down by Judge Orizu.`,
+  fine_issued:               _ => `💰 A fine has been issued.`,
+  fine_paid:                 _ => `✅ The fine has been paid.`,
+  settlement_proposed:       p => `🤝 ${p.actorName || 'A party'} proposes a settlement.`,
+  settlement_accepted:       _ => `✅ Settlement accepted — the matter is resolved.`,
+  settlement_rejected:       _ => `✖️ Settlement rejected — proceedings continue.`,
+  appeal_filed:              p => `🔄 ${p.actorName || 'A party'} files an appeal.`,
+  appeal_ruled:              _ => `⚖️ The judge rules on the appeal.`,
+  case_closed:               _ => `🔒 Case closed.`,
+  default_judgment_warning:  _ => `⚠️ Final warning — the defendant must respond.`,
+  default_judgment:          _ => `🔨 Default judgment entered.`,
+  defendant_engaged:         p => `👤 ${p.actorName || 'The defendant'} enters the proceedings.`,
+  closing_arguments_called:  _ => `📣 Counsel are directed to deliver closing arguments.`,
+};
+
+exports.emitCourtUpdate = function emitCourtUpdate(courtCase) {
+  if (!courtCase) return;
+  const io = getIO();
+  if (!io) return;
+  const payload = typeof courtCase.toObject === 'function' ? courtCase.toObject() : courtCase;
+  io.to(`estate:${courtCase.estateId}`).emit('court:case-updated', payload);
+
+  // Fire a commentary line based on the most recent proceeding, if any.
+  try {
+    const procs = payload.proceedings || [];
+    const last  = procs[procs.length - 1];
+    if (last) {
+      const build = COMMENTARY_FOR_EVENT[last.event];
+      if (build) {
+        const text = build({ ...last, caseTitle: payload.title });
+        io.to(`estate:${payload.estateId}`).emit('court:commentary', {
+          caseId: String(payload._id), text, at: Date.now(),
+        });
+      }
+    }
+  } catch (_) { /* best effort */ }
+};
+
+exports.emitCourtCommentary = function emitCourtCommentary(estateId, caseId, text) {
+  const io = getIO();
+  if (!io || !text) return;
+  io.to(`estate:${estateId}`).emit('court:commentary', { caseId: String(caseId), text, at: Date.now() });
+};
 
 // Fetch the constitution context (text + estate name) for AI grounding.
 // Returns { constitutionText, estateName } — both empty strings if unavailable.
@@ -273,6 +341,8 @@ exports.fileCase = async (req, res) => {
 
     await courtCase.save();
 
+    exports.emitCourtUpdate(courtCase);
+
     // Generate AI opening statements (synchronous — Gemini flash is fast)
     try {
       const { constitutionText, estateName } = await loadEstateContext(estateId);
@@ -301,6 +371,7 @@ exports.fileCase = async (req, res) => {
       });
       courtCase.status = 'in_hearing';
       await courtCase.save();
+      exports.emitCourtUpdate(courtCase);
     } catch (aiErr) {
       console.error('AI opening statement error:', aiErr.message);
       // Case is already saved above — AI statements will be missing but that's OK
@@ -310,6 +381,13 @@ exports.fileCase = async (req, res) => {
     const populated = await Case.findById(courtCase._id)
       .populate('plaintiff.userId', 'name email')
       .populate('defendant.userId', 'name email');
+
+    // Kick off the full auto-run (rebuttals → closings → jury vote → verdict).
+    // Each phase is state-safe — if a user/manual action advances the case,
+    // the orchestrator's step becomes a no-op.
+    autoRunCase(courtCase._id);
+    exports.emitCourtCommentary(courtCase.estateId, courtCase._id,
+      `🚨 New case filed: "${title}". ${prosInfo.name} vs ${defInfo.name}.`);
 
     return res.status(201).json({ success: true, data: populated });
   } catch (err) {
@@ -389,6 +467,8 @@ exports.chatWithLawyer = async (req, res) => {
 
     await courtCase.save();
 
+    exports.emitCourtUpdate(courtCase);
+
     return res.json({ success: true, reply, side, persona: AI_PERSONAS[persona].name });
   } catch (err) {
     console.error(err);
@@ -455,6 +535,8 @@ exports.requestAdjournment = async (req, res) => {
     }
 
     await courtCase.save();
+
+    exports.emitCourtUpdate(courtCase);
     return res.json({ success: true, granted, ruling, data: courtCase });
   } catch (err) {
     console.error(err);
@@ -513,6 +595,8 @@ exports.hireLawyer = async (req, res) => {
     });
 
     await courtCase.save();
+
+    exports.emitCourtUpdate(courtCase);
     return res.json({ success: true, data: courtCase });
   } catch (err) {
     console.error(err);
@@ -581,9 +665,85 @@ exports.submitArgument = async (req, res) => {
     }
 
     await courtCase.save();
+
+    exports.emitCourtUpdate(courtCase);
     return res.json({ success: true, data: courtCase });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── POST /api/court/:id/attach ──────────────────────────────────────────────
+// Resident uploads proof files. The AI lawyer auto-tables each as evidence
+// with a short description. Resident doesn't need to click "submit evidence".
+exports.attachEvidence = async (req, res) => {
+  try {
+    const estateId = req.user.estateId;
+    const courtCase = await Case.findOne({ _id: req.params.id, estateId });
+    if (!courtCase) return res.status(404).json({ success: false, message: 'Case not found' });
+    if (['closed','settled','verdict_delivered'].includes(courtCase.status))
+      return res.status(400).json({ success: false, message: 'Cannot attach to a concluded case' });
+
+    const files = req.files || [];
+    if (!files.length) return res.status(400).json({ success: false, message: 'No files uploaded' });
+
+    const uploaderId  = req.user._id.toString();
+    const isPlaintiff = courtCase.plaintiff.userId?.toString() === uploaderId;
+    const isDefendant = courtCase.defendant.userId?.toString() === uploaderId;
+    const side = isPlaintiff ? 'prosecution' : isDefendant ? 'defense' : 'neutral';
+    const lawyerSide = side === 'prosecution' ? 'prosecution' : side === 'defense' ? 'defense' : null;
+    const personaKey = lawyerSide ? courtCase.lawyers?.[lawyerSide]?.aiPersona : null;
+    const persona    = personaKey ? AI_PERSONAS[personaKey] : null;
+    const lawyerName = persona?.name || (lawyerSide === 'prosecution' ? 'Prosecution Counsel' : lawyerSide === 'defense' ? 'Defense Counsel' : 'Clerk of Court');
+
+    // Mark defendant engagement if applicable
+    if (isDefendant && !hasDefendantEngaged(courtCase)) {
+      addProceeding(courtCase, {
+        event: 'defendant_engaged',
+        actorId: req.user._id, actorName: req.user.name, role: 'Defendant',
+        content: `${req.user.name} (Defendant) has attached evidence, engaging with these proceedings.`,
+      });
+    }
+
+    for (const f of files) {
+      const label = (req.body.label || f.originalname || 'Attached file').toString().slice(0, 80);
+      const descr = `Submitted by ${lawyerName} on behalf of ${req.user.name}. ${
+        f.kind === 'image' ? 'Visual evidence.' :
+        f.kind === 'audio' ? 'Audio recording tendered for the court.' :
+        f.kind === 'video' ? 'Video exhibit tendered for the court.' :
+        f.kind === 'pdf'   ? 'Documentary evidence (PDF).' :
+                             'Documentary evidence.'
+      }`;
+      courtCase.evidence.push({
+        submittedById: req.user._id,
+        side,
+        label,
+        content: descr,
+        mediaUrl:  f.url,
+        mediaKind: f.kind,
+        mediaName: f.originalname,
+        submittedAt: new Date(),
+      });
+      addProceeding(courtCase, {
+        event: 'evidence_submitted',
+        actorId: req.user._id,
+        actorName: lawyerName,
+        role: lawyerSide === 'prosecution' ? 'Prosecution Counsel' : lawyerSide === 'defense' ? 'Defense Counsel' : 'Neutral',
+        content: `[${f.kind?.toUpperCase() || 'FILE'}] "${label}" — tendered on behalf of ${req.user.name}.`,
+        isAI: !!persona,
+      });
+    }
+
+    if (courtCase.status === 'open') courtCase.status = 'in_hearing';
+    await courtCase.save();
+    exports.emitCourtUpdate(courtCase);
+    exports.emitCourtCommentary(courtCase.estateId, courtCase._id,
+      `📎 ${lawyerName} tables ${files.length} piece${files.length !== 1 ? 's' : ''} of evidence.`);
+
+    return res.json({ success: true, data: courtCase });
+  } catch (err) {
+    console.error('[attachEvidence]', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -625,6 +785,8 @@ exports.submitEvidence = async (req, res) => {
     });
 
     await courtCase.save();
+
+    exports.emitCourtUpdate(courtCase);
     return res.json({ success: true, data: courtCase });
   } catch (err) {
     console.error(err);
@@ -682,6 +844,8 @@ exports.castJuryVote = async (req, res) => {
     }
 
     await courtCase.save();
+
+    exports.emitCourtUpdate(courtCase);
     return res.json({ success: true, data: courtCase });
   } catch (err) {
     console.error(err);
@@ -743,6 +907,8 @@ exports.deliverVerdict = async (req, res) => {
       courtCase.relatedAction.isEnforced = true;
 
     await courtCase.save();
+
+    exports.emitCourtUpdate(courtCase);
     return res.json({ success: true, data: courtCase });
   } catch (err) {
     console.error(err);
@@ -797,6 +963,8 @@ exports.proposeSettlement = async (req, res) => {
     }
 
     await courtCase.save();
+
+    exports.emitCourtUpdate(courtCase);
     return res.json({ success: true, data: courtCase });
   } catch (err) {
     console.error(err);
@@ -832,6 +1000,8 @@ exports.fileAppeal = async (req, res) => {
 
     await courtCase.save();
 
+    exports.emitCourtUpdate(courtCase);
+
     const { constitutionText, estateName } = await loadEstateContext(estateId);
     const appealResult = await getJudgeAppealRuling({
       caseTitle: courtCase.title,
@@ -858,6 +1028,8 @@ exports.fileAppeal = async (req, res) => {
     }
 
     await courtCase.save();
+
+    exports.emitCourtUpdate(courtCase);
     return res.json({ success: true, granted: appealResult.granted, data: courtCase });
   } catch (err) {
     console.error(err);
@@ -906,6 +1078,8 @@ exports.payFine = async (req, res) => {
     }
 
     await courtCase.save();
+
+    exports.emitCourtUpdate(courtCase);
     return res.json({ success: true, data: courtCase, newWalletBalance: user.walletBalance });
   } catch (err) {
     console.error(err);
@@ -969,6 +1143,8 @@ exports.setMode = async (req, res) => {
     }
 
     await courtCase.save();
+
+    exports.emitCourtUpdate(courtCase);
     return res.json({ success: true, data: courtCase });
   } catch (err) {
     console.error('setMode error:', err);
@@ -1043,6 +1219,8 @@ exports.managerVerdict = async (req, res) => {
       courtCase.relatedAction.isEnforced = true;
 
     await courtCase.save();
+
+    exports.emitCourtUpdate(courtCase);
     return res.json({ success: true, data: courtCase });
   } catch (err) {
     console.error('managerVerdict error:', err);
@@ -1141,6 +1319,8 @@ exports.overrideVerdict = async (req, res) => {
     }
 
     await courtCase.save();
+
+    exports.emitCourtUpdate(courtCase);
     return res.json({ success: true, data: courtCase });
   } catch (err) {
     console.error('overrideVerdict error:', err);

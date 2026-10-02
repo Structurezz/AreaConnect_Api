@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const ctrl = require('../controllers/courtController');
 const { authenticate, authorize, scopeToEstate } = require('../middleware/auth');
+const evidenceUpload = require('../middleware/uploadEvidence');
 
 router.use(authenticate, scopeToEstate);
 
@@ -16,6 +17,7 @@ router.post('/:id/adjourn',   ctrl.requestAdjournment);
 router.post('/:id/lawyer',    ctrl.hireLawyer);
 router.post('/:id/argument',  ctrl.submitArgument);
 router.post('/:id/evidence',  ctrl.submitEvidence);
+router.post('/:id/attach',    ...evidenceUpload.array('files', 6), ctrl.attachEvidence);
 router.post('/:id/jury-vote', ctrl.castJuryVote);
 router.post('/:id/verdict',   authorize('estate_manager','super_admin'), ctrl.deliverVerdict);
 router.patch('/:id/mode',            authorize('estate_manager','super_admin'), ctrl.setMode);
