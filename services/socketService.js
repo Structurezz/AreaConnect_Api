@@ -146,6 +146,49 @@ const initSocket = (server) => {
       broadcastPodcastCount(showId);
     });
 
+    // ── Twitch/IG-Live-style engagement for podcasts ─────────────────────────
+    // Lightweight relay — ephemeral, no DB persistence. State lives on the
+    // room and dies when the show ends.
+    const chatRate = socket.data._podcastChatAt || 0;
+
+    socket.on('podcast:chat:send', ({ showId, text, userId, userName, userPhoto }) => {
+      if (!showId || !text) return;
+      const trimmed = String(text).slice(0, 240).trim();
+      if (!trimmed) return;
+      // Simple per-socket rate limit: 1 msg per 400ms
+      const now = Date.now();
+      if (now - (socket.data._podcastChatAt || 0) < 400) return;
+      socket.data._podcastChatAt = now;
+      const msg = {
+        id: `${now}-${Math.random().toString(36).slice(2, 6)}`,
+        showId, userId, userName: (userName || 'Listener').slice(0, 40),
+        userPhoto: userPhoto || null, text: trimmed, at: now,
+      };
+      io.to(`podcast:${showId}`).emit('podcast:chat', msg);
+    });
+
+    socket.on('podcast:reaction:send', ({ showId, emoji, userId, userName }) => {
+      if (!showId || !emoji) return;
+      // Max one reaction per 150ms per socket
+      const now = Date.now();
+      if (now - (socket.data._podcastReactionAt || 0) < 150) return;
+      socket.data._podcastReactionAt = now;
+      io.to(`podcast:${showId}`).emit('podcast:reaction', {
+        emoji: String(emoji).slice(0, 4),
+        userId, userName: (userName || '').slice(0, 40),
+        at: now,
+      });
+    });
+
+    socket.on('podcast:like:send', ({ showId, userId }) => {
+      if (!showId) return;
+      const now = Date.now();
+      // Rate limit: 1 like per 100ms (so a long press feels responsive but doesn't flood)
+      if (now - (socket.data._podcastLikeAt || 0) < 100) return;
+      socket.data._podcastLikeAt = now;
+      io.to(`podcast:${showId}`).emit('podcast:like', { userId, at: now });
+    });
+
     // ── Call-ins (listener → raise hand → host approves → promoted to speaker) ─
     socket.on('podcast:raise-hand', ({ showId, userId, userName, userPhoto }) => {
       if (!showId) return;
