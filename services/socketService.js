@@ -180,6 +180,33 @@ const initSocket = (server) => {
       });
     });
 
+    // Host updates the background music track. Persist + relay.
+    socket.on('podcast:music-change', async ({ showId, nowPlaying }) => {
+      if (!showId) return;
+      const np = nowPlaying && nowPlaying.videoId ? {
+        videoId: String(nowPlaying.videoId),
+        title:   String(nowPlaying.title || ''),
+        artist:  String(nowPlaying.artist || ''),
+        startedAt: new Date(),
+      } : null;
+      try {
+        const PodcastShow = require('../models/PodcastShow');
+        await PodcastShow.updateOne({ _id: showId, status: 'live' }, { nowPlaying: np || {} });
+      } catch (_) { /* best effort */ }
+      io.to(`podcast:${showId}`).emit('podcast:music-change', { showId, nowPlaying: np || null });
+    });
+
+    // Host adjusts background music volume. Persist + relay.
+    socket.on('podcast:volume', async ({ showId, volume }) => {
+      if (!showId || typeof volume !== 'number') return;
+      const vol = Math.max(0, Math.min(100, Math.round(volume)));
+      try {
+        const PodcastShow = require('../models/PodcastShow');
+        await PodcastShow.updateOne({ _id: showId, status: 'live' }, { musicVolume: vol });
+      } catch (_) { /* best effort */ }
+      io.to(`podcast:${showId}`).emit('podcast:volume', { showId, volume: vol });
+    });
+
     socket.on('podcast:like:send', ({ showId, userId }) => {
       if (!showId) return;
       const now = Date.now();

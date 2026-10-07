@@ -27,6 +27,15 @@ const podcastShowSchema = new mongoose.Schema({
   recurrence:   { type: String, default: '' },     // human label
   guests:       [guestInviteSchema],
   peakListeners:{ type: Number, default: 0 },
+
+  // Optional background music the host mixes under their voice (radio-style).
+  nowPlaying: {
+    videoId:   { type: String },
+    title:     { type: String },
+    artist:    { type: String },
+    startedAt: { type: Date },
+  },
+  musicVolume: { type: Number, default: 35, min: 0, max: 100 },
   episodeId:    { type: mongoose.Schema.Types.ObjectId, ref: 'PodcastEpisode' },
 }, { timestamps: true });
 

@@ -196,7 +196,7 @@ exports.revokeInvite = async (req, res) => {
 exports.getLive = async (req, res) => {
   try {
     const show = await PodcastShow.findOne({ status: 'live' })
-      .select('title hostName coverImage startedAt peakListeners description')
+      .select('title hostName coverImage startedAt peakListeners description nowPlaying musicVolume')
       .lean();
     return res.json({ success: true, data: show || null });
   } catch (err) {
