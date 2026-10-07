@@ -262,6 +262,42 @@ const initSocket = (server) => {
       broadcastPodcastCount(showId);
     });
 
+    // ── Twitch/IG-Live-style engagement for DJ-type rooms ──────────────────
+    // (dj / announcement / prayer / chat / podcast kinds — anything in a
+    //  `dj:${sessionId}` room). Mirrors the podcast:* relays — ephemeral.
+    socket.on('dj:chat:send', ({ sessionId, text, userId, userName, userPhoto }) => {
+      if (!sessionId || !text) return;
+      const trimmed = String(text).slice(0, 240).trim();
+      if (!trimmed) return;
+      const now = Date.now();
+      if (now - (socket.data._djChatAt || 0) < 400) return;
+      socket.data._djChatAt = now;
+      io.to(`dj:${sessionId}`).emit('dj:chat', {
+        id: `${now}-${Math.random().toString(36).slice(2, 6)}`,
+        sessionId, userId, userName: (userName || 'Listener').slice(0, 40),
+        userPhoto: userPhoto || null, text: trimmed, at: now,
+      });
+    });
+
+    socket.on('dj:reaction:send', ({ sessionId, emoji, userId, userName }) => {
+      if (!sessionId || !emoji) return;
+      const now = Date.now();
+      if (now - (socket.data._djReactionAt || 0) < 150) return;
+      socket.data._djReactionAt = now;
+      io.to(`dj:${sessionId}`).emit('dj:reaction', {
+        sessionId, emoji: String(emoji).slice(0, 4),
+        userId, userName: (userName || '').slice(0, 40), at: now,
+      });
+    });
+
+    socket.on('dj:like:send', ({ sessionId, userId }) => {
+      if (!sessionId) return;
+      const now = Date.now();
+      if (now - (socket.data._djLikeAt || 0) < 100) return;
+      socket.data._djLikeAt = now;
+      io.to(`dj:${sessionId}`).emit('dj:like', { sessionId, userId, at: now });
+    });
+
     // Persist music volume so late joiners get the current level.
     // Clients emit dj:volume → server writes it to the session and broadcasts.
     socket.on('dj:volume', async ({ sessionId, volume }) => {
