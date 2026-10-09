@@ -485,6 +485,170 @@ const sendSubscriptionReminderEmail = async ({ to, managerName, estateName, days
 };
 
 // ── Pitch / intro email (to prospects) ───────────────────────────────────────
+// ── Comp / promo gift email ───────────────────────────────────────────────
+// Sent when a super admin grants an estate free access to a plan. The email
+// welcomes the manager, explains the perk, and ships with an invoice-style
+// breakdown that shows the normal price struck-through with a ₦0 total.
+const sendCompGiftEmail = async ({
+  to,
+  managerName,
+  estateName,
+  plan,
+  cycle,
+  reason,
+  expiresAt,
+  grantedByName,
+}) => {
+  if (!process.env.RESEND_API_KEY) return { skipped: true };
+  if (!to) return { skipped: true, reason: 'no recipient' };
+
+  const cycleLabel     = cycle === 'annual' ? 'year' : 'month';
+  const normalAmount   = cycle === 'annual' ? Number(plan?.price?.annual || 0) : Number(plan?.price?.monthly || 0);
+  const normalAmountFmt = normalAmount > 0 ? fmtNGN(normalAmount) : '&mdash;';
+  const planName       = plan?.name || 'Premium';
+  const expiryText     = expiresAt ? fmtDate(expiresAt) : 'Never expires';
+  const expiryLabelHtml = expiresAt
+    ? `Valid until <strong>${fmtDate(expiresAt)}</strong>`
+    : `<strong>Open-ended &mdash; no end date</strong>`;
+  const invoiceNo      = `COMP-${Date.now().toString(36).toUpperCase()}`;
+  const issuedAt       = new Date();
+
+  const reasonHtml = reason ? `
+    <div style="background:#FEF3C7;border:1px solid #FDE68A;border-radius:12px;padding:14px 18px;margin:0 0 24px;">
+      <div style="font-size:11px;font-weight:800;color:#B45309;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">Why you're getting this</div>
+      <div style="font-size:13px;color:#78350F;line-height:1.6;">${reason}</div>
+    </div>` : '';
+
+  const invoiceHtml = `
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;overflow:hidden;margin-top:24px;">
+      <div style="background:#0F172A;padding:22px 26px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:10px;color:#94A3B8;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;">Receipt &middot; ${estateName}</div>
+          <div style="font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.02em;">Gift Invoice</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:10px;color:#94A3B8;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;">Status</div>
+          <div style="display:inline-block;background:#10B981;color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;letter-spacing:0.06em;">PAID &middot; ₦0</div>
+        </div>
+      </div>
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+        ${[
+          ['Invoice #',   invoiceNo],
+          ['Issued',      fmtDate(issuedAt)],
+          ['Plan',        planName],
+          ['Billing',     cycle === 'annual' ? 'Annual' : 'Monthly'],
+          ['Access until', expiryText],
+          grantedByName ? ['Granted by', `${grantedByName} &middot; AreaConnect team`] : null,
+        ].filter(Boolean).map(([label, val], i) => `
+          <tr style="background:${i%2===0?'#F8FAFC':'#fff'};">
+            <td style="padding:11px 24px;font-size:12px;color:#94A3B8;font-weight:600;width:42%;">${label}</td>
+            <td style="padding:11px 24px;font-size:13px;color:#0F172A;">${val}</td>
+          </tr>`).join('')}
+      </table>
+
+      <div style="border-top:1px solid #E2E8F0;padding:20px 26px;background:#fff;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          <tr>
+            <td style="font-size:13px;color:#64748B;padding:4px 0;">${planName} &middot; ${cycle === 'annual' ? 'Annual' : 'Monthly'} subscription</td>
+            <td align="right" style="font-size:13px;color:#64748B;padding:4px 0;"><span style="text-decoration:line-through;">${normalAmountFmt}</span></td>
+          </tr>
+          <tr>
+            <td style="font-size:13px;color:#059669;padding:4px 0;font-weight:600;">AreaConnect gift credit</td>
+            <td align="right" style="font-size:13px;color:#059669;padding:4px 0;font-weight:600;">&minus; ${normalAmountFmt}</td>
+          </tr>
+          <tr>
+            <td colspan="2" style="padding:12px 0 6px;"><div style="border-top:1px dashed #CBD5E1;"></div></td>
+          </tr>
+          <tr>
+            <td style="font-size:14px;color:#0F172A;font-weight:800;padding:4px 0;">Total due</td>
+            <td align="right" style="font-size:22px;color:#10B981;font-weight:900;letter-spacing:-0.02em;padding:4px 0;">&#8358;0.00</td>
+          </tr>
+          <tr>
+            <td colspan="2" style="font-size:11px;color:#94A3B8;padding:6px 0 0;">You will not be charged for this period. ${expiresAt ? `Normal pricing of ${normalAmountFmt}/${cycleLabel} resumes after ${fmtDate(expiresAt)}.` : 'This gift stays active until an AreaConnect admin ends it.'}</td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="background:#F8FAFC;border-top:1px solid #E2E8F0;padding:14px 24px;">
+        <span style="font-size:11px;color:#94A3B8;">AreaConnect Estate Management &nbsp;&middot;&nbsp; areaconnect.pro</span>
+      </div>
+    </div>`;
+
+  await getResend().emails.send({
+    from: FROM(),
+    to,
+    subject: `🎁 You've been gifted ${planName} access — ${estateName}`,
+    html: `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:32px 16px;margin:0;">
+<div style="max-width:600px;margin:0 auto;">
+
+  <div style="text-align:center;margin-bottom:20px;">
+    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+  </div>
+
+  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
+    <div style="background:linear-gradient(135deg,#F59E0B 0%,#D97706 60%,#B45309 100%);padding:36px 32px;text-align:center;">
+      <div style="font-size:52px;margin-bottom:6px;line-height:1;">🎁</div>
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.85);margin-bottom:8px;">A gift from AreaConnect</div>
+      <h1 style="font-size:26px;font-weight:900;color:#fff;letter-spacing:-0.02em;line-height:1.2;margin:0;">
+        ${estateName}, you've just unlocked<br>${planName} — on the house.
+      </h1>
+    </div>
+
+    <div style="padding:32px;">
+      <p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 20px;">
+        Hi <strong>${managerName || 'there'}</strong>,<br><br>
+        We're giving <strong>${estateName}</strong> full access to our
+        <strong style="color:#D97706;">${planName}</strong> plan — every feature, no payment, no card required.
+        ${expiresAt ? `This gift is valid until <strong>${fmtDate(expiresAt)}</strong>.` : `This gift stays active indefinitely.`}
+      </p>
+
+      ${reasonHtml}
+
+      <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:12px;padding:16px 20px;margin-bottom:24px;">
+        <div style="font-size:11px;font-weight:800;color:#065F46;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">What you can do right now</div>
+        <ul style="margin:0;padding-left:18px;font-size:13px;color:#065F46;line-height:1.75;">
+          <li>Invite your residents and get them onto AreaMates</li>
+          <li>Issue your first visitor QR passes in under 30 seconds</li>
+          <li>Schedule your first dues cycle via Paystack &mdash; collection usually jumps 60% &rarr; 90% in month one</li>
+          <li>Broadcast your first announcement with read receipts</li>
+        </ul>
+      </div>
+
+      <div style="text-align:center;margin-bottom:12px;">
+        <a href="${FRONTEND_URL}"
+          style="display:inline-block;background:linear-gradient(135deg,#10B981,#059669);color:#fff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 40px;border-radius:12px;box-shadow:0 4px 14px rgba(16,185,129,0.35);">
+          Open your dashboard &rarr;
+        </a>
+      </div>
+      <p style="text-align:center;font-size:12px;color:#94A3B8;margin:0 0 4px;">
+        ${expiryLabelHtml}
+      </p>
+
+      ${invoiceHtml}
+
+      <p style="font-size:13px;color:#64748B;line-height:1.7;margin-top:28px;">
+        Questions, feedback, or want to switch plans later?
+        Just reply to this email &mdash; a real human will respond within a few hours.<br><br>
+        Welcome aboard,<br>
+        <strong style="color:#0F172A;">The AreaConnect team</strong>
+      </p>
+    </div>
+  </div>
+
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">
+    Powered by Area Connector Technologies &middot; RC 9607864<br>
+    This is a courtesy gift from our team. You will not be charged for ${planName} ${expiresAt ? `until ${fmtDate(expiresAt)}` : 'while this comp is active'}.
+  </p>
+</div>
+</body></html>`,
+  });
+
+  return { sent: true };
+};
+
 const sendPitchEmail = async ({ to, name, title, company, city }) => {
   if (!process.env.RESEND_API_KEY) return { skipped: true };
 
@@ -495,12 +659,12 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
     from: FROM(),
     reply_to: 'michael@areaconnect.pro',
     to,
-    subject: `Transform How You Manage ${company || 'Your Estate'} — AreaConnect`,
+    subject: `Try AreaConnect Free for 30 Days — Transform How You Manage ${company || 'Your Estate'}`,
     html: `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>*{box-sizing:border-box;margin:0;padding:0;}</style></head>
-<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:32px 16px;margin:0;">
-<div style="max-width:600px;margin:0 auto;">
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:24px 20px;margin:0;">
+<div style="width:100%;max-width:100%;margin:0 auto;">
 
   <!-- Logo -->
   <div style="text-align:center;margin-bottom:24px;">
@@ -508,19 +672,19 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
     <div style="font-size:11px;color:#94A3B8;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">Smart Estate Management Platform</div>
   </div>
 
-  <!-- Hero card -->
+  <!-- Hero card (full-width) -->
   <div style="background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.12);">
 
     <!-- Header gradient -->
     <div style="background:linear-gradient(135deg,#0F172A 0%,#1E3A5F 60%,#10B981 100%);padding:40px 32px;text-align:center;">
       <div style="display:inline-block;background:rgba(16,185,129,0.2);border:1px solid rgba(16,185,129,0.4);color:#34D399;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 14px;border-radius:20px;margin-bottom:16px;">
-        Estate Management Revolution
+        30 Days Free · No Card Required
       </div>
       <h1 style="font-size:28px;font-weight:900;color:#fff;letter-spacing:-0.03em;line-height:1.2;margin-bottom:8px;">
-        Your Estate Deserves<br>Better Technology
+        Try AreaConnect Free<br>for a Full Month
       </h1>
-      <p style="font-size:15px;color:rgba(255,255,255,0.7);line-height:1.6;">
-        Join hundreds of Nigerian estates already running on AreaConnect
+      <p style="font-size:15px;color:rgba(255,255,255,0.85);line-height:1.6;">
+        Run your entire estate on us for 30 days — every feature, no charge, no commitment.
       </p>
     </div>
 
@@ -531,11 +695,248 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
       <p style="font-size:16px;color:#374151;line-height:1.7;margin-bottom:24px;">
         Hi <strong style="color:#0F172A;">${greeting}</strong>,
       </p>
-      <p style="font-size:15px;color:#4B5563;line-height:1.8;margin-bottom:28px;">
+      <p style="font-size:15px;color:#4B5563;line-height:1.8;margin-bottom:20px;">
         Managing <strong>${company}</strong>${city ? ` in <strong>${city}</strong>` : ''} comes with real challenges —
         tracking residents, managing security, collecting levies, and keeping everyone informed.
         <strong style="color:#0F172A;">AreaConnect</strong> was built specifically for estates like yours.
       </p>
+      <p style="font-size:15px;color:#4B5563;line-height:1.8;margin-bottom:28px;">
+        That's why we're inviting you to <strong style="color:#059669;">try the entire platform free for 30 days</strong> —
+        the full feature set, unlimited residents, real support from our team. If it doesn't save you hours every week,
+        walk away. No card, no auto-charge, no strings.
+      </p>
+
+      <!-- Three-phone showcase: Manager · Resident · Guard (mirrors real app source) -->
+      <div style="background:linear-gradient(160deg,#0F172A 0%,#1E293B 55%,#0F172A 100%);border-radius:18px;padding:28px 8px 22px;margin-bottom:32px;text-align:center;position:relative;overflow:hidden;">
+        <p style="font-size:10px;font-weight:800;color:#34D399;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:4px;">One platform · Three apps</p>
+        <p style="font-size:17px;font-weight:800;color:#fff;letter-spacing:-0.02em;margin-bottom:22px;">Purpose-built for every role in your estate</p>
+
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          <tr>
+
+            <!-- ─── PHONE 1 · ESTATE MANAGER (bg #F8FAFB, green #10B981) ─── -->
+            <td width="33%" align="center" valign="top" style="padding:0 2px;">
+              <div style="display:inline-block;width:136px;background:#0B1220;border:2px solid #1F2937;border-radius:22px;padding:5px 4px 4px;box-shadow:0 12px 30px rgba(0,0,0,0.45);">
+                <div style="width:40px;height:5px;background:#000;border-radius:3px;margin:2px auto 4px;"></div>
+                <div style="background:#F8FAFB;border-radius:15px;padding:0;text-align:left;overflow:hidden;">
+
+                  <!-- Hero: white card w/ green border & green glow -->
+                  <div style="background:#fff;border:1px solid rgba(16,185,129,0.20);border-radius:10px;margin:6px 5px 5px;padding:7px 7px 8px;position:relative;overflow:hidden;">
+                    <div style="position:absolute;top:-18px;left:-18px;width:56px;height:56px;border-radius:50%;background:rgba(16,185,129,0.10);"></div>
+                    <table width="100%" cellpadding="0" cellspacing="0" style="position:relative;"><tr>
+                      <td style="vertical-align:top;">
+                        <div style="display:inline-block;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.20);border-radius:99px;padding:1px 5px;font-size:5px;font-weight:700;color:#10B981;letter-spacing:0.03em;">FRI, AUG 1</div>
+                        <div style="font-size:9px;font-weight:800;color:#0F172A;line-height:1.15;margin-top:3px;letter-spacing:-0.02em;">Good morning,<br/>Michael 👋</div>
+                        <div style="font-size:5px;color:#475569;margin-top:2px;">Palm Estate — what's happening</div>
+                      </td>
+                      <td width="18" style="vertical-align:top;text-align:right;">
+                        <div style="width:16px;height:16px;border-radius:50%;background:#10B981;color:#fff;font-size:9px;font-weight:800;text-align:center;line-height:16px;">M</div>
+                      </td>
+                    </tr></table>
+                    <!-- Hero action buttons: Visitors + Alerts -->
+                    <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:5px;border-collapse:separate;border-spacing:3px 0;"><tr>
+                      <td width="50%" style="background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.20);border-radius:6px;padding:3px 4px;text-align:center;">
+                        <span style="font-size:6px;color:#10B981;font-weight:700;">👤＋ Visitors</span>
+                      </td>
+                      <td width="50%" style="background:#10B981;border-radius:6px;padding:3px 4px;text-align:center;">
+                        <span style="font-size:6px;color:#fff;font-weight:700;">🔔 Alerts</span>
+                        <span style="display:inline-block;background:#EF4444;color:#fff;font-size:5px;font-weight:800;border-radius:99px;padding:0 3px;margin-left:2px;">2</span>
+                      </td>
+                    </tr></table>
+                  </div>
+
+                  <!-- 2×2 Stats grid: Residents / Visitors Today / Inside Now / Open Alerts -->
+                  <div style="padding:0 5px 4px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:3px;">
+                      <tr>
+                        <td width="50%" style="background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:6px;padding:5px 4px;">
+                          <div style="width:12px;height:12px;border-radius:4px;background:rgba(99,102,241,0.10);color:#6366F1;font-size:8px;line-height:12px;text-align:center;">👥</div>
+                          <div style="font-size:11px;font-weight:800;color:#6366F1;letter-spacing:-0.03em;margin-top:2px;">248</div>
+                          <div style="font-size:5px;color:#475569;font-weight:500;">Residents</div>
+                        </td>
+                        <td width="50%" style="background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:6px;padding:5px 4px;">
+                          <div style="width:12px;height:12px;border-radius:4px;background:rgba(16,185,129,0.10);color:#10B981;font-size:8px;line-height:12px;text-align:center;">＋</div>
+                          <div style="font-size:11px;font-weight:800;color:#10B981;letter-spacing:-0.03em;margin-top:2px;">17</div>
+                          <div style="font-size:5px;color:#475569;font-weight:500;">Visitors Today</div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:6px;padding:5px 4px;">
+                          <div style="width:12px;height:12px;border-radius:4px;background:rgba(251,191,36,0.10);color:#FBBF24;font-size:8px;line-height:12px;text-align:center;">🚶</div>
+                          <div style="font-size:11px;font-weight:800;color:#FBBF24;letter-spacing:-0.03em;margin-top:2px;">9</div>
+                          <div style="font-size:5px;color:#475569;font-weight:500;">Inside Now</div>
+                        </td>
+                        <td style="background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:6px;padding:5px 4px;">
+                          <div style="width:12px;height:12px;border-radius:4px;background:rgba(239,68,68,0.10);color:#EF4444;font-size:8px;line-height:12px;text-align:center;">⚠</div>
+                          <div style="font-size:11px;font-weight:800;color:#EF4444;letter-spacing:-0.03em;margin-top:2px;">2</div>
+                          <div style="font-size:5px;color:#475569;font-weight:500;">Open Alerts</div>
+                        </td>
+                      </tr>
+                    </table>
+                  </div>
+
+                  <!-- Bottom tab bar: Home · People · Alerts · Chat · More -->
+                  <div style="border-top:1px solid rgba(0,0,0,0.06);background:#fff;padding:4px 2px;">
+                    <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                      <td width="20%" align="center" style="font-size:7px;color:#10B981;font-weight:800;line-height:1.1;">⌂<br/><span style="font-size:5px;">Home</span></td>
+                      <td width="20%" align="center" style="font-size:7px;color:#94A3B8;line-height:1.1;">👥<br/><span style="font-size:5px;">People</span></td>
+                      <td width="20%" align="center" style="font-size:7px;color:#94A3B8;line-height:1.1;">⚠<br/><span style="font-size:5px;">Alerts</span></td>
+                      <td width="20%" align="center" style="font-size:7px;color:#94A3B8;line-height:1.1;">💬<br/><span style="font-size:5px;">Chat</span></td>
+                      <td width="20%" align="center" style="font-size:7px;color:#94A3B8;line-height:1.1;">⋯<br/><span style="font-size:5px;">More</span></td>
+                    </tr></table>
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top:10px;font-size:11px;font-weight:800;color:#fff;letter-spacing:-0.01em;">Estate Manager</div>
+              <div style="font-size:9px;color:#94A3B8;margin-top:2px;">Run everything from one dashboard</div>
+            </td>
+
+            <!-- ─── PHONE 2 · RESIDENT (bg #F7F5F1 cream, hero INDIGO #6366F1) ─── -->
+            <td width="33%" align="center" valign="top" style="padding:0 2px;">
+              <div style="display:inline-block;width:136px;background:#0B1220;border:2px solid #1F2937;border-radius:22px;padding:5px 4px 4px;box-shadow:0 12px 30px rgba(0,0,0,0.45);">
+                <div style="width:40px;height:5px;background:#000;border-radius:3px;margin:2px auto 4px;"></div>
+                <div style="background:#F7F5F1;border-radius:15px;padding:0;text-align:left;overflow:hidden;">
+
+                  <!-- Indigo hero card -->
+                  <div style="background:#6366F1;padding:8px 8px 9px;margin:5px 5px 6px;border-radius:10px;">
+                    <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                      <td style="vertical-align:top;">
+                        <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:99px;padding:1px 5px;font-size:5px;font-weight:700;color:rgba(255,255,255,0.9);letter-spacing:0.05em;text-transform:uppercase;">🏢 PALM ESTATE</div>
+                        <div style="font-size:6px;color:rgba(255,255,255,0.75);margin-top:3px;">Good morning,</div>
+                        <div style="font-size:12px;font-weight:700;color:#fff;line-height:1.1;">Michael 👋</div>
+                        <div style="font-size:6px;color:rgba(255,255,255,0.65);margin-top:2px;">📍 Unit 12 · Block B</div>
+                      </td>
+                      <td style="vertical-align:top;text-align:right;">
+                        <div style="display:inline-block;background:rgba(197,48,48,0.9);border-radius:99px;padding:2px 5px;font-size:5px;font-weight:700;color:#fff;letter-spacing:0.05em;">🛡 ALERT</div>
+                      </td>
+                    </tr></table>
+                    <!-- Stats row: Active Passes / All Visitors / Notices -->
+                    <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:6px;border-collapse:separate;border-spacing:2px 0;"><tr>
+                      <td width="33%" style="background:rgba(255,255,255,0.12);border-radius:5px;padding:4px 2px;text-align:center;">
+                        <div style="font-size:7px;color:rgba(255,255,255,0.7);">✓</div>
+                        <div style="font-size:10px;color:#fff;font-weight:700;">3</div>
+                        <div style="font-size:4px;color:rgba(255,255,255,0.65);font-weight:600;">Active Passes</div>
+                      </td>
+                      <td width="33%" style="background:rgba(255,255,255,0.12);border-radius:5px;padding:4px 2px;text-align:center;">
+                        <div style="font-size:7px;color:rgba(255,255,255,0.7);">👥</div>
+                        <div style="font-size:10px;color:#fff;font-weight:700;">28</div>
+                        <div style="font-size:4px;color:rgba(255,255,255,0.65);font-weight:600;">All Visitors</div>
+                      </td>
+                      <td width="33%" style="background:rgba(255,255,255,0.12);border-radius:5px;padding:4px 2px;text-align:center;">
+                        <div style="font-size:7px;color:rgba(255,255,255,0.7);">📢</div>
+                        <div style="font-size:10px;color:#fff;font-weight:700;">5</div>
+                        <div style="font-size:4px;color:rgba(255,255,255,0.65);font-weight:600;">Notices</div>
+                      </td>
+                    </tr></table>
+                  </div>
+
+                  <!-- "QUICK ACTIONS" section heading -->
+                  <div style="padding:0 6px;font-size:5px;color:#4A5568;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px;">Quick Actions</div>
+
+                  <!-- 2×2 Quick Actions: white cards, colored icon on tinted bg, colored label -->
+                  <div style="padding:0 5px 4px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:3px;">
+                      <tr>
+                        <td width="50%" style="background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:6px;padding:4px;text-align:center;">
+                          <div style="display:inline-block;width:16px;height:16px;border-radius:5px;background:rgba(39,103,73,0.10);color:#276749;font-size:10px;line-height:16px;text-align:center;">＋</div>
+                          <div style="font-size:6px;font-weight:700;color:#276749;margin-top:2px;">Invite Visitor</div>
+                        </td>
+                        <td width="50%" style="background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:6px;padding:4px;text-align:center;">
+                          <div style="display:inline-block;width:16px;height:16px;border-radius:5px;background:rgba(43,108,176,0.10);color:#2B6CB0;font-size:10px;line-height:16px;text-align:center;">🛍</div>
+                          <div style="font-size:6px;font-weight:700;color:#2B6CB0;margin-top:2px;">Marketplace</div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:6px;padding:4px;text-align:center;">
+                          <div style="display:inline-block;width:16px;height:16px;border-radius:5px;background:rgba(107,70,193,0.10);color:#6B46C1;font-size:10px;line-height:16px;text-align:center;">💬</div>
+                          <div style="font-size:6px;font-weight:700;color:#6B46C1;margin-top:2px;">Community</div>
+                        </td>
+                        <td style="background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:6px;padding:4px;text-align:center;">
+                          <div style="display:inline-block;width:16px;height:16px;border-radius:5px;background:rgba(197,48,48,0.10);color:#C53030;font-size:10px;line-height:16px;text-align:center;">🛡</div>
+                          <div style="font-size:6px;font-weight:700;color:#C53030;margin-top:2px;">Alert Security</div>
+                        </td>
+                      </tr>
+                    </table>
+                  </div>
+
+                  <!-- Bottom tab bar: Home · Visitors · Chat · Market · More (indigo active) -->
+                  <div style="border-top:1px solid rgba(0,0,0,0.07);background:#fff;padding:4px 2px;">
+                    <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                      <td width="20%" align="center" style="font-size:7px;color:#6366F1;font-weight:800;line-height:1.1;">⌂<br/><span style="font-size:5px;">Home</span></td>
+                      <td width="20%" align="center" style="font-size:7px;color:#A0AEC0;line-height:1.1;">👤<br/><span style="font-size:5px;">Visitors</span></td>
+                      <td width="20%" align="center" style="font-size:7px;color:#A0AEC0;line-height:1.1;">💬<br/><span style="font-size:5px;">Chat</span></td>
+                      <td width="20%" align="center" style="font-size:7px;color:#A0AEC0;line-height:1.1;">🛍<br/><span style="font-size:5px;">Market</span></td>
+                      <td width="20%" align="center" style="font-size:7px;color:#A0AEC0;line-height:1.1;">⋯<br/><span style="font-size:5px;">More</span></td>
+                    </tr></table>
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top:10px;font-size:11px;font-weight:800;color:#fff;letter-spacing:-0.01em;">Resident App</div>
+              <div style="font-size:9px;color:#94A3B8;margin-top:2px;">Passes, notices, security — one tap</div>
+            </td>
+
+            <!-- ─── PHONE 3 · GUARD (bg #060C18, gold #F59E0B, code-entry screen) ─── -->
+            <td width="33%" align="center" valign="top" style="padding:0 2px;">
+              <div style="display:inline-block;width:136px;background:#0B1220;border:2px solid #1F2937;border-radius:22px;padding:5px 4px 4px;box-shadow:0 12px 30px rgba(0,0,0,0.45);">
+                <div style="width:40px;height:5px;background:#000;border-radius:3px;margin:2px auto 4px;"></div>
+                <div style="background:#060C18;border-radius:15px;padding:0;text-align:left;overflow:hidden;">
+
+                  <!-- Centered shield header -->
+                  <div style="padding:10px 8px 6px;text-align:center;">
+                    <div style="display:inline-block;width:26px;height:26px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.25);border-radius:9px;color:#F59E0B;font-size:15px;line-height:26px;text-align:center;">🛡</div>
+                    <div style="font-size:11px;font-weight:800;color:#fff;margin-top:4px;letter-spacing:0.02em;">Gate Security</div>
+                    <div style="font-size:5px;color:rgba(255,255,255,0.55);margin-top:2px;">Enter visitor access code to verify</div>
+                  </div>
+
+                  <!-- Code card: dark card w/ label, QR + input, dots, gold Verify button -->
+                  <div style="margin:0 6px;background:#0F1A2E;border:1px solid rgba(255,255,255,0.07);border-radius:9px;padding:7px 6px 6px;">
+                    <div style="font-size:5px;color:rgba(255,255,255,0.30);font-weight:700;letter-spacing:0.12em;text-align:center;text-transform:uppercase;">Visitor Access Code</div>
+                    <!-- Input row -->
+                    <div style="background:#0D172A;border:1px solid rgba(245,158,11,0.25);border-radius:6px;padding:4px 6px;margin-top:4px;">
+                      <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                        <td width="12" style="vertical-align:middle;font-size:8px;color:rgba(255,255,255,0.30);">▦</td>
+                        <td style="text-align:center;font-family:'Courier New',monospace;font-size:12px;font-weight:800;color:#F59E0B;letter-spacing:0.35em;">ABC123</td>
+                      </tr></table>
+                    </div>
+                    <!-- Progress dots (6 bars) -->
+                    <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:5px;border-collapse:separate;border-spacing:2px 0;"><tr>
+                      <td style="height:3px;background:#F59E0B;border-radius:99px;"></td>
+                      <td style="height:3px;background:#F59E0B;border-radius:99px;"></td>
+                      <td style="height:3px;background:#F59E0B;border-radius:99px;"></td>
+                      <td style="height:3px;background:#F59E0B;border-radius:99px;"></td>
+                      <td style="height:3px;background:#F59E0B;border-radius:99px;"></td>
+                      <td style="height:3px;background:#F59E0B;border-radius:99px;"></td>
+                    </tr></table>
+                    <!-- Verify button (gold, black text) -->
+                    <div style="background:#F59E0B;border-radius:6px;padding:5px;text-align:center;margin-top:5px;">
+                      <span style="font-size:8px;font-weight:800;color:#000;">🔍 Verify Code</span>
+                    </div>
+                  </div>
+
+                  <div style="height:14px;"></div>
+
+                  <!-- Bottom tab bar (dark): Gate · Alerts · Log · Profile -->
+                  <div style="border-top:1px solid rgba(255,255,255,0.07);background:#0A1020;padding:4px 2px;">
+                    <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                      <td width="25%" align="center" style="font-size:8px;color:#F59E0B;font-weight:800;line-height:1.1;">🛡<br/><span style="font-size:5px;">Gate</span></td>
+                      <td width="25%" align="center" style="font-size:8px;color:rgba(255,255,255,0.30);line-height:1.1;">⚠<br/><span style="font-size:5px;">Alerts</span></td>
+                      <td width="25%" align="center" style="font-size:8px;color:rgba(255,255,255,0.30);line-height:1.1;">☰<br/><span style="font-size:5px;">Entry Log</span></td>
+                      <td width="25%" align="center" style="font-size:8px;color:rgba(255,255,255,0.30);line-height:1.1;">👤<br/><span style="font-size:5px;">Profile</span></td>
+                    </tr></table>
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top:10px;font-size:11px;font-weight:800;color:#fff;letter-spacing:-0.01em;">Guard App</div>
+              <div style="font-size:9px;color:#94A3B8;margin-top:2px;">Verify visitors by code in seconds</div>
+            </td>
+
+          </tr>
+        </table>
+
+        <p style="font-size:11px;color:#94A3B8;margin-top:20px;line-height:1.6;">
+          Three connected apps. One shared source of truth. Zero data re-entry.
+        </p>
+      </div>
 
       <!-- Feature grid -->
       <div style="margin-bottom:32px;">
@@ -561,13 +962,16 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
 
       <!-- Pricing callout -->
       <div style="background:linear-gradient(135deg,#F0FDF4,#ECFDF5);border:1.5px solid #A7F3D0;border-radius:14px;padding:22px 24px;margin-bottom:28px;">
-        <p style="font-size:11px;font-weight:800;color:#059669;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px;">Transparent Pricing</p>
+        <p style="font-size:11px;font-weight:800;color:#059669;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;">30 Days Free · Then Pick a Plan</p>
+        <p style="font-size:12px;color:#065F46;line-height:1.6;margin-bottom:14px;">
+          You won't be charged during your first month. After that, choose the plan that fits your estate — or cancel with one click.
+        </p>
         <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
           ${[
-            ['Starter',    '&#8358;20,000/mo',  'Up to 50 residents &middot; security, announcements, visitor mgmt'],
-            ['Growth',     '&#8358;47,000/mo',  'Up to 150 residents &middot; payments, AI, community chat, events'],
-            ['Premium',    '&#8358;80,000/mo',  'Up to 300 residents &middot; marketplace, lounge, white-label'],
-            ['Enterprise', '&#8358;100,000/mo', 'Up to 500 residents &middot; full suite, API access, priority support'],
+            ['Starter',    'Free 30 days, then &#8358;20,000/mo',  'Up to 50 residents &middot; security, announcements, visitor mgmt'],
+            ['Growth',     'Free 30 days, then &#8358;47,000/mo',  'Up to 150 residents &middot; payments, AI, community chat, events'],
+            ['Premium',    'Free 30 days, then &#8358;80,000/mo',  'Up to 300 residents &middot; marketplace, lounge, white-label'],
+            ['Enterprise', 'Free 30 days, then &#8358;100,000/mo', 'Up to 500 residents &middot; full suite, API access, priority support'],
           ].map(([plan, price, desc]) => `
           <tr>
             <td style="padding:6px 0;font-size:13px;font-weight:700;color:#0F172A;width:110px;">${plan}</td>
@@ -588,10 +992,10 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
       <!-- Stats row -->
       <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:32px;">
         ${[
+          ['30 Days','Free Trial'],
           ['500+',   'Active Estates'],
           ['50,000+','Residents Managed'],
           ['99.9%',  'Platform Uptime'],
-          ['Free','To Get Started'],
         ].map(([num, label]) => `
         <td style="text-align:center;padding:16px 8px;background:#F8FAFC;border-radius:10px;margin:4px;">
           <div style="font-size:22px;font-weight:900;color:#10B981;letter-spacing:-0.03em;">${num}</div>
@@ -603,9 +1007,9 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
       <div style="text-align:center;margin-bottom:20px;">
         <a href="https://area-connector.areaconnect.pro/register"
           style="display:inline-block;background:linear-gradient(135deg,#10B981,#059669);color:#fff;font-weight:800;font-size:16px;text-decoration:none;padding:16px 48px;border-radius:12px;letter-spacing:-0.01em;box-shadow:0 4px 16px rgba(16,185,129,0.4);">
-          Get Started &rarr;
+          Start My Free 30 Days &rarr;
         </a>
-        <p style="font-size:12px;color:#94A3B8;margin-top:10px;">No credit card required &nbsp;·&nbsp; Setup in under 10 minutes</p>
+        <p style="font-size:12px;color:#94A3B8;margin-top:10px;">No credit card required &nbsp;·&nbsp; Cancel anytime &nbsp;·&nbsp; Setup in under 10 minutes</p>
       </div>
 
       <!-- CEO personal sign-off -->
@@ -619,7 +1023,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
             </td>
             <td style="vertical-align:top;">
               <p style="font-size:14px;color:#374151;line-height:1.7;margin:0 0 10px;">
-                I built AreaConnect because I've seen first-hand how much time Nigerian estate managers lose to manual processes — WhatsApp dues reminders, handwritten visitor logs, security gaps. I'd love to show you what we've built and hear what's most painful for <strong>${company}</strong>.
+                I built AreaConnect because I've seen first-hand how much time Nigerian estate managers lose to manual processes — WhatsApp dues reminders, handwritten visitor logs, security gaps. That's why I'm giving you <strong style="color:#059669;">30 days on the house</strong> — spin up <strong>${company}</strong> on AreaConnect, put every feature through its paces, and only pay if it earns its keep. If it doesn't work for you, no card was ever charged.
               </p>
               <p style="font-size:13px;color:#374151;margin:0;">
                 Feel free to reach me directly —<br>
@@ -823,6 +1227,7 @@ module.exports = {
   sendPaymentReceiptEmail,
   sendWithdrawalReceiptEmail,
   sendSubscriptionReminderEmail,
+  sendCompGiftEmail,
   generateInvoiceHtml,
   sendPitchEmail,
   sendCampaignEmail,

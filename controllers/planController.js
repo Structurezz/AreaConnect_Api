@@ -3,7 +3,7 @@ const Plan = require('../models/Plan');
 const Subscription = require('../models/Subscription');
 const Estate = require('../models/Estate');
 const User = require('../models/User');
-const { sendSubscriptionReminderEmail } = require('../services/emailService');
+const { sendSubscriptionReminderEmail, sendCompGiftEmail } = require('../services/emailService');
 
 const PAYSTACK_BASE = 'https://api.paystack.co';
 const paystackHeaders = () => ({
@@ -327,14 +327,14 @@ exports.verifyUpgrade = async (req, res) => {
 // updates it.
 exports.grantComp = async (req, res) => {
   try {
-    const { estateId, planId, reason, expiresAt } = req.body;
+    const { estateId, planId, reason, expiresAt, cycle } = req.body;
     if (!estateId || !planId) {
       return res.status(400).json({ success: false, message: 'estateId and planId are required' });
     }
 
     const [estate, plan] = await Promise.all([
       Estate.findById(estateId).select('_id name'),
-      Plan.findById(planId).select('_id name slug'),
+      Plan.findById(planId),  // keep full plan for price snapshot on the gift email
     ]);
     if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
     if (!plan)   return res.status(404).json({ success: false, message: 'Plan not found' });
@@ -371,6 +371,25 @@ exports.grantComp = async (req, res) => {
       .populate('planId', 'name slug color price')
       .populate('comp.planId', 'name slug color price')
       .populate('comp.grantedBy', 'name email');
+
+    // Fire the gift email — don't let a delivery failure block the grant.
+    try {
+      const manager = await User.findOne({ estateId, role: 'estate_manager' }).select('name email');
+      if (manager?.email) {
+        await sendCompGiftEmail({
+          to:            manager.email,
+          managerName:   manager.name,
+          estateName:    estate.name,
+          plan,
+          cycle:         cycle === 'annual' ? 'annual' : 'monthly',
+          reason:        reason || '',
+          expiresAt:     expiry,
+          grantedByName: req.user.name,
+        });
+      }
+    } catch (e) {
+      console.error('[grantComp email]', e.message);
+    }
 
     return res.json({ success: true, data: sub });
   } catch (err) {
