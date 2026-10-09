@@ -27,6 +27,24 @@ exports.createEstate = async (req, res) => {
       });
     }
 
+    // Seed a 14-day trial subscription so the estate shows up on the admin
+    // Subscriptions page immediately (mirrors addEstate / auth register flow).
+    const plan = await Plan.findOne({ slug: 'starter', isActive: true })
+      || await Plan.findOne({ isActive: true }).sort({ sortOrder: 1 });
+    if (plan) {
+      const trialEndsAt = new Date(Date.now() + 14 * 86400000);
+      await Subscription.create({
+        estateId: estate._id,
+        planId: plan._id,
+        billingModel: 'flat',
+        cycle: 'monthly',
+        status: 'trial',
+        trialEndsAt,
+        nextBillingDate: trialEndsAt,
+        startDate: new Date(),
+      });
+    }
+
     return res.status(201).json({ success: true, message: 'Estate created', data: estate });
   } catch (err) {
     console.error(err);
@@ -102,6 +120,14 @@ exports.updateEstate = async (req, res) => {
     if (name !== undefined) update.name = name;
     if (settings !== undefined) update.settings = settings;
 
+    // Tracks what happened with geocoding so the client can show the right toast.
+    //   'manual'    — manager/admin dropped a pin by hand, we trust that
+    //   'success'   — Google returned a lat/lng for the new address
+    //   'failed'    — address changed but Google returned nothing (quota, bad address, etc.)
+    //   'skipped'   — address didn't change
+    //   'not_configured' — GOOGLE_MAPS_API_KEY missing
+    let geocodeOutcome = 'skipped';
+
     // Manual pin override (from Settings map picker) takes precedence over geocoding
     if (manualLocation && typeof manualLocation.lat === 'number' && typeof manualLocation.lng === 'number') {
       update.location = {
@@ -113,13 +139,26 @@ exports.updateEstate = async (req, res) => {
       };
       if (manualLocation.formattedAddress) update.address = manualLocation.formattedAddress;
       else if (address !== undefined) update.address = address;
+      geocodeOutcome = 'manual';
     } else if (address !== undefined) {
       update.address = address;
       // Re-geocode when address changed and no manual pin provided
       const current = await Estate.findById(req.params.estateId).select('address').lean();
       if (current && current.address !== address) {
-        const geo = await geocodeAddress(address);
-        if (geo) update.location = { ...geo, geocodedAt: new Date() };
+        if (!process.env.GOOGLE_MAPS_API_KEY) {
+          console.warn('[updateEstate] GOOGLE_MAPS_API_KEY missing — pin will stay stale');
+          geocodeOutcome = 'not_configured';
+        } else {
+          const geo = await geocodeAddress(address);
+          if (geo) {
+            update.location = { ...geo, geocodedAt: new Date() };
+            geocodeOutcome = 'success';
+            console.log(`[updateEstate] geocoded "${address}" → ${geo.lat},${geo.lng}`);
+          } else {
+            geocodeOutcome = 'failed';
+            console.warn(`[updateEstate] geocoding returned nothing for "${address}"`);
+          }
+        }
       }
     }
 
@@ -129,7 +168,7 @@ exports.updateEstate = async (req, res) => {
       { new: true, runValidators: true }
     );
     if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
-    return res.json({ success: true, data: estate });
+    return res.json({ success: true, data: estate, geocode: geocodeOutcome });
   } catch (err) {
     console.error('updateEstate error:', err);
     return res.status(500).json({ success: false, message: 'Server error' });
