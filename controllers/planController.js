@@ -359,7 +359,8 @@ exports.grantComp = async (req, res) => {
     }
 
     const [estate, plan] = await Promise.all([
-      Estate.findById(estateId).select('_id name'),
+      // Pull enough fields for the invoice PDF header + body
+      Estate.findById(estateId).select('_id name estateCode address logoUrl'),
       Plan.findById(planId),  // keep full plan for price snapshot on the gift email
     ]);
     if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
@@ -398,19 +399,27 @@ exports.grantComp = async (req, res) => {
       .populate('comp.planId', 'name slug color price')
       .populate('comp.grantedBy', 'name email');
 
-    // Fire the gift email — don't let a delivery failure block the grant.
+    // Fire the gift email with a PDF receipt attached — don't let a
+    // delivery failure block the grant.
     try {
-      const manager = await User.findOne({ estateId, role: 'estate_manager' }).select('name email');
+      const manager = await User.findOne({ estateId, role: 'estate_manager' }).select('name email phone');
       if (manager?.email) {
+        const addressStr = typeof estate.address === 'string'
+          ? estate.address
+          : [estate.address?.street, estate.address?.city, estate.address?.state].filter(Boolean).join(', ');
         await sendCompGiftEmail({
-          to:            manager.email,
-          managerName:   manager.name,
-          estateName:    estate.name,
+          to:             manager.email,
+          managerName:    manager.name,
+          managerPhone:   manager.phone,
+          estateName:     estate.name,
+          estateCode:     estate.estateCode,
+          estateAddress:  addressStr,
+          estateLogoUrl:  estate.logoUrl,
           plan,
-          cycle:         cycle === 'annual' ? 'annual' : 'monthly',
-          reason:        reason || '',
-          expiresAt:     expiry,
-          grantedByName: req.user.name,
+          cycle:          cycle === 'annual' ? 'annual' : 'monthly',
+          reason:         reason || '',
+          expiresAt:      expiry,
+          grantedByName:  req.user.name,
         });
       }
     } catch (e) {

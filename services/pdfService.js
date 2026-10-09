@@ -7,6 +7,7 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-NG', { day: '2-dig
 const METHOD_LABELS = {
   cash: 'Cash', bank_transfer: 'Bank Transfer',
   paystack: 'Paystack (Online)', manual: 'Manual Entry',
+  comp: 'Comp (Gift Credit)',
 };
 const FREQ_LABELS = {
   one_time: 'One-time', monthly: 'Monthly', quarterly: 'Quarterly', annual: 'Annual',
