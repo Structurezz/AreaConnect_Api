@@ -92,6 +92,7 @@ app.use('/api/pitch',  require('./routes/pitch'));
 app.use('/api/contact', require('./routes/contact'));
 app.use('/api/court', require('./routes/court'));
 app.use('/api/campaigns', require('./routes/campaigns'));
+app.use('/api/admin/withdrawals', require('./routes/adminWithdrawals'));
 
 // Health check
 app.get('/health', (req, res) => {

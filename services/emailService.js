@@ -1326,6 +1326,38 @@ const sendWithdrawalReceiptEmail = async ({ to, managerName, estateName, estateC
   return { sent: true };
 };
 
+// ── Withdrawal rejected email (to estate manager) ──────────────────────────
+const sendWithdrawalRejectedEmail = async ({ to, managerName, estateName, amount, reference, reason }) => {
+  if (!process.env.RESEND_API_KEY) return { skipped: true };
+
+  await getResend().emails.send({
+    from: FROM(),
+    to,
+    subject: `Withdrawal declined — ₦${Number(amount).toLocaleString('en-NG')} | ${estateName}`,
+    html: `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:24px 16px;margin:0;">
+<div style="max-width:600px;margin:0 auto;">
+  <div style="text-align:center;margin-bottom:16px;">
+    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+  </div>
+  <div style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:10px;padding:14px 20px;font-size:14px;color:#991B1B;line-height:1.6;">
+    Hi <strong>${managerName || 'Manager'}</strong>, your withdrawal request of
+    <strong>₦${Number(amount).toLocaleString('en-NG')}</strong> from <strong>${estateName}</strong>
+    (ref <code>${reference}</code>) was declined by the admin.
+    <br/><br/>
+    <strong>Reason:</strong> ${reason || 'Not specified'}
+    <br/><br/>
+    The amount is credited back to your wallet. You can submit a new request anytime.
+  </div>
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by Area Connector Technologies &nbsp;&middot;&nbsp; RC 9607864</p>
+</div>
+</body></html>`,
+  });
+
+  return { sent: true };
+};
+
 // ── Marketing / campaign email ──────────────────────────────────────────────
 const sendCampaignEmail = async ({ to, name, subject, preheader, htmlBody, ctaUrl, ctaText, theme, brand }) => {
   if (!process.env.RESEND_API_KEY) return { skipped: true };
@@ -1425,6 +1457,7 @@ module.exports = {
   sendManagerNotificationEmail,
   sendPaymentReceiptEmail,
   sendWithdrawalReceiptEmail,
+  sendWithdrawalRejectedEmail,
   sendSubscriptionReminderEmail,
   sendCompGiftEmail,
   sendRenewalReceiptEmail,
