@@ -23,4 +23,8 @@ router.get('/subscriptions', ...adminOnly, ctrl.getSubscriptions);
 router.post('/subscriptions', ...adminOnly, ctrl.assignSubscription);
 router.patch('/subscriptions/:id', ...adminOnly, ctrl.updateSubscription);
 
+// Comp / promo overrides — grant a free premium (or any plan) override to an estate
+router.post('/subscriptions/comp', ...adminOnly, ctrl.grantComp);
+router.delete('/subscriptions/comp/:estateId', ...adminOnly, ctrl.revokeComp);
+
 module.exports = router;

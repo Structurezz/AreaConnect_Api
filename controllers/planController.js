@@ -68,6 +68,8 @@ exports.getSubscriptions = async (req, res) => {
     const subs = await Subscription.find()
       .populate('estateId', 'name address estateCode')
       .populate('planId', 'name slug color price')
+      .populate('comp.planId', 'name slug color price')
+      .populate('comp.grantedBy', 'name email')
       .populate('updatedBy', 'name')
       .sort({ updatedAt: -1 });
     return res.json({ success: true, data: subs });
@@ -78,19 +80,32 @@ exports.getSubscriptions = async (req, res) => {
 
 exports.getMySubscription = async (req, res) => {
   try {
-    const sub = await Subscription.findOne({ estateId: req.estateId }).populate('planId');
+    const sub = await Subscription.findOne({ estateId: req.estateId })
+      .populate('planId')
+      .populate('comp.planId');
     if (!sub) return res.status(404).json({ success: false, message: 'No subscription found' });
 
-    // Compute days until expiry
-    const expiryDate = sub.status === 'trial' ? sub.trialEndsAt : sub.nextBillingDate;
+    // ── Comp resolution ─────────────────────────────────────────────────
+    // If a comp override is active, the client should see the comp plan as
+    // their effective plan while still knowing the real underlying plan.
+    const compActive = sub.isCompActive();
+    const compPlan   = compActive ? sub.comp?.planId : null;
+    const basePlan   = sub.planId;
+
+    // Compute days until expiry — comp expiry wins when active
+    const expiryDate = compActive && sub.comp?.expiresAt
+      ? sub.comp.expiresAt
+      : (sub.status === 'trial' ? sub.trialEndsAt : sub.nextBillingDate);
     let daysUntilExpiry = null;
     if (expiryDate) {
       daysUntilExpiry = Math.ceil((new Date(expiryDate) - Date.now()) / 86400000);
     }
 
-    // Send expiry reminder email at 7, 3, 1 day thresholds (once per threshold)
+    // Send expiry reminder email at 7, 3, 1 day thresholds (once per threshold).
+    // Comp overrides are promo/VIP perks — skip reminders while a comp is live.
     const THRESHOLDS = [7, 3, 1];
     if (
+      !compActive &&
       daysUntilExpiry != null &&
       daysUntilExpiry > 0 &&
       ['active', 'trial'].includes(sub.status)
@@ -118,7 +133,17 @@ exports.getMySubscription = async (req, res) => {
       }
     }
 
-    return res.json({ success: true, data: { ...sub.toObject(), daysUntilExpiry } });
+    const subObj = sub.toObject();
+    return res.json({
+      success: true,
+      data: {
+        ...subObj,
+        daysUntilExpiry,
+        // Effective plan the client should treat as "current" (features + limits).
+        effectivePlan: compPlan || basePlan,
+        isComp: compActive,
+      },
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
@@ -292,6 +317,93 @@ exports.verifyUpgrade = async (req, res) => {
   } catch (err) {
     console.error('[Plan upgrade verify]', err.response?.data || err.message);
     return res.status(500).json({ success: false, message: 'Verification failed' });
+  }
+};
+
+// ── Comp / promo overrides (super admin only) ─────────────────────────────
+// Grants an estate free access to a specific plan (typically Premium) for
+// marketing promos, VIP comps, beta testers, etc. Overrides billing without
+// touching the underlying `planId`. If a comp is already active, this
+// updates it.
+exports.grantComp = async (req, res) => {
+  try {
+    const { estateId, planId, reason, expiresAt } = req.body;
+    if (!estateId || !planId) {
+      return res.status(400).json({ success: false, message: 'estateId and planId are required' });
+    }
+
+    const [estate, plan] = await Promise.all([
+      Estate.findById(estateId).select('_id name'),
+      Plan.findById(planId).select('_id name slug'),
+    ]);
+    if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
+    if (!plan)   return res.status(404).json({ success: false, message: 'Plan not found' });
+
+    // Normalise expiresAt: null, undefined, '' or 'never' => never expires.
+    let expiry = null;
+    if (expiresAt && expiresAt !== 'never') {
+      const d = new Date(expiresAt);
+      if (isNaN(d.getTime())) {
+        return res.status(400).json({ success: false, message: 'Invalid expiresAt' });
+      }
+      if (d <= new Date()) {
+        return res.status(400).json({ success: false, message: 'expiresAt must be in the future' });
+      }
+      expiry = d;
+    }
+
+    const sub = await Subscription.findOneAndUpdate(
+      { estateId },
+      {
+        // Keep underlying planId if present; comp sits on top.
+        status: 'active',
+        'comp.isActive':  true,
+        'comp.planId':    plan._id,
+        'comp.reason':    reason || '',
+        'comp.expiresAt': expiry,
+        'comp.grantedBy': req.user._id,
+        'comp.grantedAt': new Date(),
+        updatedBy: req.user._id,
+      },
+      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
+    )
+      .populate('estateId', 'name estateCode')
+      .populate('planId', 'name slug color price')
+      .populate('comp.planId', 'name slug color price')
+      .populate('comp.grantedBy', 'name email');
+
+    return res.json({ success: true, data: sub });
+  } catch (err) {
+    console.error('[grantComp]', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+exports.revokeComp = async (req, res) => {
+  try {
+    const { estateId } = req.params;
+    const sub = await Subscription.findOne({ estateId });
+    if (!sub) return res.status(404).json({ success: false, message: 'Subscription not found' });
+
+    sub.comp = {
+      isActive:  false,
+      planId:    null,
+      reason:    '',
+      expiresAt: null,
+      grantedBy: null,
+      grantedAt: null,
+    };
+    sub.updatedBy = req.user._id;
+    await sub.save();
+
+    const populated = await Subscription.findById(sub._id)
+      .populate('estateId', 'name estateCode')
+      .populate('planId', 'name slug color price');
+
+    return res.json({ success: true, data: populated });
+  } catch (err) {
+    console.error('[revokeComp]', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
