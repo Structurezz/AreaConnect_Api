@@ -1,6 +1,9 @@
 const DJSession = require('../models/DJSession');
 const Mixtape   = require('../models/Mixtape');
+const User      = require('../models/User');
+const Estate    = require('../models/Estate');
 const { getIO, emitNotification } = require('../services/socketService');
+const { sendLiveAnnouncementEmail } = require('../services/emailService');
 
 // GET /api/dj/active — the current live session for this estate (if any)
 exports.getActive = async (req, res) => {
@@ -96,6 +99,44 @@ exports.start = async (req, res) => {
         hostUserId: session.hostUserId.toString(),  // frontend uses this to suppress for the host
       },
     });
+
+    // ── Email blast for live announcements only ──────────────────────────
+    // Not awaited: broadcasts can be large, we don't want the host staring
+    // at a spinner. Delivery failures are swallowed per recipient so one
+    // bad address never aborts the sweep.
+    if (sessionKind === 'announcement') {
+      (async () => {
+        try {
+          const [estate, residents] = await Promise.all([
+            Estate.findById(req.estateId).select('name'),
+            User.find({
+              estateId: req.estateId,
+              role: 'resident',
+              isActive: true,
+              email: { $exists: true, $ne: '' },
+              _id: { $ne: req.user._id }, // don't email the host themselves
+            }).select('name email').lean(),
+          ]);
+          if (!estate || !residents.length) return;
+          const FRONTEND_URL = process.env.FRONTEND_URL || 'https://area-mates.areaconnect.pro';
+          const joinUrl = `${FRONTEND_URL}/announcements?listen=${session._id}`;
+          console.log(`[dj.start] blasting live announcement to ${residents.length} residents at ${estate.name}`);
+          await Promise.allSettled(residents.map(r =>
+            sendLiveAnnouncementEmail({
+              to:         r.email,
+              name:       r.name,
+              estateName: estate.name,
+              hostName:   req.user.name,
+              title:      session.title,
+              message:    session.message,
+              joinUrl,
+            }).catch(e => console.error('[live announcement email]', r.email, e.message))
+          ));
+        } catch (e) {
+          console.error('[dj.start] email blast failed', e.message);
+        }
+      })();
+    }
 
     return res.status(201).json({ success: true, data: session });
   } catch (err) {

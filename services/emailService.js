@@ -485,6 +485,88 @@ const sendSubscriptionReminderEmail = async ({ to, managerName, estateName, days
 };
 
 // ── Pitch / intro email (to prospects) ───────────────────────────────────────
+// ── Live announcement blast (estate manager just went on air) ─────────────
+// Fired from dj.start when kind === 'announcement'. The subject + hero are
+// deliberately loud so this stands out from routine notification mail.
+const sendLiveAnnouncementEmail = async ({
+  to, name, estateName, hostName, title, message, joinUrl,
+}) => {
+  if (!process.env.RESEND_API_KEY || !to) return { skipped: true };
+  const safeName = (name || 'Neighbour').split(' ')[0];
+  const safeMsg  = message || title || 'Something important for the estate — tap to listen.';
+  const url      = joinUrl || `${FRONTEND_URL}/announcements`;
+
+  await getResend().emails.send({
+    from: FROM(),
+    to,
+    subject: `🚨 LIVE NOW: ${hostName} is broadcasting to ${estateName} — tap to listen`,
+    html: `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="background:#0F172A;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:28px 16px;margin:0;">
+<div style="max-width:600px;margin:0 auto;">
+  <div style="text-align:center;margin-bottom:16px;">
+    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#fff;">Area<span style="color:#10B981;">Connect</span></span>
+  </div>
+
+  <div style="background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 24px 60px rgba(239,68,68,0.3);border:3px solid #DC2626;">
+    <!-- Siren header -->
+    <div style="background:linear-gradient(135deg,#7F1D1D 0%,#B91C1C 55%,#DC2626 100%);padding:36px 32px;text-align:center;position:relative;">
+      <div style="display:inline-block;background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.3);padding:5px 14px;border-radius:999px;margin-bottom:14px;">
+        <span style="font-size:10px;font-weight:800;letter-spacing:0.2em;color:#FEE2E2;text-transform:uppercase;">
+          🔴 LIVE &middot; ${estateName}
+        </span>
+      </div>
+      <div style="font-size:48px;line-height:1;margin-bottom:8px;">📢</div>
+      <h1 style="font-size:26px;font-weight:900;color:#fff;letter-spacing:-0.02em;line-height:1.15;margin:0 0 6px;">
+        ${hostName} is on air right now
+      </h1>
+      <div style="font-size:13px;color:#FECACA;line-height:1.5;">
+        An estate-wide announcement is broadcasting <strong>live</strong>. Join before it ends.
+      </div>
+    </div>
+
+    <!-- Message preview -->
+    <div style="padding:28px 32px 10px;">
+      <p style="font-size:15px;color:#374151;line-height:1.65;margin:0 0 16px;">
+        Hi <strong>${safeName}</strong>,<br><br>
+        <strong>${hostName}</strong> is broadcasting a live announcement to <strong>${estateName}</strong> right now.
+      </p>
+      <div style="background:#FEF2F2;border-left:4px solid #DC2626;border-radius:0 10px 10px 0;padding:14px 18px;margin:0 0 24px;">
+        <div style="font-size:11px;font-weight:800;color:#991B1B;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">
+          What it's about
+        </div>
+        <div style="font-size:14px;color:#1F2937;line-height:1.55;">
+          ${safeMsg}
+        </div>
+      </div>
+      <div style="text-align:center;margin:4px 0 10px;">
+        <a href="${url}"
+          style="display:inline-block;background:linear-gradient(135deg,#DC2626,#991B1B);color:#fff;font-weight:800;font-size:15px;text-decoration:none;padding:16px 36px;border-radius:12px;box-shadow:0 10px 24px rgba(220,38,38,0.4);letter-spacing:-0.01em;">
+          🎧 Listen now &rarr;
+        </a>
+      </div>
+      <p style="text-align:center;font-size:11px;color:#94A3B8;margin:14px 0 0;">
+        You can also open the AreaMates app and tap the red LIVE banner.
+      </p>
+    </div>
+
+    <div style="background:#F8FAFC;border-top:1px solid #E2E8F0;padding:14px 24px;text-align:center;">
+      <span style="font-size:11px;color:#64748B;">
+        Live broadcast at ${estateName} &middot; AreaConnect Estate Management
+      </span>
+    </div>
+  </div>
+
+  <p style="text-align:center;font-size:12px;color:#94A3B8;margin-top:18px;">
+    You received this because you're a resident at ${estateName}.<br>
+    Powered by Area Connector Technologies &middot; RC 9607864
+  </p>
+</div>
+</body></html>`,
+  });
+  return { sent: true };
+};
+
 // ── Auto-renewal receipt (recurring charge succeeded) ─────────────────────
 const sendRenewalReceiptEmail = async ({
   to, managerName, estateName, plan, cycle, amount, reference, cardLast4, cardBrand, nextBillingDate,
@@ -1462,6 +1544,7 @@ module.exports = {
   sendCompGiftEmail,
   sendRenewalReceiptEmail,
   sendSubscriptionExpiredEmail,
+  sendLiveAnnouncementEmail,
   generateInvoiceHtml,
   sendPitchEmail,
   sendCampaignEmail,
