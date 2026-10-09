@@ -149,6 +149,13 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/estate_ma
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📡 Socket.io ready`);
     });
+
+    // Subscription auditor — sweeps once a day (and on boot) to renew or
+    // expire stale subscriptions. Opt-out with SUBSCRIPTION_AUDITOR=off.
+    if (process.env.SUBSCRIPTION_AUDITOR !== 'off') {
+      const { startSubscriptionAuditor } = require('./services/subscriptionAuditor');
+      startSubscriptionAuditor();
+    }
   })
   .catch(err => {
     console.error('❌ MongoDB connection error:', err.message);

@@ -1,9 +1,14 @@
+const crypto = require('crypto');
 const axios = require('axios');
 const Plan = require('../models/Plan');
 const Subscription = require('../models/Subscription');
 const Estate = require('../models/Estate');
 const User = require('../models/User');
-const { sendSubscriptionReminderEmail, sendCompGiftEmail } = require('../services/emailService');
+const {
+  sendSubscriptionReminderEmail,
+  sendCompGiftEmail,
+  sendRenewalReceiptEmail,
+} = require('../services/emailService');
 
 const PAYSTACK_BASE = 'https://api.paystack.co';
 const paystackHeaders = () => ({
@@ -288,11 +293,11 @@ exports.verifyUpgrade = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Payment not successful' });
     }
 
-    const meta = data.data.metadata;
-    const estateId     = meta.estateId;
-    const planId       = meta.planId;
-    const cycle        = meta.cycle;
-    const billingModel = meta.billingModel || 'flat';
+    const meta = data.data.metadata || {};
+    const estateId      = meta.estateId;
+    const planId        = meta.planId;
+    const cycle         = meta.cycle;
+    const billingModel  = meta.billingModel || 'flat';
     const residentCount = meta.residentCount || 0;
 
     const plan = await Plan.findById(planId);
@@ -302,11 +307,32 @@ exports.verifyUpgrade = async (req, res) => {
     const next = new Date(now);
     cycle === 'annual' ? next.setFullYear(next.getFullYear() + 1) : next.setMonth(next.getMonth() + 1);
 
+    // Snapshot the Paystack authorization so the auditor can recurring-charge later
+    const auth = data.data.authorization || {};
+    const customer = data.data.customer || {};
+    const paystackAuth = {
+      authorizationCode: auth.authorization_code || '',
+      customerCode:      customer.customer_code || '',
+      customerEmail:     customer.email || data.data.customer?.email || '',
+      cardLast4:         auth.last4 || '',
+      cardBrand:         auth.card_type || auth.brand || '',
+      bank:              auth.bank || '',
+      channel:           auth.channel || '',
+      reusable:          !!auth.reusable,
+      savedAt:           auth.authorization_code ? now : null,
+    };
+
     const sub = await Subscription.findOneAndUpdate(
       { estateId },
       {
         planId, cycle, billingModel, residentCount, status: 'active',
         startDate: now, nextBillingDate: next,
+        paystackAuth,
+        renewalAttempts: 0,
+        lastRenewalError: '',
+        lastSuccessfulRenewalAt: now,
+        lastRenewalReference: reference,
+        remindersSent: [],
         $unset: { pendingRef: '', pendingPlanId: '', pendingCycle: '' },
         updatedBy: req.user._id,
       },
@@ -423,6 +449,119 @@ exports.revokeComp = async (req, res) => {
   } catch (err) {
     console.error('[revokeComp]', err);
     return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// ── Paystack webhook ──────────────────────────────────────────────────────
+// Paystack posts events (charge.success, invoice.payment_failed, etc.) to
+// this endpoint. We HMAC-verify with the secret key, then act on charge
+// successes — handy as a safety net alongside the daily auditor so a
+// recurring charge the auditor fired updates the sub immediately.
+exports.paystackWebhook = async (req, res) => {
+  try {
+    if (!process.env.PAYSTACK_SECRET_KEY) return res.status(200).end();
+
+    // req.rawBody is set by the plans route for this handler only
+    const rawBody = req.rawBody || JSON.stringify(req.body || {});
+    const hash = crypto
+      .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY)
+      .update(rawBody)
+      .digest('hex');
+
+    if (hash !== req.headers['x-paystack-signature']) {
+      return res.status(401).json({ success: false, message: 'Invalid signature' });
+    }
+
+    const event = req.body;
+    if (!event || !event.event) return res.status(200).end();
+
+    // We only care about successful charges tied to a plan upgrade/renewal
+    if (event.event !== 'charge.success') return res.status(200).end();
+
+    const meta = event.data?.metadata || {};
+    if (meta.type !== 'plan_upgrade' && meta.type !== 'plan_renewal') {
+      return res.status(200).end();
+    }
+
+    const estateId = meta.estateId;
+    const planId   = meta.planId;
+    const cycle    = meta.cycle || 'monthly';
+    if (!estateId || !planId) return res.status(200).end();
+
+    const sub = await Subscription.findOne({ estateId });
+    if (!sub) return res.status(200).end();
+
+    // Idempotency — don't double-apply if we already processed this reference
+    const reference = event.data?.reference;
+    if (reference && sub.lastRenewalReference === reference) return res.status(200).end();
+
+    const plan = await Plan.findById(planId);
+    if (!plan) return res.status(200).end();
+
+    const now = new Date();
+    const next = new Date(now);
+    cycle === 'annual' ? next.setFullYear(next.getFullYear() + 1) : next.setMonth(next.getMonth() + 1);
+
+    // Snapshot auth for future recurring charges
+    const auth = event.data?.authorization || {};
+    if (auth.authorization_code) {
+      sub.paystackAuth = {
+        authorizationCode: auth.authorization_code,
+        customerCode:      event.data?.customer?.customer_code || sub.paystackAuth?.customerCode || '',
+        customerEmail:     event.data?.customer?.email || sub.paystackAuth?.customerEmail || '',
+        cardLast4:         auth.last4 || sub.paystackAuth?.cardLast4 || '',
+        cardBrand:         auth.card_type || auth.brand || sub.paystackAuth?.cardBrand || '',
+        bank:              auth.bank || sub.paystackAuth?.bank || '',
+        channel:           auth.channel || sub.paystackAuth?.channel || '',
+        reusable:          !!auth.reusable,
+        savedAt:           now,
+      };
+    }
+
+    sub.planId = plan._id;
+    sub.cycle  = cycle;
+    sub.status = 'active';
+    sub.startDate = sub.startDate || now;
+    sub.nextBillingDate = next;
+    sub.renewalAttempts = 0;
+    sub.lastRenewalError = '';
+    sub.lastRenewalReference = reference || sub.lastRenewalReference;
+    sub.lastSuccessfulRenewalAt = now;
+    sub.remindersSent = [];
+    await sub.save();
+
+    // Fire renewal receipt for recurring (upgrades already have the first
+    // transaction confirmation on the client, so skip for `plan_upgrade`).
+    if (meta.type === 'plan_renewal') {
+      try {
+        const [manager, estate] = await Promise.all([
+          User.findOne({ estateId, role: 'estate_manager' }).select('name email'),
+          Estate.findById(estateId).select('name'),
+        ]);
+        if (manager?.email && estate) {
+          await sendRenewalReceiptEmail({
+            to: manager.email,
+            managerName: manager.name,
+            estateName: estate.name,
+            plan,
+            cycle,
+            amount: (event.data?.amount || 0) / 100,
+            reference,
+            cardLast4: auth.last4,
+            cardBrand: auth.card_type || auth.brand,
+            nextBillingDate: next,
+          });
+        }
+      } catch (e) {
+        console.error('[paystackWebhook renewal email]', e.message);
+      }
+    }
+
+    return res.status(200).json({ received: true });
+  } catch (err) {
+    console.error('[paystackWebhook]', err.message);
+    // Always 200 to prevent Paystack from retrying when WE have the bug
+    return res.status(200).end();
   }
 };
 

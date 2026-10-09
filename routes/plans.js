@@ -1,6 +1,27 @@
-const router = require('express').Router();
+const express = require('express');
+const router = express.Router();
 const ctrl = require('../controllers/planController');
 const { authenticate, authorize, scopeToEstate } = require('../middleware/auth');
+
+// Paystack webhook — needs the raw body for HMAC verification, so this route
+// uses express.raw() instead of the global JSON parser. Must be declared
+// before any router.use(express.json()) higher up — it is (plans router is
+// mounted after global JSON parsing, so we parse here manually).
+router.post(
+  '/webhook',
+  express.raw({ type: 'application/json', limit: '2mb' }),
+  (req, res, next) => {
+    try {
+      // Expose raw body for the controller's HMAC check, then parse into req.body
+      req.rawBody = req.body?.toString('utf8') || '';
+      req.body = req.rawBody ? JSON.parse(req.rawBody) : {};
+      next();
+    } catch (e) {
+      return res.status(400).json({ success: false, message: 'Invalid JSON' });
+    }
+  },
+  ctrl.paystackWebhook
+);
 
 // Public — pricing page (no auth)
 router.get('/public', ctrl.getPlans);

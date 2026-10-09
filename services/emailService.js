@@ -485,6 +485,124 @@ const sendSubscriptionReminderEmail = async ({ to, managerName, estateName, days
 };
 
 // ── Pitch / intro email (to prospects) ───────────────────────────────────────
+// ── Auto-renewal receipt (recurring charge succeeded) ─────────────────────
+const sendRenewalReceiptEmail = async ({
+  to, managerName, estateName, plan, cycle, amount, reference, cardLast4, cardBrand, nextBillingDate,
+}) => {
+  if (!process.env.RESEND_API_KEY || !to) return { skipped: true };
+  const planName = plan?.name || 'Current Plan';
+  const amountFmt = fmtNGN(amount);
+  const cycleLabel = cycle === 'annual' ? 'Annual' : 'Monthly';
+  const cardLabel  = cardLast4 ? `${(cardBrand || 'Card').toUpperCase()} •••• ${cardLast4}` : 'card on file';
+
+  await getResend().emails.send({
+    from: FROM(),
+    to,
+    subject: `✅ Payment received — ${estateName} ${planName} renewed`,
+    html: `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:32px 16px;margin:0;">
+<div style="max-width:600px;margin:0 auto;">
+  <div style="text-align:center;margin-bottom:20px;">
+    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+  </div>
+  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
+    <div style="background:linear-gradient(135deg,#10B981,#059669);padding:30px 32px;text-align:center;">
+      <div style="font-size:40px;line-height:1;margin-bottom:6px;">✅</div>
+      <h1 style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.02em;margin:0;">Payment received &middot; ${planName} renewed</h1>
+    </div>
+    <div style="padding:30px 32px;">
+      <p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 20px;">
+        Hi <strong>${managerName || 'there'}</strong>,<br><br>
+        We just renewed your <strong>${planName}</strong> subscription for <strong>${estateName}</strong>.
+        Your access continues without interruption.
+      </p>
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:14px;overflow:hidden;margin-bottom:20px;">
+        <div style="background:#0F172A;padding:18px 22px;">
+          <div style="font-size:10px;color:#94A3B8;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:3px;">Renewal receipt</div>
+          <div style="font-size:18px;font-weight:800;color:#fff;letter-spacing:-0.02em;">${amountFmt}</div>
+        </div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          ${[
+            ['Reference',    reference],
+            ['Plan',         `${planName} (${cycleLabel})`],
+            ['Charged',      cardLabel],
+            ['Amount',       amountFmt],
+            ['Access until', fmtDate(nextBillingDate)],
+          ].map(([l,v],i)=>`<tr style="background:${i%2===0?'#F8FAFC':'#fff'};"><td style="padding:11px 22px;font-size:12px;color:#94A3B8;font-weight:600;width:42%;">${l}</td><td style="padding:11px 22px;font-size:13px;color:#0F172A;">${v}</td></tr>`).join('')}
+        </table>
+      </div>
+      <p style="font-size:13px;color:#64748B;line-height:1.6;">
+        Reply to this email if anything looks off. Have a great month running ${estateName}!
+      </p>
+    </div>
+  </div>
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by Area Connector Technologies &middot; RC 9607864</p>
+</div>
+</body></html>`,
+  });
+  return { sent: true };
+};
+
+// ── Subscription expired (renewal failed or no stored card) ───────────────
+const sendSubscriptionExpiredEmail = async ({
+  to, managerName, estateName, planName, amountDue, failureReason, hasAuth,
+}) => {
+  if (!process.env.RESEND_API_KEY || !to) return { skipped: true };
+  const payUrl = `${FRONTEND_URL}/upgrade`;
+  const reasonLine = hasAuth
+    ? 'We tried to charge the card on file but the attempt failed'
+    : 'There is no payment method on file, so we could not auto-renew';
+  const detail = failureReason ? ` (${failureReason})` : '';
+
+  await getResend().emails.send({
+    from: FROM(),
+    to,
+    subject: `🚨 Your ${estateName} subscription is paused — action needed`,
+    html: `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:32px 16px;margin:0;">
+<div style="max-width:600px;margin:0 auto;">
+  <div style="text-align:center;margin-bottom:20px;">
+    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+  </div>
+  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
+    <div style="background:linear-gradient(135deg,#DC2626,#B91C1C);padding:30px 32px;text-align:center;">
+      <div style="font-size:40px;line-height:1;margin-bottom:6px;">🚨</div>
+      <h1 style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.02em;margin:0;">Access paused for ${estateName}</h1>
+    </div>
+    <div style="padding:30px 32px;">
+      <p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 18px;">
+        Hi <strong>${managerName || 'there'}</strong>,<br><br>
+        Your <strong>${planName || 'subscription'}</strong> for <strong>${estateName}</strong> just reached its billing date.
+        ${reasonLine}${detail}, so we've paused the account.
+      </p>
+      <div style="background:#FEE2E2;border:1px solid #FECACA;border-radius:12px;padding:14px 18px;margin-bottom:22px;">
+        <div style="font-size:11px;font-weight:800;color:#991B1B;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">What this means right now</div>
+        <ul style="margin:0;padding-left:18px;font-size:13px;color:#7F1D1D;line-height:1.75;">
+          <li>Residents can't log into AreaMates until the account is reactivated</li>
+          <li>Visitor QR passes won't verify at the gate</li>
+          <li>All your estate data is safe &mdash; nothing is deleted</li>
+        </ul>
+      </div>
+      <div style="text-align:center;margin-bottom:22px;">
+        <a href="${payUrl}"
+          style="display:inline-block;background:linear-gradient(135deg,#10B981,#059669);color:#fff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 36px;border-radius:12px;box-shadow:0 4px 14px rgba(16,185,129,0.35);">
+          Reactivate &mdash; ${amountDue != null ? fmtNGN(amountDue) : 'pay now'} &rarr;
+        </a>
+      </div>
+      <p style="font-size:13px;color:#64748B;line-height:1.6;">
+        Takes under a minute. Reply to this email if you need help &mdash; we're happy to switch plans or arrange bank transfer.
+      </p>
+    </div>
+  </div>
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by Area Connector Technologies &middot; RC 9607864</p>
+</div>
+</body></html>`,
+  });
+  return { sent: true };
+};
+
 // ── Comp / promo gift email ───────────────────────────────────────────────
 // Sent when a super admin grants an estate free access to a plan. The email
 // welcomes the manager, explains the perk, and ships with an invoice-style
@@ -1228,6 +1346,8 @@ module.exports = {
   sendWithdrawalReceiptEmail,
   sendSubscriptionReminderEmail,
   sendCompGiftEmail,
+  sendRenewalReceiptEmail,
+  sendSubscriptionExpiredEmail,
   generateInvoiceHtml,
   sendPitchEmail,
   sendCampaignEmail,

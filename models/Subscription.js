@@ -26,6 +26,29 @@ const subscriptionSchema = new mongoose.Schema({
   // Tracks which day-thresholds have already had a reminder email sent (e.g. [7, 3, 1])
   remindersSent: { type: [Number], default: [] },
 
+  // ── Paystack authorization (recurring charge) ────────────────────────────
+  // Captured on first successful payment so the auditor can re-bill the
+  // stored card when nextBillingDate passes. If authorizationCode is empty,
+  // the auditor flips the sub to `expired` instead of attempting a charge.
+  paystackAuth: {
+    authorizationCode: { type: String, default: '' },
+    customerCode:      { type: String, default: '' },
+    customerEmail:     { type: String, default: '' },
+    cardLast4:         { type: String, default: '' },
+    cardBrand:         { type: String, default: '' },
+    bank:              { type: String, default: '' },
+    channel:           { type: String, default: '' }, // card, bank_transfer, ussd, …
+    reusable:          { type: Boolean, default: false },
+    savedAt:           { type: Date,   default: null },
+  },
+
+  // ── Renewal bookkeeping ──────────────────────────────────────────────────
+  renewalAttempts:        { type: Number, default: 0 },     // charges attempted since last success
+  lastRenewalAttemptAt:   { type: Date,   default: null },
+  lastRenewalError:       { type: String, default: '' },
+  lastRenewalReference:   { type: String, default: '' },
+  lastSuccessfulRenewalAt:{ type: Date,   default: null },
+
   // ── Comp / promo override ────────────────────────────────────────────────
   // When comp.isActive is true (and comp.expiresAt is null or in the future),
   // the estate gets the features of `comp.planId` for free, regardless of
