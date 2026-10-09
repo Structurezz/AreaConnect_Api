@@ -1,5 +1,5 @@
-const fs = require('fs');
-const path = require('path');
+const mongoose = require('mongoose');
+const { GridFSBucket, ObjectId } = require('mongodb');
 const pdfParse = require('pdf-parse');
 const { geocodeAddress } = require('../services/geocoding');
 const Estate = require('../models/Estate');
@@ -9,6 +9,29 @@ const Visitor = require('../models/Visitor');
 const Alert = require('../models/Alert');
 const Plan = require('../models/Plan');
 const Subscription = require('../models/Subscription');
+
+const CONSTITUTION_BUCKET = 'constitutions';
+
+// Constitution files are served at /files/{gridfsId}; pull the id back out.
+const gridfsIdFromUrl = (url) => {
+  const match = /\/files\/([a-f0-9]{24})/i.exec(url || '');
+  if (!match) return null;
+  try { return new ObjectId(match[1]); } catch { return null; }
+};
+
+const deleteConstitutionFile = async (gridfsId) => {
+  const db = mongoose.connection?.db;
+  if (!db || !gridfsId) return;
+  try {
+    const bucket = new GridFSBucket(db, { bucketName: CONSTITUTION_BUCKET });
+    await bucket.delete(gridfsId);
+  } catch (err) {
+    // File may already be gone — don't block the upload/delete flow on cleanup.
+    if (err?.message && !/FileNotFound/i.test(err.message)) {
+      console.warn('[constitution] GridFS delete failed:', err.message);
+    }
+  }
+};
 
 exports.createEstate = async (req, res) => {
   try {
@@ -346,25 +369,22 @@ exports.uploadConstitution = async (req, res) => {
 
     if (!req.file) return res.status(400).json({ success: false, message: 'PDF file required' });
 
-    // Parse PDF text for AI grounding
+    // Parse PDF text for AI grounding. Upload middleware uses memory storage
+    // then streams to GridFS, so the bytes live in req.file.buffer (no disk path).
     let extractedText = '';
     let pageCount = 0;
     try {
-      const buf = fs.readFileSync(req.file.path);
-      const parsed = await pdfParse(buf);
+      const parsed = await pdfParse(req.file.buffer);
       extractedText = (parsed.text || '').trim();
       pageCount = parsed.numpages || 0;
     } catch (parseErr) {
       console.error('constitution parse error:', parseErr.message);
-      // Delete the uploaded file since we couldn't parse it
-      try { fs.unlinkSync(req.file.path); } catch {}
       return res.status(400).json({ success: false, message: 'Could not read the PDF. Please ensure it is a valid, non-encrypted PDF.' });
     }
 
-    // Delete previous file if present
+    // Delete previous constitution from GridFS so files don't accumulate.
     if (estate.constitution?.fileUrl) {
-      const prev = path.join(__dirname, '..', estate.constitution.fileUrl.replace(/^\/+/, ''));
-      try { if (fs.existsSync(prev)) fs.unlinkSync(prev); } catch {}
+      await deleteConstitutionFile(gridfsIdFromUrl(estate.constitution.fileUrl));
     }
 
     estate.constitution = {
@@ -428,12 +448,25 @@ exports.downloadConstitution = async (req, res) => {
     if (!assertEstateAccess(req.user, estate)) return res.status(403).json({ success: false, message: 'Forbidden' });
     if (!estate.constitution?.fileUrl) return res.status(404).json({ success: false, message: 'No constitution uploaded' });
 
-    const filePath = path.join(__dirname, '..', estate.constitution.fileUrl.replace(/^\/+/, ''));
-    if (!fs.existsSync(filePath)) return res.status(404).json({ success: false, message: 'File missing on server' });
+    const gridfsId = gridfsIdFromUrl(estate.constitution.fileUrl);
+    if (!gridfsId) return res.status(404).json({ success: false, message: 'File missing on server' });
 
+    const db = mongoose.connection?.db;
+    if (!db) return res.status(503).json({ success: false, message: 'DB not ready' });
+
+    const bucket = new GridFSBucket(db, { bucketName: CONSTITUTION_BUCKET });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${estate.constitution.fileName || 'constitution.pdf'}"`);
-    return fs.createReadStream(filePath).pipe(res);
+    const stream = bucket.openDownloadStream(gridfsId);
+    stream.on('error', (err) => {
+      if (/FileNotFound/i.test(err?.message || '')) {
+        if (!res.headersSent) res.status(404).json({ success: false, message: 'File missing on server' });
+      } else {
+        console.error('[constitution] download stream error:', err?.message);
+        if (!res.headersSent) res.status(500).end();
+      }
+    });
+    return stream.pipe(res);
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -451,8 +484,7 @@ exports.deleteConstitution = async (req, res) => {
     if (!isManager) return res.status(403).json({ success: false, message: 'Only the estate manager can remove the constitution' });
 
     if (estate.constitution?.fileUrl) {
-      const filePath = path.join(__dirname, '..', estate.constitution.fileUrl.replace(/^\/+/, ''));
-      try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch {}
+      await deleteConstitutionFile(gridfsIdFromUrl(estate.constitution.fileUrl));
     }
     estate.constitution = { fileUrl: '', fileName: '', sizeBytes: 0, uploadedAt: undefined, uploadedById: undefined, extractedText: '', pageCount: 0 };
     await estate.save();
