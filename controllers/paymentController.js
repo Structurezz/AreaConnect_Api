@@ -1,5 +1,4 @@
-const axios  = require('axios');
-const crypto = require('crypto');
+const axios = require('axios');
 const PaymentSchedule = require('../models/PaymentSchedule');
 const Payment = require('../models/Payment');
 const User = require('../models/User');
@@ -36,90 +35,6 @@ const creditManagerWallet = async (estateId, amount) => {
     await User.findByIdAndUpdate(estate.managerId, { $inc: { walletBalance: amount } });
   }
 };
-
-/**
- * Finalize a Paystack-paid payment: flip status, credit wallet, notify + email.
- * Idempotent — if the payment is already marked paid, it's a no-op (so the
- * webhook + the client-side verify call can both run safely).
- * Returns the populated payment or null if the reference doesn't match anything.
- */
-async function finalizePaidPayment(reference) {
-  // Only transition pending → paid once. If it's already paid, skip side-effects.
-  const payment = await Payment.findOneAndUpdate(
-    { paystackReference: reference, status: { $ne: 'paid' } },
-    { status: 'paid', method: 'paystack', paidAt: new Date() },
-    { new: true }
-  ).populate('scheduleId', 'title frequency dueDate');
-
-  if (!payment) {
-    // Either not found or already paid — hand back whatever's on file
-    return Payment.findOne({ paystackReference: reference })
-      .populate('scheduleId', 'title frequency dueDate');
-  }
-
-  const estateId = payment.estateId;
-  await creditManagerWallet(estateId, payment.amount);
-
-  try {
-    await payment.populate([
-      { path: 'residentId', populate: { path: 'unitId', select: 'unitNumber block type' } },
-      { path: 'recordedBy', select: 'name' },
-    ]);
-    const estate   = await Estate.findById(estateId).select('name address estateCode logoUrl');
-    const resident = payment.residentId;
-    const unit     = resident?.unitId;
-    const fmt      = (n) => `₦${Number(n).toLocaleString('en-NG')}`;
-
-    const notif = {
-      id: payment._id.toString(),
-      type: 'payment_received',
-      title: 'Payment Received',
-      body: `${resident?.name || 'A resident'} paid ${fmt(payment.amount)} for ${payment.scheduleId?.title || 'levy'}`,
-      amount: payment.amount,
-      meta: { paymentId: payment._id },
-    };
-
-    emitNotification(estateId, {
-      ...notif,
-      title: 'Payment Confirmed',
-      body: `Your payment of ${fmt(payment.amount)} for ${payment.scheduleId?.title || 'levy'} was received`,
-    }, resident?._id);
-
-    const manager = await User.findOne({ estateId, role: 'estate_manager' }).select('name email');
-    emitNotification(estateId, notif, manager?._id);
-
-    if (manager && estate) {
-      sendManagerNotificationEmail({
-        to: manager.email,
-        managerName: manager.name,
-        estateName: estate.name,
-        type: 'payment_received',
-        title: notif.title,
-        body: notif.body,
-      }).catch(e => console.error('[manager email]', e.message));
-    }
-
-    if (resident?.email) {
-      const dateStr = payment.createdAt.toISOString().slice(0, 10).replace(/-/g, '');
-      const invoiceNumber = `INV-${dateStr}-${payment._id.toString().slice(-6).toUpperCase()}`;
-      const inv = {
-        invoiceNumber,
-        date: payment.createdAt,
-        dueDate: payment.scheduleId?.dueDate,
-        status: 'paid', paidAt: payment.paidAt, method: 'paystack',
-        notes: '',  recordedBy: null,
-        estate: { name: estate?.name || '', address: estate?.address || '', estateCode: estate?.estateCode || '', logoUrl: estate?.logoUrl || '' },
-        resident: { name: resident.name, email: resident.email, phone: resident.phone || '', unit: unit ? `${unit.block ? unit.block + ' ' : ''}${unit.unitNumber}` : 'N/A' },
-        items: [{ description: payment.scheduleId?.title || 'Payment', detail: '', frequency: payment.scheduleId?.frequency || '', quantity: 1, unitPrice: payment.amount, vat: 0, total: payment.amount }],
-        subtotal: payment.amount, vatAmount: 0, total: payment.amount,
-      };
-      sendPaymentReceiptEmail({ to: resident.email, residentName: resident.name, estateName: estate?.name || '', inv })
-        .catch(e => console.error('[receipt email]', e.message));
-    }
-  } catch (e) { console.error('[notify finalizePaidPayment]', e.message); }
-
-  return payment;
-}
 
 // ── Estate Manager: create schedule ───────────────────────────────────────
 
@@ -532,71 +447,82 @@ exports.verifyPayment = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Payment not successful' });
     }
 
-    // Make sure this reference belongs to the caller's estate before finalizing
-    const owned = await Payment.exists({ paystackReference: reference, estateId: req.estateId });
-    if (!owned) return res.status(404).json({ success: false, message: 'Payment record not found' });
+    const payment = await Payment.findOneAndUpdate(
+      { paystackReference: reference, estateId: req.estateId },
+      { status: 'paid', method: 'paystack', paidAt: new Date() },
+      { new: true }
+    ).populate('scheduleId', 'title');
 
-    const payment = await finalizePaidPayment(reference);
     if (!payment) return res.status(404).json({ success: false, message: 'Payment record not found' });
+
+    await creditManagerWallet(req.estateId, payment.amount);
+
+    try {
+      await payment.populate([
+        { path: 'residentId', populate: { path: 'unitId', select: 'unitNumber block type' } },
+        { path: 'recordedBy', select: 'name' },
+      ]);
+      const estate   = await Estate.findById(req.estateId).select('name address estateCode logoUrl');
+      const resident = payment.residentId;
+      const unit     = resident?.unitId;
+      const fmt      = (n) => `₦${Number(n).toLocaleString('en-NG')}`;
+
+      const notif = {
+        id: payment._id.toString(),
+        type: 'payment_received',
+        title: 'Payment Received',
+        body: `${resident?.name || 'A resident'} paid ${fmt(payment.amount)} for ${payment.scheduleId?.title || 'levy'}`,
+        amount: payment.amount,
+        meta: { paymentId: payment._id },
+      };
+
+      // Notify the resident that their payment was confirmed
+      emitNotification(req.estateId, {
+        ...notif,
+        title: 'Payment Confirmed',
+        body: `Your payment of ${fmt(payment.amount)} for ${payment.scheduleId?.title || 'levy'} was received`,
+      }, resident?._id);
+
+      const manager = await User.findOne({ estateId: req.estateId, role: 'estate_manager' }).select('name email');
+
+      // Notify only the manager about the incoming payment
+      emitNotification(req.estateId, notif, manager?._id);
+
+      if (manager && estate) {
+        sendManagerNotificationEmail({
+          to: manager.email,
+          managerName: manager.name,
+          estateName: estate.name,
+          type: 'payment_received',
+          title: notif.title,
+          body: notif.body,
+        }).catch(e => console.error('[manager email]', e.message));
+      }
+
+      // Send receipt to resident
+      if (resident?.email) {
+        const dateStr = payment.createdAt.toISOString().slice(0, 10).replace(/-/g, '');
+        const invoiceNumber = `INV-${dateStr}-${payment._id.toString().slice(-6).toUpperCase()}`;
+        const inv = {
+          invoiceNumber,
+          date: payment.createdAt,
+          dueDate: payment.scheduleId?.dueDate,
+          status: 'paid', paidAt: payment.paidAt, method: 'paystack',
+          notes: '',  recordedBy: null,
+          estate: { name: estate?.name || '', address: estate?.address || '', estateCode: estate?.estateCode || '', logoUrl: estate?.logoUrl || '' },
+          resident: { name: resident.name, email: resident.email, phone: resident.phone || '', unit: unit ? `${unit.block ? unit.block + ' ' : ''}${unit.unitNumber}` : 'N/A' },
+          items: [{ description: payment.scheduleId?.title || 'Payment', detail: '', frequency: payment.scheduleId?.frequency || '', quantity: 1, unitPrice: payment.amount, vat: 0, total: payment.amount }],
+          subtotal: payment.amount, vatAmount: 0, total: payment.amount,
+        };
+        sendPaymentReceiptEmail({ to: resident.email, residentName: resident.name, estateName: estate?.name || '', inv })
+          .catch(e => console.error('[receipt email]', e.message));
+      }
+    } catch (e) { console.error('[notify verifyPayment]', e.message); }
 
     return res.json({ success: true, data: payment });
   } catch (err) {
     console.error('[Paystack verify]', err.response?.data || err.message);
     return res.status(500).json({ success: false, message: 'Verification failed' });
-  }
-};
-
-// ─── POST /api/payments/webhook ─────────────────────────────────────────────
-// Paystack POSTs events here when charges succeed / fail etc. Verified via
-// HMAC-SHA512 of the raw body using our secret. Mounted BEFORE auth middleware
-// in routes/payments.js — Paystack doesn't send a JWT.
-exports.handleWebhook = async (req, res) => {
-  try {
-    if (!process.env.PAYSTACK_SECRET_KEY) return res.sendStatus(503);
-
-    // Verify signature using the raw body (buffer) attached by express.raw()
-    const raw = req.body;  // Buffer (express.raw at the route layer)
-    if (!raw || !Buffer.isBuffer(raw)) {
-      console.warn('[Paystack webhook] missing raw body');
-      return res.sendStatus(400);
-    }
-    const expected = crypto
-      .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY)
-      .update(raw)
-      .digest('hex');
-    const got = req.headers['x-paystack-signature'] || '';
-    if (expected !== got) {
-      console.warn('[Paystack webhook] bad signature');
-      return res.sendStatus(401);
-    }
-
-    // Ack immediately so Paystack doesn't retry while we do the work
-    res.sendStatus(200);
-
-    let event;
-    try { event = JSON.parse(raw.toString('utf8')); }
-    catch { return; }
-
-    if (event.event === 'charge.success') {
-      const reference = event.data?.reference;
-      if (reference) {
-        try { await finalizePaidPayment(reference); }
-        catch (e) { console.error('[Paystack webhook finalize]', e.message); }
-      }
-    } else if (event.event === 'transfer.success' || event.event === 'transfer.failed') {
-      const code = event.data?.transfer_code || event.data?.reference;
-      if (code) {
-        const status = event.event === 'transfer.success' ? 'completed' : 'failed';
-        await Withdrawal.updateOne(
-          { paystackTransferCode: code },
-          { status, settledAt: event.event === 'transfer.success' ? new Date() : undefined },
-        ).catch(e => console.error('[Paystack webhook transfer]', e.message));
-      }
-    }
-    // Other events (invoice.*, subscription.*) silently acknowledged.
-  } catch (err) {
-    console.error('[Paystack webhook]', err.message);
-    // Already acked above if we got past the signature check
   }
 };
 
