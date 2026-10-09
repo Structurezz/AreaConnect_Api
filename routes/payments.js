@@ -1,8 +1,15 @@
-const router = require('express').Router();
+const express = require('express');
+const router  = express.Router();
 const { body } = require('express-validator');
 const ctrl = require('../controllers/paymentController');
 const { authenticate, authorize, scopeToEstate, requireEstate, requireActiveSubscription } = require('../middleware/auth');
 const validate = require('../middleware/validate');
+
+// ── Paystack webhook (PUBLIC — HMAC verified) ──────────────────────────────
+// Mounted BEFORE auth middleware since Paystack doesn't send a JWT.
+// express.raw gives us the exact bytes Paystack signed, which the controller
+// re-hashes to verify authenticity.
+router.post('/webhook', express.raw({ type: '*/*', limit: '1mb' }), ctrl.handleWebhook);
 
 router.use(authenticate, scopeToEstate, requireEstate, requireActiveSubscription);
 
