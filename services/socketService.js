@@ -1,5 +1,40 @@
 let io = null;
 
+// ── In-memory podcast rooms ──────────────────────────────────────────────
+// Keeps the "warm" state every late joiner needs to feel like they've been
+// in the room all along: last 50 chat messages, cumulative likes, current
+// background music + volume. Cleared when the show ends (see
+// cleanupPodcastShow). Deliberately not persisted — this is ephemeral live
+// state.
+const CHAT_HISTORY_LIMIT = 50;
+const podcastRooms = new Map(); // showId -> { chat: msg[], likes, nowPlaying, musicVolume }
+
+function roomFor(showId) {
+  const key = String(showId);
+  let r = podcastRooms.get(key);
+  if (!r) {
+    r = { chat: [], likes: 0, nowPlaying: null, musicVolume: null };
+    podcastRooms.set(key, r);
+  }
+  return r;
+}
+
+function cleanupPodcastShow(showId) {
+  podcastRooms.delete(String(showId));
+}
+
+function sendPodcastStateSync(socket, showId) {
+  const r = podcastRooms.get(String(showId));
+  if (!r) return;
+  socket.emit('podcast:state-sync', {
+    showId,
+    chat:        r.chat,
+    likes:       r.likes,
+    nowPlaying:  r.nowPlaying,
+    musicVolume: r.musicVolume,
+  });
+}
+
 const initSocket = (server) => {
   const { Server } = require('socket.io');
 
@@ -114,6 +149,10 @@ const initSocket = (server) => {
       socket.join(`podcast:${showId}:host`);
       socket.data.live.podcast = showId;
       socket.data.live.role = 'host';
+      // Make sure the room exists even before the first message so late
+      // listeners get a well-formed sync.
+      roomFor(showId);
+      sendPodcastStateSync(socket, showId);
       broadcastPodcastCount(showId);
     });
 
@@ -125,6 +164,7 @@ const initSocket = (server) => {
       socket.data.live.role = 'guest';
       socket.data.live.guestId = guestId;
       socket.data.live.guestName = name;
+      sendPodcastStateSync(socket, showId);
       io.to(`podcast:${showId}:host`).emit('podcast:new-guest', { socketId: socket.id, guestId, name });
     });
 
@@ -134,6 +174,7 @@ const initSocket = (server) => {
       socket.join(`podcast:${showId}:listeners`);
       socket.data.live.podcast = showId;
       socket.data.live.role = 'listener';
+      sendPodcastStateSync(socket, showId);
       io.to(`podcast:${showId}:host`).emit('podcast:new-listener', { socketId: socket.id });
       broadcastPodcastCount(showId);
     });
@@ -164,6 +205,10 @@ const initSocket = (server) => {
         showId, userId, userName: (userName || 'Listener').slice(0, 40),
         userPhoto: userPhoto || null, text: trimmed, at: now,
       };
+      // Push to room history so late joiners replay the last N messages
+      const r = roomFor(showId);
+      r.chat.push(msg);
+      if (r.chat.length > CHAT_HISTORY_LIMIT) r.chat.splice(0, r.chat.length - CHAT_HISTORY_LIMIT);
       io.to(`podcast:${showId}`).emit('podcast:chat', msg);
     });
 
@@ -193,17 +238,21 @@ const initSocket = (server) => {
         const PodcastShow = require('../models/PodcastShow');
         await PodcastShow.updateOne({ _id: showId, status: 'live' }, { nowPlaying: np || {} });
       } catch (_) { /* best effort */ }
+      // Mirror into room state so joiners get the current track + startedAt
+      roomFor(showId).nowPlaying = np;
       io.to(`podcast:${showId}`).emit('podcast:music-change', { showId, nowPlaying: np || null });
     });
 
     // Host adjusts background music volume. Persist + relay.
     socket.on('podcast:volume', async ({ showId, volume }) => {
-      if (!showId || typeof volume !== 'number') return;
+      if (!showId) return;
+      if (typeof volume !== 'number') return;
       const vol = Math.max(0, Math.min(100, Math.round(volume)));
       try {
         const PodcastShow = require('../models/PodcastShow');
         await PodcastShow.updateOne({ _id: showId, status: 'live' }, { musicVolume: vol });
       } catch (_) { /* best effort */ }
+      roomFor(showId).musicVolume = vol;
       io.to(`podcast:${showId}`).emit('podcast:volume', { showId, volume: vol });
     });
 
@@ -213,6 +262,7 @@ const initSocket = (server) => {
       // Rate limit: 1 like per 100ms (so a long press feels responsive but doesn't flood)
       if (now - (socket.data._podcastLikeAt || 0) < 100) return;
       socket.data._podcastLikeAt = now;
+      roomFor(showId).likes += 1;
       io.to(`podcast:${showId}`).emit('podcast:like', { userId, at: now });
     });
 
@@ -436,4 +486,9 @@ const emitGlobalNotification = (notification) => {
   });
 };
 
-module.exports = { initSocket, emitAlert, emitVisitorUpdate, emitEarlyArrival, emitEarlyApproved, emitAnnouncement, emitNkechiTyping, emitGroupMessage, emitNotification, emitGlobalNotification, getIO };
+module.exports = {
+  initSocket, emitAlert, emitVisitorUpdate, emitEarlyArrival, emitEarlyApproved,
+  emitAnnouncement, emitNkechiTyping, emitGroupMessage, emitNotification,
+  emitGlobalNotification, getIO,
+  cleanupPodcastShow,
+};

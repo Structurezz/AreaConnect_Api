@@ -1,6 +1,6 @@
 const PodcastShow    = require('../models/PodcastShow');
 const PodcastEpisode = require('../models/PodcastEpisode');
-const { getIO, emitGlobalNotification } = require('../services/socketService');
+const { getIO, emitGlobalNotification, cleanupPodcastShow } = require('../services/socketService');
 
 // ── Admin side ───────────────────────────────────────────────────────────────
 
@@ -148,6 +148,7 @@ exports.endLive = async (req, res) => {
 
     const io = getIO();
     if (io) io.emit('podcast:ended', { showId: show._id, episodeId: episode?._id || null });
+    cleanupPodcastShow(show._id);
 
     return res.json({ success: true, data: { show, episode } });
   } catch (err) {
@@ -196,7 +197,9 @@ exports.revokeInvite = async (req, res) => {
 exports.getLive = async (req, res) => {
   try {
     const show = await PodcastShow.findOne({ status: 'live' })
-      .select('title hostName coverImage startedAt peakListeners description nowPlaying musicVolume')
+      // hostUserId lets authenticated clients (admin) decide whether to
+      // auto-open LiveStudio for the current user as host.
+      .select('title hostName hostUserId coverImage startedAt peakListeners description nowPlaying musicVolume')
       .lean();
     return res.json({ success: true, data: show || null });
   } catch (err) {
