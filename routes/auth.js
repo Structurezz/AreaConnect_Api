@@ -2,7 +2,7 @@ const router = require('express').Router();
 const { body } = require('express-validator');
 const ctrl = require('../controllers/authController');
 const validate = require('../middleware/validate');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize, scopeToEstate, requireEstate } = require('../middleware/auth');
 
 router.post('/register', [
   body('name').trim().notEmpty().withMessage('Name is required'),
@@ -26,5 +26,42 @@ router.patch('/me', authenticate, [
   body('profilePhoto').optional().isString().isLength({ max: 300000 }),
 ], validate, ctrl.updateProfile);
 router.post('/switch-estate', authenticate, ctrl.switchEstate);
+
+// ── Password management ──────────────────────────────────────────────────
+router.post(
+  '/change-password',
+  authenticate,
+  [
+    body('currentPassword').optional().isString(),
+    body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
+  ],
+  validate,
+  ctrl.changePassword,
+);
+
+// Public: residents / security ask their estate manager to reset their password
+router.post(
+  '/forgot-password/request',
+  [ body('email').isEmail().withMessage('Valid email required') ],
+  validate,
+  ctrl.requestPasswordReset,
+);
+
+// Estate manager: see + act on pending requests
+router.get(
+  '/password-resets',
+  authenticate, scopeToEstate, requireEstate, authorize('estate_manager', 'super_admin'),
+  ctrl.listPasswordResets,
+);
+router.post(
+  '/password-resets/:id/approve',
+  authenticate, scopeToEstate, requireEstate, authorize('estate_manager', 'super_admin'),
+  ctrl.approvePasswordReset,
+);
+router.post(
+  '/password-resets/:id/deny',
+  authenticate, scopeToEstate, requireEstate, authorize('estate_manager', 'super_admin'),
+  ctrl.denyPasswordReset,
+);
 
 module.exports = router;

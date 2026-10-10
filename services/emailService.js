@@ -567,6 +567,61 @@ const sendLiveAnnouncementEmail = async ({
   return { sent: true };
 };
 
+// ── Password-reset review request (to estate manager) ────────────────────
+const sendPasswordResetRequestEmail = async ({
+  to, managerName, estateName, requesterName, requesterRole, requesterUnit, requesterEmail, reviewUrl,
+}) => {
+  if (!process.env.RESEND_API_KEY || !to) return { skipped: true };
+  const unitLine = requesterUnit ? `<strong>${requesterUnit}</strong> · ` : '';
+  const roleLabel = requesterRole === 'security' ? 'Security officer' : 'Resident';
+  await getResend().emails.send({
+    from: FROM(),
+    to,
+    subject: `🔐 Password reset request · ${requesterName} (${estateName})`,
+    html: `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:28px 16px;margin:0;">
+<div style="max-width:600px;margin:0 auto;">
+  <div style="text-align:center;margin-bottom:16px;">
+    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+  </div>
+  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
+    <div style="background:linear-gradient(135deg,#4F46E5,#6366F1);padding:28px 32px;color:#fff;">
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.85);margin-bottom:4px;">${estateName}</div>
+      <h1 style="font-size:22px;font-weight:800;letter-spacing:-0.02em;margin:0;">🔐 Password reset request</h1>
+    </div>
+    <div style="padding:28px 32px;">
+      <p style="font-size:15px;color:#374151;line-height:1.65;margin:0 0 18px;">
+        Hi <strong>${managerName || 'Manager'}</strong>,<br><br>
+        A ${roleLabel.toLowerCase()} at ${estateName} is asking you to approve a password reset for their account.
+      </p>
+      <div style="background:#EEF2FF;border:1px solid #C7D2FE;border-radius:12px;padding:14px 18px;margin-bottom:22px;">
+        <div style="font-size:11px;font-weight:800;color:#4338CA;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">Request details</div>
+        <div style="font-size:14px;color:#1F2937;line-height:1.6;">
+          ${unitLine}<strong>${requesterName}</strong><br>
+          <span style="color:#64748B;">${requesterEmail} &middot; ${roleLabel}</span>
+        </div>
+      </div>
+      <div style="text-align:center;margin:2px 0 8px;">
+        <a href="${reviewUrl}"
+          style="display:inline-block;background:linear-gradient(135deg,#10B981,#059669);color:#fff;font-weight:700;font-size:14px;text-decoration:none;padding:12px 28px;border-radius:12px;">
+          Review in dashboard &rarr;
+        </a>
+      </div>
+      <p style="font-size:12px;color:#64748B;line-height:1.6;margin-top:18px;">
+        Approving will email the ${roleLabel.toLowerCase()} a temporary password. They'll be forced to change it on next sign-in.
+      </p>
+    </div>
+    <div style="background:#F8FAFC;border-top:1px solid #E2E8F0;padding:12px 20px;">
+      <span style="font-size:11px;color:#94A3B8;">AreaConnect Estate Management</span>
+    </div>
+  </div>
+</div>
+</body></html>`,
+  });
+  return { sent: true };
+};
+
 // ── Auto-renewal receipt (recurring charge succeeded) ─────────────────────
 const sendRenewalReceiptEmail = async ({
   to, managerName, estateName, plan, cycle, amount, reference, cardLast4, cardBrand, nextBillingDate,
@@ -1545,6 +1600,7 @@ module.exports = {
   sendRenewalReceiptEmail,
   sendSubscriptionExpiredEmail,
   sendLiveAnnouncementEmail,
+  sendPasswordResetRequestEmail,
   generateInvoiceHtml,
   sendPitchEmail,
   sendCampaignEmail,

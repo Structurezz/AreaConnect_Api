@@ -25,6 +25,11 @@ const userSchema = new mongoose.Schema({
   bankName: { type: String, default: '' },
   accountNumber: { type: String, default: '' },
   accountName: { type: String, default: '' },
+
+  // Flipped true when an admin issues a temp password (invite or an approved
+  // reset). Login still works, but the client should force a change-password
+  // step before anything else.
+  mustChangePassword: { type: Boolean, default: false },
 }, { timestamps: true });
 
 userSchema.methods.comparePassword = async function (password) {
