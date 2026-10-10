@@ -6,8 +6,11 @@ const validate = require('../middleware/validate');
 
 router.use(authenticate, authorize('super_admin'));
 
-router.get('/', ctrl.getUsers);
-router.patch('/:id', ctrl.updateUser);
+router.get('/',       ctrl.getUsers);
+router.get('/stats',  ctrl.getUserStats);
+router.patch('/:id',  ctrl.updateUser);
+router.post('/:id/reset-password', ctrl.adminResetPassword);
+router.post('/bulk',  ctrl.bulkUpdate);
 
 router.post('/', [
   body('name').trim().notEmpty(),
