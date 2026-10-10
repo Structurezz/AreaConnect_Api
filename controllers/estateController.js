@@ -78,10 +78,102 @@ exports.createEstate = async (req, res) => {
 exports.getAllEstates = async (req, res) => {
   try {
     const estates = await Estate.find()
-      .populate('managerId', 'name email')
+      // Phone is used by the Estates list card for the manager call link.
+      .populate('managerId', 'name email phone')
       .sort({ createdAt: -1 });
     return res.json({ success: true, data: estates });
   } catch (err) {
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// GET /api/estates/overview — super admin
+// Returns one row per estate with aggregated activity so the list page
+// can show plan + status + residents + units + visitors + alerts without
+// doing a dozen client-side fetches.
+exports.getEstatesOverview = async (req, res) => {
+  try {
+    const Subscription = require('../models/Subscription');
+    const Visitor      = require('../models/Visitor');
+    const Alert        = require('../models/Alert');
+
+    const now = new Date();
+    const startOfDay = new Date(now); startOfDay.setHours(0, 0, 0, 0);
+    const weekAgo    = new Date(now.getTime() - 7 * 86400000);
+
+    const [estates, subs, residentCounts, unitCounts, visitorsToday, visitorsWeek, openAlerts] = await Promise.all([
+      Estate.find()
+        .populate('managerId', 'name email phone')
+        .sort({ createdAt: -1 })
+        .lean(),
+      Subscription.find()
+        .populate('planId', 'name slug color price')
+        .populate('comp.planId', 'name slug color')
+        .select('estateId planId status cycle nextBillingDate trialEndsAt comp lastRenewalError renewalAttempts paystackAuth.cardLast4 paystackAuth.authorizationCode')
+        .lean(),
+      User.aggregate([
+        { $match: { role: 'resident', isActive: true } },
+        { $group: { _id: '$estateId', count: { $sum: 1 } } },
+      ]),
+      // Lazy require to avoid circular deps
+      require('../models/Unit').aggregate([
+        { $group: { _id: '$estateId', count: { $sum: 1 } } },
+      ]),
+      Visitor.aggregate([
+        { $match: { createdAt: { $gte: startOfDay } } },
+        { $group: { _id: '$estateId', count: { $sum: 1 } } },
+      ]),
+      Visitor.aggregate([
+        { $match: { createdAt: { $gte: weekAgo } } },
+        { $group: { _id: '$estateId', count: { $sum: 1 } } },
+      ]),
+      Alert.aggregate([
+        { $match: { status: { $in: ['open', 'acknowledged'] } } },
+        { $group: { _id: '$estateId', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const toMap = (arr) => arr.reduce((m, r) => { m[String(r._id)] = r.count; return m; }, {});
+    const subByEstate = subs.reduce((m, s) => { m[String(s.estateId)] = s; return m; }, {});
+    const residents  = toMap(residentCounts);
+    const units      = toMap(unitCounts);
+    const vToday     = toMap(visitorsToday);
+    const vWeek      = toMap(visitorsWeek);
+    const alerts     = toMap(openAlerts);
+
+    const data = estates.map(e => {
+      const sub = subByEstate[String(e._id)] || null;
+      const compLive = sub && sub.comp?.isActive && sub.comp?.planId &&
+        (!sub.comp?.expiresAt || new Date(sub.comp.expiresAt) > now);
+      return {
+        ...e,
+        subscription: sub ? {
+          planId: sub.planId,
+          status: sub.status,
+          cycle:  sub.cycle,
+          nextBillingDate: sub.nextBillingDate,
+          trialEndsAt:     sub.trialEndsAt,
+          compActive:      !!compLive,
+          compPlan:        compLive ? sub.comp.planId : null,
+          compExpiresAt:   compLive ? sub.comp.expiresAt : null,
+          renewalIssue:    !!(sub.renewalAttempts > 0 && sub.lastRenewalError),
+          renewalError:    sub.lastRenewalError || null,
+          hasCard:         !!sub.paystackAuth?.authorizationCode,
+          cardLast4:       sub.paystackAuth?.cardLast4 || null,
+        } : null,
+        counts: {
+          residents:     residents[String(e._id)]  || 0,
+          units:         units[String(e._id)]      || 0,
+          visitorsToday: vToday[String(e._id)]     || 0,
+          visitorsWeek:  vWeek[String(e._id)]      || 0,
+          openAlerts:    alerts[String(e._id)]     || 0,
+        },
+      };
+    });
+
+    return res.json({ success: true, data });
+  } catch (err) {
+    console.error('[getEstatesOverview]', err);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
@@ -111,8 +203,13 @@ exports.getEstate = async (req, res) => {
 exports.getEstateDetail = async (req, res) => {
   try {
     const { estateId } = req.params;
+    const Subscription = require('../models/Subscription');
+    const Visitor      = require('../models/Visitor');
+    const Alert        = require('../models/Alert');
+    const Announcement = require('../models/Announcement');
+    const Payment      = require('../models/Payment');
 
-    const [estate, residents, securityStaff, units] = await Promise.all([
+    const [estate, residents, securityStaff, units, subscription, visitors, alerts, announcements, payments] = await Promise.all([
       Estate.findById(estateId).populate('managerId', 'name email phone'),
       User.find({ estateId, role: 'resident' })
         .populate('unitId', 'unitNumber block type')
@@ -122,16 +219,53 @@ exports.getEstateDetail = async (req, res) => {
         .select('-passwordHash -refreshToken')
         .sort({ name: 1 }),
       Unit.find({ estateId }).sort({ unitNumber: 1 }),
+      // Replace the client's N+1: ship the single sub for this estate directly
+      Subscription.findOne({ estateId })
+        .populate('planId', 'name slug color price features')
+        .populate('comp.planId', 'name slug color price')
+        .populate('comp.grantedBy', 'name email'),
+      // Last 20 visitors
+      Visitor.find({ estateId })
+        .sort({ createdAt: -1 }).limit(20)
+        .select('name phone hostName unitNumber status checkInTime checkOutTime createdAt accessCode')
+        .lean(),
+      // Open + recent alerts
+      Alert.find({ estateId })
+        .sort({ createdAt: -1 }).limit(20)
+        .populate('residentId', 'name phone')
+        .populate('unitId', 'unitNumber block')
+        .lean(),
+      // Last 10 announcements
+      Announcement.find({ estateId })
+        .sort({ createdAt: -1 }).limit(10)
+        .select('title message category isPinned createdAt')
+        .lean(),
+      // Last 20 payments (if the schedule model exists)
+      Payment.find({ estateId })
+        .sort({ createdAt: -1 }).limit(20)
+        .populate('residentId', 'name')
+        .populate('scheduleId', 'title amount')
+        .lean().catch(() => []),
     ]);
 
     if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
 
     return res.json({
       success: true,
-      data: { estate, residents, securityStaff, units },
+      data: {
+        estate,
+        residents,
+        securityStaff,
+        units,
+        subscription,
+        visitors,
+        alerts,
+        announcements,
+        payments,
+      },
     });
   } catch (err) {
-    console.error(err);
+    console.error('[getEstateDetail]', err);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };

@@ -13,6 +13,7 @@ router.post('/', authorize('super_admin'), [
 ], validate, ctrl.createEstate);
 
 router.get('/', authorize('super_admin'), ctrl.getAllEstates);
+router.get('/overview', authorize('super_admin'), ctrl.getEstatesOverview);
 
 router.get('/platform-stats', authorize('super_admin'), ctrl.getPlatformStats);
 router.get('/stats', scopeToEstate, ctrl.getEstateStats);
