@@ -48,4 +48,8 @@ router.patch('/subscriptions/:id', ...adminOnly, ctrl.updateSubscription);
 router.post('/subscriptions/comp', ...adminOnly, ctrl.grantComp);
 router.delete('/subscriptions/comp/:estateId', ...adminOnly, ctrl.revokeComp);
 
+// Revenue intelligence
+router.get('/renewals/upcoming', ...adminOnly, ctrl.getUpcomingRenewals);
+router.get('/renewals/failed',   ...adminOnly, ctrl.getFailedRenewals);
+
 module.exports = router;

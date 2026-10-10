@@ -576,39 +576,205 @@ exports.paystackWebhook = async (req, res) => {
 
 exports.getSubscriptionStats = async (req, res) => {
   try {
-    const [total, active, trial, expired] = await Promise.all([
+    const now = new Date();
+    const in7Days  = new Date(now.getTime() + 7  * 86400000);
+    const last30d  = new Date(now.getTime() - 30 * 86400000);
+
+    // A sub is "comp live" when the comp flag is on AND it hasn't expired.
+    const compLiveMatch = {
+      'comp.isActive': true,
+      'comp.planId':   { $ne: null },
+      $or: [
+        { 'comp.expiresAt': null },
+        { 'comp.expiresAt': { $gt: now } },
+      ],
+    };
+
+    const [
+      total, active, trial, expired, cancelled, suspended,
+      activeComp,
+      cancelled30d,
+    ] = await Promise.all([
       Subscription.countDocuments(),
       Subscription.countDocuments({ status: 'active' }),
       Subscription.countDocuments({ status: 'trial' }),
-      Subscription.countDocuments({ status: { $in: ['expired', 'suspended', 'cancelled'] } }),
+      Subscription.countDocuments({ status: 'expired' }),
+      Subscription.countDocuments({ status: 'cancelled' }),
+      Subscription.countDocuments({ status: 'suspended' }),
+      Subscription.countDocuments({ status: 'active', ...compLiveMatch }),
+      Subscription.countDocuments({
+        status: { $in: ['cancelled', 'expired'] },
+        updatedAt: { $gte: last30d },
+      }),
     ]);
 
-    const revenueArr = await Subscription.aggregate([
-      { $match: { status: 'active' } },
+    // ── MRR split: paid vs comp ─────────────────────────────────────────
+    // A sub counts as paid revenue only when it's active AND no live comp.
+    const compActiveExpr = {
+      $and: [
+        { $eq: ['$comp.isActive', true] },
+        { $ne: ['$comp.planId', null] },
+        {
+          $or: [
+            { $eq: ['$comp.expiresAt', null] },
+            { $gt: ['$comp.expiresAt', now] },
+          ],
+        },
+      ],
+    };
+    const monthlyFromPlan = {
+      $cond: [
+        { $eq: ['$cycle', 'monthly'] },
+        { $ifNull: ['$plan.price.monthly', 0] },
+        { $divide: [{ $ifNull: ['$plan.price.annual', 0] }, 12] },
+      ],
+    };
+
+    const [paidMrrRow, compMrrRow] = await Promise.all([
+      // PAID MRR — active, no live comp, use billed planId
+      Subscription.aggregate([
+        { $match: { status: 'active' } },
+        { $lookup: { from: 'plans', localField: 'planId', foreignField: '_id', as: 'plan' } },
+        { $unwind: '$plan' },
+        { $match: { $expr: { $not: compActiveExpr } } },
+        { $group: { _id: null, mrr: { $sum: monthlyFromPlan } } },
+      ]),
+      // COMP MRR — active with live comp, use the comp plan's price (what we
+      // would have billed had they not been gifted — "foregone MRR").
+      Subscription.aggregate([
+        { $match: { status: 'active', ...compLiveMatch } },
+        { $lookup: { from: 'plans', localField: 'comp.planId', foreignField: '_id', as: 'plan' } },
+        { $unwind: '$plan' },
+        { $group: { _id: null, mrr: { $sum: monthlyFromPlan } } },
+      ]),
+    ]);
+    const paidMrr = Math.round(paidMrrRow[0]?.mrr || 0);
+    const compMrr = Math.round(compMrrRow[0]?.mrr || 0);
+
+    // ── Trial pipeline value ───────────────────────────────────────────
+    const trialPipelineRow = await Subscription.aggregate([
+      { $match: { status: 'trial' } },
       { $lookup: { from: 'plans', localField: 'planId', foreignField: '_id', as: 'plan' } },
       { $unwind: '$plan' },
-      { $group: {
-        _id: null,
-        monthly: { $sum: { $cond: [{ $eq: ['$cycle', 'monthly'] }, '$plan.price.monthly', { $divide: ['$plan.price.annual', 12] }] } },
-      }},
+      { $group: { _id: null, mrr: { $sum: monthlyFromPlan } } },
+    ]);
+    const trialPipelineMrr = Math.round(trialPipelineRow[0]?.mrr || 0);
+
+    // ── Upcoming renewals (next 7 days) + failed renewal queue ─────────
+    const [renewalsDue7d, failedRenewalCount] = await Promise.all([
+      Subscription.countDocuments({
+        status: 'active',
+        nextBillingDate: { $lte: in7Days, $gte: now },
+      }),
+      Subscription.countDocuments({
+        $and: [
+          { renewalAttempts: { $gt: 0 } },
+          { lastRenewalError: { $exists: true, $ne: '' } },
+          { status: { $in: ['active', 'expired'] } },
+        ],
+      }),
     ]);
 
+    // ── byPlan: with paid vs comp split per plan ───────────────────────
     const byPlan = await Subscription.aggregate([
       { $match: { status: { $in: ['active', 'trial'] } } },
-      { $group: { _id: '$planId', count: { $sum: 1 } } },
-      { $lookup: { from: 'plans', localField: '_id', foreignField: '_id', as: 'plan' } },
+      {
+        $addFields: {
+          _isComp: {
+            $and: [
+              { $eq: ['$comp.isActive', true] },
+              { $ne: ['$comp.planId', null] },
+              {
+                $or: [
+                  { $eq: ['$comp.expiresAt', null] },
+                  { $gt: ['$comp.expiresAt', now] },
+                ],
+              },
+            ],
+          },
+        },
+      },
+      {
+        $group: {
+          _id: { planId: '$planId', isComp: '$_isComp' },
+          count: { $sum: 1 },
+        },
+      },
+      { $lookup: { from: 'plans', localField: '_id.planId', foreignField: '_id', as: 'plan' } },
       { $unwind: '$plan' },
-      { $project: { name: '$plan.name', color: '$plan.color', slug: '$plan.slug', count: 1 } },
+      {
+        $group: {
+          _id: '$_id.planId',
+          name:  { $first: '$plan.name' },
+          color: { $first: '$plan.color' },
+          slug:  { $first: '$plan.slug' },
+          paid: { $sum: { $cond: ['$_id.isComp', 0, '$count'] } },
+          comp: { $sum: { $cond: ['$_id.isComp', '$count', 0] } },
+          count:{ $sum: '$count' },
+        },
+      },
+      { $project: { _id: 0, planId: '$_id', name: 1, color: 1, slug: 1, paid: 1, comp: 1, count: 1 } },
     ]);
 
     return res.json({
       success: true,
       data: {
-        total, active, trial, expired,
-        mrr: revenueArr[0]?.monthly || 0,
+        total, active, trial, expired, cancelled, suspended,
+        activeComp,
+        cancelled30d,
+        // Keep `mrr` for backwards compat with any older client (= paid only now).
+        mrr: paidMrr,
+        mrrPaid: paidMrr,
+        mrrComp: compMrr,                 // "foregone MRR"
+        mrrTotal: paidMrr + compMrr,
+        trialPipelineMrr,
+        renewalsDue7d,
+        failedRenewalCount,
         byPlan,
       },
     });
+  } catch (err) {
+    console.error('[getSubscriptionStats]', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// GET /api/plans/renewals/upcoming — admin
+exports.getUpcomingRenewals = async (req, res) => {
+  try {
+    const now = new Date();
+    const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 90);
+    const until = new Date(now.getTime() + days * 86400000);
+    const items = await Subscription.find({
+      status: 'active',
+      nextBillingDate: { $gte: now, $lte: until },
+      'comp.isActive': { $ne: true },
+    })
+      .populate('estateId', 'name estateCode')
+      .populate('planId', 'name slug color price')
+      .sort({ nextBillingDate: 1 })
+      .limit(50)
+      .lean();
+    return res.json({ success: true, data: items });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// GET /api/plans/renewals/failed — admin
+exports.getFailedRenewals = async (req, res) => {
+  try {
+    const items = await Subscription.find({
+      renewalAttempts: { $gt: 0 },
+      lastRenewalError: { $exists: true, $ne: '' },
+      status: { $in: ['active', 'expired'] },
+    })
+      .populate('estateId', 'name estateCode')
+      .populate('planId', 'name slug color price')
+      .sort({ lastRenewalAttemptAt: -1 })
+      .limit(50)
+      .lean();
+    return res.json({ success: true, data: items });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
