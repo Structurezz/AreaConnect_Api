@@ -527,3 +527,83 @@ exports.denyPasswordReset = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
+// GET /api/auth/password-resets/pending-all  (super_admin)
+// Lists pending reset requests across every estate for the ops dashboard.
+exports.listAllPendingResets = async (req, res) => {
+  try {
+    const items = await PasswordResetRequest.find({ status: 'pending' })
+      .sort({ requestedAt: -1 })
+      .limit(100)
+      .populate('userId', 'name email phone role')
+      .populate('estateId', 'name estateCode')
+      .lean();
+    return res.json({ success: true, data: items });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// POST /api/auth/password-resets/:id/approve-admin — super admin approve
+// across estates. Mirrors approvePasswordReset but doesn't scope by estateId.
+exports.adminApprovePasswordReset = async (req, res) => {
+  try {
+    const request = await PasswordResetRequest.findOne({ _id: req.params.id, status: 'pending' });
+    if (!request) return res.status(404).json({ success: false, message: 'Request not found or already handled' });
+
+    const user = await User.findById(request.userId).populate('estateId', 'name');
+    if (!user) return res.status(404).json({ success: false, message: 'User no longer exists' });
+
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    const bytes = crypto.randomBytes(10);
+    let tempPassword = '';
+    for (let i = 0; i < 10; i++) tempPassword += alphabet[bytes[i] % alphabet.length];
+
+    user.passwordHash = await bcrypt.hash(tempPassword, 12);
+    user.mustChangePassword = true;
+    user.refreshToken = null;
+    await user.save();
+
+    request.status = 'approved';
+    request.reviewedBy = req.user._id;
+    request.reviewedAt = new Date();
+    await request.save();
+
+    try {
+      const loginUrl = user.role === 'security'
+        ? (process.env.SECURITY_URL || 'https://area-guards.areaconnect.pro')
+        : (process.env.RESIDENT_URL || 'https://area-mates.areaconnect.pro');
+      await emailService.sendInviteEmail({
+        to: user.email,
+        name: user.name,
+        estateName: user.estateId?.name || 'your estate',
+        loginUrl,
+        tempPassword,
+      });
+    } catch (e) {
+      console.error('[adminApprovePasswordReset email]', e.message);
+    }
+
+    return res.json({ success: true, data: request });
+  } catch (err) {
+    console.error('[adminApprovePasswordReset]', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// POST /api/auth/password-resets/:id/deny-admin — super admin deny
+exports.adminDenyPasswordReset = async (req, res) => {
+  try {
+    const { reason } = req.body || {};
+    const request = await PasswordResetRequest.findOne({ _id: req.params.id, status: 'pending' });
+    if (!request) return res.status(404).json({ success: false, message: 'Request not found or already handled' });
+    request.status = 'denied';
+    request.reviewedBy = req.user._id;
+    request.reviewedAt = new Date();
+    request.denyReason = (reason || '').slice(0, 300);
+    await request.save();
+    return res.json({ success: true, data: request });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};

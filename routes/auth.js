@@ -64,4 +64,21 @@ router.post(
   ctrl.denyPasswordReset,
 );
 
+// Super admin — platform-wide reset ops for the Operations page
+router.get(
+  '/password-resets/pending-all',
+  authenticate, authorize('super_admin'),
+  ctrl.listAllPendingResets,
+);
+router.post(
+  '/password-resets/:id/approve-admin',
+  authenticate, authorize('super_admin'),
+  ctrl.adminApprovePasswordReset,
+);
+router.post(
+  '/password-resets/:id/deny-admin',
+  authenticate, authorize('super_admin'),
+  ctrl.adminDenyPasswordReset,
+);
+
 module.exports = router;
