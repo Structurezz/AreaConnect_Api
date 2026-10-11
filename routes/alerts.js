@@ -4,6 +4,10 @@ const ctrl = require('../controllers/alertController');
 const { authenticate, authorize, scopeToEstate, requireEstate, requireActiveSubscription } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 
+// Super-admin platform-wide list — declared BEFORE the estate-scoped
+// middleware chain below so admin requests skip the requireEstate check.
+router.get('/platform-all', authenticate, authorize('super_admin'), ctrl.getAllAlertsAdmin);
+
 router.use(authenticate, scopeToEstate, requireEstate, requireActiveSubscription);
 
 router.post('/', [

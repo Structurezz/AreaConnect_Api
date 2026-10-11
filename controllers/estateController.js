@@ -336,25 +336,43 @@ exports.getPlatformStats = async (req, res) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const weekAgo    = new Date(Date.now() - 7  * 86400000);
+    const thirtyAgo  = new Date(Date.now() - 30 * 86400000);
+    const Payment    = require('../models/Payment');
 
     const [
-      totalEstates,
-      totalManagers,
-      totalResidents,
-      totalSecurity,
-      totalVisitors,
-      visitorsToday,
-      totalUnits,
+      totalEstates, activeEstates,
+      totalManagers, totalResidents, totalSecurity,
+      totalVisitors, visitorsToday, visitorsWeek,
+      totalUnits, occupiedUnits,
       openAlerts,
+      dau, wau, mau,
+      paymentVolumeAllTime, paymentVolume30d,
     ] = await Promise.all([
       Estate.countDocuments(),
+      Estate.countDocuments({ isActive: true }),
       User.countDocuments({ role: 'estate_manager' }),
       User.countDocuments({ role: 'resident', isActive: true }),
       User.countDocuments({ role: 'security', isActive: true }),
       Visitor.countDocuments(),
-      Visitor.countDocuments({ expectedDate: { $gte: today } }),
+      Visitor.countDocuments({ createdAt: { $gte: today } }),
+      Visitor.countDocuments({ createdAt: { $gte: weekAgo } }),
       Unit.countDocuments(),
+      Unit.countDocuments({ status: 'occupied' }),
       Alert.countDocuments({ status: 'open' }),
+      // DAU/WAU/MAU based on lastSeen
+      User.countDocuments({ lastSeen: { $gte: today    } }),
+      User.countDocuments({ lastSeen: { $gte: weekAgo  } }),
+      User.countDocuments({ lastSeen: { $gte: thirtyAgo } }),
+      // Payment volume (service-charge collection)
+      Payment.aggregate([
+        { $match: { status: 'paid' } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]).catch(() => []),
+      Payment.aggregate([
+        { $match: { status: 'paid', paidAt: { $gte: thirtyAgo } } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]).catch(() => []),
     ]);
 
     const sixMonthsAgo = new Date();
@@ -371,15 +389,23 @@ exports.getPlatformStats = async (req, res) => {
       { $sort: { '_id.year': 1, '_id.month': 1 } },
     ]);
 
+    const occupancyRate = totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 100) : 0;
+
     return res.json({
       success: true,
       data: {
-        totalEstates, totalManagers, totalResidents, totalSecurity,
-        totalVisitors, visitorsToday, totalUnits, openAlerts, estateGrowth,
+        totalEstates, activeEstates,
+        totalManagers, totalResidents, totalSecurity,
+        totalVisitors, visitorsToday, visitorsWeek,
+        totalUnits, occupiedUnits, occupancyRate,
+        openAlerts, estateGrowth,
+        dau, wau, mau,
+        paymentVolume: paymentVolumeAllTime[0]?.total || 0,
+        paymentVolume30d: paymentVolume30d[0]?.total || 0,
       },
     });
   } catch (err) {
-    console.error(err);
+    console.error('[getPlatformStats]', err);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };

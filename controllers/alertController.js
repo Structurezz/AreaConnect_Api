@@ -149,3 +149,24 @@ exports.broadcastEmergency = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
+// GET /api/alerts/platform-all — super admin, platform-wide
+exports.getAllAlertsAdmin = async (req, res) => {
+  try {
+    const { status, limit = 50 } = req.query;
+    const filter = {};
+    if (status) filter.status = status;
+    const alerts = await Alert.find(filter)
+      .populate('residentId', 'name phone role profilePhoto')
+      .populate('unitId', 'unitNumber block')
+      .populate('estateId', 'name estateCode')
+      .populate('resolvedBy', 'name')
+      .sort({ createdAt: -1 })
+      .limit(Math.min(Number(limit) || 50, 200))
+      .lean();
+    return res.json({ success: true, data: alerts });
+  } catch (err) {
+    console.error('[getAllAlertsAdmin]', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
