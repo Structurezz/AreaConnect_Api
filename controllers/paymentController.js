@@ -430,6 +430,95 @@ exports.initializePayment = async (req, res) => {
   }
 };
 
+// Shared settlement — flips a Payment to paid, credits the manager wallet,
+// fires socket + email notifications. Idempotent: a second call for an
+// already-paid payment is a no-op. Used by verifyPayment (resident callback),
+// paystackWebhook (server-side event), and reconcilePayment (manager-triggered).
+async function settlePaymentByReference(reference) {
+  if (!reference) return { ok: false, reason: 'missing-reference' };
+
+  const existing = await Payment.findOne({ paystackReference: reference });
+  if (!existing) return { ok: false, reason: 'payment-not-found' };
+  if (existing.status === 'paid') return { ok: true, alreadyPaid: true, payment: existing };
+
+  const payment = await Payment.findOneAndUpdate(
+    { paystackReference: reference, status: { $ne: 'paid' } },
+    { status: 'paid', method: 'paystack', paidAt: new Date() },
+    { new: true },
+  ).populate('scheduleId', 'title frequency dueDate');
+
+  if (!payment) {
+    // Someone else just raced us — reload the paid version
+    const now = await Payment.findOne({ paystackReference: reference });
+    return { ok: true, alreadyPaid: true, payment: now };
+  }
+
+  await creditManagerWallet(payment.estateId, payment.amount);
+
+  try {
+    await payment.populate([
+      { path: 'residentId', populate: { path: 'unitId', select: 'unitNumber block type' } },
+      { path: 'recordedBy', select: 'name' },
+    ]);
+    const estate   = await Estate.findById(payment.estateId).select('name address estateCode logoUrl');
+    const resident = payment.residentId;
+    const unit     = resident?.unitId;
+    const fmt      = (n) => `₦${Number(n).toLocaleString('en-NG')}`;
+
+    const notif = {
+      id: payment._id.toString(),
+      type: 'payment_received',
+      title: 'Payment Received',
+      body: `${resident?.name || 'A resident'} paid ${fmt(payment.amount)} for ${payment.scheduleId?.title || 'levy'}`,
+      amount: payment.amount,
+      meta: { paymentId: payment._id },
+    };
+
+    emitNotification(payment.estateId, {
+      ...notif,
+      title: 'Payment Confirmed',
+      body: `Your payment of ${fmt(payment.amount)} for ${payment.scheduleId?.title || 'levy'} was received`,
+    }, resident?._id);
+
+    const manager = await User.findOne({ estateId: payment.estateId, role: 'estate_manager' }).select('name email');
+    emitNotification(payment.estateId, notif, manager?._id);
+
+    if (manager && estate) {
+      sendManagerNotificationEmail({
+        to: manager.email,
+        managerName: manager.name,
+        estateName: estate.name,
+        type: 'payment_received',
+        title: notif.title,
+        body: notif.body,
+      }).catch(e => console.error('[manager email]', e.message));
+    }
+
+    if (resident?.email) {
+      const dateStr = payment.createdAt.toISOString().slice(0, 10).replace(/-/g, '');
+      const invoiceNumber = `INV-${dateStr}-${payment._id.toString().slice(-6).toUpperCase()}`;
+      const inv = {
+        invoiceNumber,
+        date: payment.createdAt, dueDate: payment.scheduleId?.dueDate,
+        status: 'paid', paidAt: payment.paidAt, method: 'paystack',
+        notes: '', recordedBy: null,
+        estate: { name: estate?.name || '', address: estate?.address || '', estateCode: estate?.estateCode || '', logoUrl: estate?.logoUrl || '' },
+        resident: { name: resident.name, email: resident.email, phone: resident.phone || '', unit: unit ? `${unit.block ? unit.block + ' ' : ''}${unit.unitNumber}` : 'N/A' },
+        items: [{ description: payment.scheduleId?.title || 'Payment', detail: '', frequency: payment.scheduleId?.frequency || '', quantity: 1, unitPrice: payment.amount, vat: 0, total: payment.amount }],
+        subtotal: payment.amount, vatAmount: 0, total: payment.amount,
+      };
+      sendPaymentReceiptEmail({ to: resident.email, residentName: resident.name, estateName: estate?.name || '', inv })
+        .catch(e => console.error('[receipt email]', e.message));
+    }
+  } catch (e) {
+    console.error('[settlePaymentByReference notify]', e.message);
+  }
+
+  return { ok: true, payment };
+}
+// Expose so other controllers (plans webhook) can call it
+exports.settlePaymentByReference = settlePaymentByReference;
+
 exports.verifyPayment = async (req, res) => {
   try {
     const { reference } = req.params;
@@ -447,82 +536,53 @@ exports.verifyPayment = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Payment not successful' });
     }
 
-    const payment = await Payment.findOneAndUpdate(
-      { paystackReference: reference, estateId: req.estateId },
-      { status: 'paid', method: 'paystack', paidAt: new Date() },
-      { new: true }
-    ).populate('scheduleId', 'title');
-
-    if (!payment) return res.status(404).json({ success: false, message: 'Payment record not found' });
-
-    await creditManagerWallet(req.estateId, payment.amount);
-
-    try {
-      await payment.populate([
-        { path: 'residentId', populate: { path: 'unitId', select: 'unitNumber block type' } },
-        { path: 'recordedBy', select: 'name' },
-      ]);
-      const estate   = await Estate.findById(req.estateId).select('name address estateCode logoUrl');
-      const resident = payment.residentId;
-      const unit     = resident?.unitId;
-      const fmt      = (n) => `₦${Number(n).toLocaleString('en-NG')}`;
-
-      const notif = {
-        id: payment._id.toString(),
-        type: 'payment_received',
-        title: 'Payment Received',
-        body: `${resident?.name || 'A resident'} paid ${fmt(payment.amount)} for ${payment.scheduleId?.title || 'levy'}`,
-        amount: payment.amount,
-        meta: { paymentId: payment._id },
-      };
-
-      // Notify the resident that their payment was confirmed
-      emitNotification(req.estateId, {
-        ...notif,
-        title: 'Payment Confirmed',
-        body: `Your payment of ${fmt(payment.amount)} for ${payment.scheduleId?.title || 'levy'} was received`,
-      }, resident?._id);
-
-      const manager = await User.findOne({ estateId: req.estateId, role: 'estate_manager' }).select('name email');
-
-      // Notify only the manager about the incoming payment
-      emitNotification(req.estateId, notif, manager?._id);
-
-      if (manager && estate) {
-        sendManagerNotificationEmail({
-          to: manager.email,
-          managerName: manager.name,
-          estateName: estate.name,
-          type: 'payment_received',
-          title: notif.title,
-          body: notif.body,
-        }).catch(e => console.error('[manager email]', e.message));
-      }
-
-      // Send receipt to resident
-      if (resident?.email) {
-        const dateStr = payment.createdAt.toISOString().slice(0, 10).replace(/-/g, '');
-        const invoiceNumber = `INV-${dateStr}-${payment._id.toString().slice(-6).toUpperCase()}`;
-        const inv = {
-          invoiceNumber,
-          date: payment.createdAt,
-          dueDate: payment.scheduleId?.dueDate,
-          status: 'paid', paidAt: payment.paidAt, method: 'paystack',
-          notes: '',  recordedBy: null,
-          estate: { name: estate?.name || '', address: estate?.address || '', estateCode: estate?.estateCode || '', logoUrl: estate?.logoUrl || '' },
-          resident: { name: resident.name, email: resident.email, phone: resident.phone || '', unit: unit ? `${unit.block ? unit.block + ' ' : ''}${unit.unitNumber}` : 'N/A' },
-          items: [{ description: payment.scheduleId?.title || 'Payment', detail: '', frequency: payment.scheduleId?.frequency || '', quantity: 1, unitPrice: payment.amount, vat: 0, total: payment.amount }],
-          subtotal: payment.amount, vatAmount: 0, total: payment.amount,
-        };
-        sendPaymentReceiptEmail({ to: resident.email, residentName: resident.name, estateName: estate?.name || '', inv })
-          .catch(e => console.error('[receipt email]', e.message));
-      }
-    } catch (e) { console.error('[notify verifyPayment]', e.message); }
-
-    return res.json({ success: true, data: payment });
+    const result = await settlePaymentByReference(reference);
+    if (!result.ok) {
+      return res.status(result.reason === 'payment-not-found' ? 404 : 500).json({
+        success: false, message: result.reason === 'payment-not-found' ? 'Payment record not found' : 'Settlement failed',
+      });
+    }
+    return res.json({ success: true, data: result.payment, alreadyPaid: !!result.alreadyPaid });
   } catch (err) {
     console.error('[Paystack verify]', err.response?.data || err.message);
     return res.status(500).json({ success: false, message: 'Verification failed' });
+  }
+};
+
+// POST /api/payments/reconcile/:reference  (estate_manager, super_admin)
+// Force-sync a stuck pending payment against Paystack. Settles if Paystack
+// confirms success, otherwise returns the gateway status so the manager can
+// decide. Fire-and-forget safe: idempotent.
+exports.reconcilePayment = async (req, res) => {
+  try {
+    const { reference } = req.params;
+    if (!reference) return res.status(400).json({ success: false, message: 'Reference required' });
+    if (!process.env.PAYSTACK_SECRET_KEY) {
+      return res.status(503).json({ success: false, message: 'Payment gateway not configured' });
+    }
+
+    const payment = await Payment.findOne({ paystackReference: reference, estateId: req.estateId });
+    if (!payment) return res.status(404).json({ success: false, message: 'Payment not found for this estate' });
+    if (payment.status === 'paid') {
+      return res.json({ success: true, data: payment, alreadyPaid: true, message: 'Already paid' });
+    }
+
+    const { data } = await axios.get(
+      `${PAYSTACK_BASE}/transaction/verify/${reference}`,
+      { headers: paystackHeaders() },
+    );
+    if (data?.data?.status !== 'success') {
+      return res.status(400).json({
+        success: false,
+        message: `Paystack status: ${data?.data?.status || 'unknown'}`,
+        gateway: data?.data?.gateway_response || data?.message || null,
+      });
+    }
+    const result = await settlePaymentByReference(reference);
+    return res.json({ success: true, data: result.payment, reconciled: true });
+  } catch (err) {
+    console.error('[reconcilePayment]', err.response?.data || err.message);
+    return res.status(500).json({ success: false, message: 'Reconcile failed' });
   }
 };
 

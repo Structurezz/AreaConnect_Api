@@ -484,10 +484,28 @@ exports.paystackWebhook = async (req, res) => {
     const event = req.body;
     if (!event || !event.event) return res.status(200).end();
 
-    // We only care about successful charges tied to a plan upgrade/renewal
+    // We only care about successful charges
     if (event.event !== 'charge.success') return res.status(200).end();
 
     const meta = event.data?.metadata || {};
+
+    // Branch 1 — levy payments. Resident checkouts carry metadata.paymentId
+    // (set in paymentController.initializePayment). Settle the Payment doc
+    // via the shared helper so the webhook does the same work as the
+    // resident-callback verify route (status→paid, wallet credit, socket +
+    // email notifications). Idempotent inside the helper.
+    if (meta.paymentId) {
+      try {
+        const paymentCtrl = require('./paymentController');
+        const reference = event.data?.reference;
+        if (reference) await paymentCtrl.settlePaymentByReference(reference);
+      } catch (e) {
+        console.error('[paystackWebhook levy]', e.message);
+      }
+      return res.status(200).end();
+    }
+
+    // Branch 2 — plan upgrade/renewal (existing flow)
     if (meta.type !== 'plan_upgrade' && meta.type !== 'plan_renewal') {
       return res.status(200).end();
     }

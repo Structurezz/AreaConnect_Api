@@ -59,4 +59,10 @@ router.get('/mine', ctrl.getMyPayments);
 router.post('/:paymentId/initialize', ctrl.initializePayment);
 router.get('/verify/:reference', ctrl.verifyPayment);
 
+// ── Manager: force-sync a stuck Paystack reference ──────────────
+router.post('/reconcile/:reference',
+  authorize('estate_manager', 'super_admin'),
+  ctrl.reconcilePayment,
+);
+
 module.exports = router;
