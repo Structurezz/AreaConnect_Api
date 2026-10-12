@@ -65,4 +65,17 @@ router.post('/reconcile/:reference',
   ctrl.reconcilePayment,
 );
 
+// ── Manager: Paystack ledger (direct gateway view) ──────────────
+// Lets the manager see every Paystack capture, including ones that
+// have no matching Payment row in our DB — then attach to a resident +
+// schedule to pull the money through.
+router.get('/paystack/recent',
+  authorize('estate_manager', 'super_admin'),
+  ctrl.getPaystackLedger,
+);
+router.post('/paystack/attach',
+  authorize('estate_manager', 'super_admin'),
+  ctrl.attachPaystackTransaction,
+);
+
 module.exports = router;

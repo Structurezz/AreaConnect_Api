@@ -549,6 +549,127 @@ exports.verifyPayment = async (req, res) => {
   }
 };
 
+// GET /api/payments/paystack/recent?status=success&limit=50
+// Lists recent Paystack transactions directly from the gateway and marks
+// which ones already have a matching Payment doc so the manager can see
+// unmatched captures (the "paid but not reflecting" case).
+exports.getPaystackLedger = async (req, res) => {
+  try {
+    if (!process.env.PAYSTACK_SECRET_KEY) {
+      return res.status(503).json({ success: false, message: 'Payment gateway not configured' });
+    }
+    const perPage = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
+    const status  = req.query.status || 'success';
+
+    const { data } = await axios.get(
+      `${PAYSTACK_BASE}/transaction?perPage=${perPage}&status=${encodeURIComponent(status)}`,
+      { headers: paystackHeaders() },
+    );
+
+    const transactions = Array.isArray(data?.data) ? data.data : [];
+    if (!transactions.length) return res.json({ success: true, data: [] });
+
+    const refs = transactions.map(t => t.reference).filter(Boolean);
+    const matches = await Payment.find({
+      paystackReference: { $in: refs },
+      estateId: req.estateId,
+    })
+      .populate('scheduleId', 'title')
+      .populate('residentId', 'name email')
+      .lean();
+    const byRef = matches.reduce((m, p) => { m[p.paystackReference] = p; return m; }, {});
+
+    const rows = transactions.map(t => ({
+      reference:  t.reference,
+      amount:     (t.amount || 0) / 100,
+      currency:   t.currency,
+      status:     t.status,
+      channel:    t.channel,
+      paidAt:     t.paid_at || t.paidAt || null,
+      createdAt:  t.created_at || t.createdAt,
+      customer: t.customer ? {
+        email: t.customer.email,
+        name:  [t.customer.first_name, t.customer.last_name].filter(Boolean).join(' ') || null,
+      } : null,
+      metadata:   t.metadata || {},
+      matched:    !!byRef[t.reference],
+      payment:    byRef[t.reference] || null,
+    }));
+
+    return res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('[getPaystackLedger]', err.response?.data || err.message);
+    return res.status(500).json({ success: false, message: 'Failed to load Paystack transactions' });
+  }
+};
+
+// POST /api/payments/paystack/attach
+// body: { reference, residentId, scheduleId, notes? }
+// Pulls the transaction from Paystack, creates a Payment for the given
+// resident + schedule, flips it to paid via the shared settle helper.
+// Use case: Paystack has a capture but we have no matching Payment doc
+// (resident paid via a one-off link, or the initialize flow lost the row).
+exports.attachPaystackTransaction = async (req, res) => {
+  try {
+    const { reference, residentId, scheduleId, notes } = req.body || {};
+    if (!reference || !residentId || !scheduleId) {
+      return res.status(400).json({ success: false, message: 'reference, residentId, scheduleId are required' });
+    }
+    if (!process.env.PAYSTACK_SECRET_KEY) {
+      return res.status(503).json({ success: false, message: 'Payment gateway not configured' });
+    }
+
+    const existing = await Payment.findOne({ paystackReference: reference, estateId: req.estateId });
+    if (existing && existing.status === 'paid') {
+      return res.json({ success: true, data: existing, alreadyPaid: true });
+    }
+
+    const { data } = await axios.get(
+      `${PAYSTACK_BASE}/transaction/verify/${reference}`,
+      { headers: paystackHeaders() },
+    );
+    if (data?.data?.status !== 'success') {
+      return res.status(400).json({ success: false, message: `Paystack status: ${data?.data?.status || 'unknown'}` });
+    }
+    const amountNaira = (data.data.amount || 0) / 100;
+
+    const schedule = await PaymentSchedule.findOne({ _id: scheduleId, estateId: req.estateId });
+    if (!schedule) return res.status(404).json({ success: false, message: 'Schedule not found for this estate' });
+
+    const resident = await User.findOne({ _id: residentId, estateId: req.estateId, role: 'resident' });
+    if (!resident) return res.status(404).json({ success: false, message: 'Resident not found for this estate' });
+
+    if (existing) {
+      existing.paystackReference = reference;
+      existing.residentId = resident._id;
+      existing.scheduleId = schedule._id;
+      existing.amount     = existing.amount || amountNaira;
+      if (notes) existing.notes = notes;
+      await existing.save();
+    } else {
+      await Payment.create({
+        scheduleId: schedule._id,
+        residentId: resident._id,
+        estateId:   req.estateId,
+        amount:     amountNaira,
+        status:     'pending',
+        paystackReference: reference,
+        notes:      notes || `Attached from Paystack transaction ${reference}`,
+        recordedBy: req.user._id,
+      });
+    }
+
+    const result = await settlePaymentByReference(reference);
+    if (!result.ok) {
+      return res.status(500).json({ success: false, message: 'Settle failed after attach' });
+    }
+    return res.json({ success: true, data: result.payment, attached: true });
+  } catch (err) {
+    console.error('[attachPaystackTransaction]', err.response?.data || err.message);
+    return res.status(500).json({ success: false, message: 'Attach failed' });
+  }
+};
+
 // POST /api/payments/reconcile/:reference  (estate_manager, super_admin)
 // Force-sync a stuck pending payment against Paystack. Settles if Paystack
 // confirms success, otherwise returns the gateway status so the manager can
