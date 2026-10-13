@@ -1,5 +1,6 @@
 const axios = require('axios');
 const Withdrawal = require('../models/Withdrawal');
+const Payment = require('../models/Payment');
 const User = require('../models/User');
 const Estate = require('../models/Estate');
 const {
@@ -38,6 +39,69 @@ exports.listWithdrawals = async (req, res) => {
     return res.json({ success: true, data: { withdrawals, totals } });
   } catch (err) {
     console.error('[Admin withdrawals list]', err.message);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// Super admin — live Paystack balance vs what's owed to managers, so admin
+// knows how much can safely be moved out to the AreaConnect bank account.
+//   walletBalances: sum of every estate's withdrawable wallet (paid levies
+//                   minus pending/success withdrawals, floored at 0 per estate)
+//   queued:         pending withdrawals with no Paystack transfer yet — still
+//                   to leave the balance (in-flight transfers already have)
+exports.getBalance = async (req, res) => {
+  try {
+    const [paidByEstate, withdrawnByEstate, queuedAgg] = await Promise.all([
+      Payment.aggregate([
+        { $match: { status: 'paid' } },
+        { $group: { _id: '$estateId', total: { $sum: '$amount' } } },
+      ]),
+      Withdrawal.aggregate([
+        { $match: { status: { $in: ['pending', 'success'] } } },
+        { $group: { _id: '$estateId', total: { $sum: '$amount' } } },
+      ]),
+      Withdrawal.aggregate([
+        { $match: { status: 'pending', paystackTransferCode: null } },
+        { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const withdrawn = Object.fromEntries(withdrawnByEstate.map(w => [String(w._id), w.total]));
+    const walletBalances = paidByEstate.reduce(
+      (sum, p) => sum + Math.max(0, p.total - (withdrawn[String(p._id)] || 0)), 0
+    );
+    const queued = { total: queuedAgg[0]?.total || 0, count: queuedAgg[0]?.count || 0 };
+    const owed = walletBalances + queued.total;
+
+    let paystack = null;
+    let paystackError = null;
+    if (!process.env.PAYSTACK_SECRET_KEY) {
+      paystackError = 'Payment gateway not configured';
+    } else {
+      try {
+        const { data } = await axios.get(`${PAYSTACK_BASE}/balance`, { headers: paystackHeaders() });
+        const ngn = (data.data || []).find(b => b.currency === 'NGN') || data.data?.[0];
+        paystack = ngn ? { balance: ngn.balance / 100, currency: ngn.currency } : null;
+      } catch (err) {
+        paystackError = err.response?.data?.message || 'Could not reach Paystack';
+        console.error('[Admin paystack balance]', err.response?.data || err.message);
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        paystack,
+        paystackError,
+        walletBalances,
+        queued,
+        owed,
+        surplus: paystack ? paystack.balance - owed : null,
+        testMode: !!process.env.PAYSTACK_SECRET_KEY?.startsWith('sk_test_'),
+      },
+    });
+  } catch (err) {
+    console.error('[Admin withdrawals balance]', err.message);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
