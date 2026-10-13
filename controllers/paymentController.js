@@ -242,7 +242,16 @@ exports.getPaymentHistory = async (req, res) => {
 
 exports.getInvoice = async (req, res) => {
   try {
-    const payment = await Payment.findOne({ _id: req.params.paymentId, estateId: req.estateId })
+    // Managers can open any invoice in their estate; everyone else only their
+    // own — otherwise a resident with another resident's payment ID could read
+    // that person's name, email, phone and unit. 404 (not 403) so the
+    // existence of other residents' payments isn't revealed either.
+    const filter = { _id: req.params.paymentId, estateId: req.estateId };
+    if (!['estate_manager', 'super_admin'].includes(req.user.role)) {
+      filter.residentId = req.user._id;
+    }
+
+    const payment = await Payment.findOne(filter)
       .populate('scheduleId')
       .populate('residentId', 'name email phone unitId')
       .populate({ path: 'residentId', populate: { path: 'unitId', select: 'unitNumber block type' } })
