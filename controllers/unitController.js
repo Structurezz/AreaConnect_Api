@@ -1,5 +1,6 @@
 const Unit = require('../models/Unit');
 const User = require('../models/User');
+const { withUnitDues } = require('../utils/unitDues');
 
 exports.getUnits = async (req, res) => {
   try {
@@ -11,7 +12,8 @@ exports.getUnits = async (req, res) => {
       .populate('residentIds', 'name email phone profilePhoto')
       .sort({ block: 1, unitNumber: 1 });
 
-    return res.json({ success: true, data: units });
+    // Each unit carries its real dues position (see utils/unitDues).
+    return res.json({ success: true, data: await withUnitDues(units, req.estateId) });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
   }

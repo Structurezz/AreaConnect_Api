@@ -250,13 +250,16 @@ exports.getEstateDetail = async (req, res) => {
 
     if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
 
+    const { withUnitDues } = require('../utils/unitDues');
+    const unitsWithDues = await withUnitDues(units, estate._id);
+
     return res.json({
       success: true,
       data: {
         estate,
         residents,
         securityStaff,
-        units,
+        units: unitsWithDues,
         subscription,
         visitors,
         alerts,
