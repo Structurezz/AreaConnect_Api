@@ -1,5 +1,7 @@
 const PDFDocument = require('pdfkit');
 const axios       = require('axios');
+const fs          = require('fs');
+const path        = require('path');
 
 const fmtNGN  = (n) => `NGN ${Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -26,8 +28,17 @@ const LIGHT  = [148, 163, 184];
 const WHITE  = [255, 255, 255];
 const BGPAGE = [240, 244, 248];
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://estatemanager.areaconnect.pro';
-const DEFAULT_HERO = `${FRONTEND_URL}/estate-hero.jpeg`;
+// Default hero is bundled with the server so PDFs never depend on a
+// network fetch to a frontend domain.
+const DEFAULT_HERO_PATH = path.join(__dirname, '..', 'public', 'estate-hero.jpeg');
+let DEFAULT_HERO_BUFFER = null;
+try { DEFAULT_HERO_BUFFER = fs.readFileSync(DEFAULT_HERO_PATH); } catch { /* fall back to solid fill */ }
+
+// PDFKit can only embed JPEG and PNG.
+const isJpegOrPng = (buf) => buf && buf.length > 4 && (
+  (buf[0] === 0xFF && buf[1] === 0xD8) ||
+  (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47)
+);
 
 async function fetchImageBuffer(url) {
   try {
@@ -39,12 +50,13 @@ async function fetchImageBuffer(url) {
 }
 
 const generateInvoicePdf = async (inv) => {
-  // Determine hero image URL (same logic as HTML version)
-  const heroUrl = (inv.estate?.logoUrl && inv.estate.logoUrl.startsWith('http'))
-    ? inv.estate.logoUrl
-    : DEFAULT_HERO;
-
-  const heroBuffer = await fetchImageBuffer(heroUrl);
+  // Hero image: estate's own image if it fetches as JPEG/PNG, else the bundled default
+  let heroBuffer = null;
+  if (inv.estate?.logoUrl && inv.estate.logoUrl.startsWith('http')) {
+    const fetched = await fetchImageBuffer(inv.estate.logoUrl);
+    if (isJpegOrPng(fetched)) heroBuffer = fetched;
+  }
+  if (!heroBuffer) heroBuffer = DEFAULT_HERO_BUFFER;
 
   return new Promise((resolve, reject) => {
     const doc    = new PDFDocument({ size: 'A4', margin: 0, bufferPages: true });
