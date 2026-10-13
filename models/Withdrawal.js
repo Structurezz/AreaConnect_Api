@@ -6,6 +6,9 @@ const withdrawalSchema = new mongoose.Schema({
   amount:               { type: Number, required: true },
   status:               { type: String, enum: ['pending', 'success', 'failed'], default: 'pending' },
   paystackTransferCode: { type: String, default: null },
+  // Raw Paystack transfer status ('otp', 'pending', 'success', ...). 'otp'
+  // means the transfer is parked until the business-phone OTP is entered.
+  paystackStatus:       { type: String, default: '' },
   reference:            { type: String, required: true },
   bankName:             { type: String, default: '' },
   accountNumber:        { type: String, default: '' },

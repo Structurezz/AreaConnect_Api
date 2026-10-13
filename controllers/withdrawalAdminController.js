@@ -190,6 +190,7 @@ exports.processWithdrawalViaPaystack = async (req, res) => {
     // and finalise via the transfer.success webhook. We mark success optimistically
     // when Paystack confirms it, else leave as 'pending' with the transfer code saved.
     w.status = paystackStatus === 'success' ? 'success' : 'pending';
+    w.paystackStatus = paystackStatus || '';
     w.paystackTransferCode = data.data?.transfer_code || w.paystackTransferCode;
     await w.save();
 
@@ -254,5 +255,88 @@ exports.rejectWithdrawal = async (req, res) => {
   } catch (err) {
     console.error('[Admin reject]', err.message);
     return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// ── Transfer OTP ───────────────────────────────────────────────────────────
+// With OTP enabled on the Paystack account, /transfer returns status 'otp'
+// and Paystack sends a code to the BUSINESS phone/email (not the manager).
+// The admin enters it here to push the parked transfer through.
+
+const isRealTransferCode = (code) => code && !code.startsWith('MANUAL-') && code !== 'TRF_test_mock';
+
+// POST /:id/finalize-otp { otp }
+exports.finalizeWithdrawalOtp = async (req, res) => {
+  try {
+    const otp = String(req.body?.otp || '').trim();
+    if (!otp) return res.status(400).json({ success: false, message: 'OTP is required' });
+
+    const w = await Withdrawal.findById(req.params.id);
+    if (!w) return res.status(404).json({ success: false, message: 'Withdrawal not found' });
+    if (w.status !== 'pending') return res.status(400).json({ success: false, message: `Already ${w.status}` });
+    if (!isRealTransferCode(w.paystackTransferCode)) {
+      return res.status(400).json({ success: false, message: 'No Paystack transfer to finalise for this withdrawal' });
+    }
+
+    const { data } = await axios.post(
+      `${PAYSTACK_BASE}/transfer/finalize_transfer`,
+      { transfer_code: w.paystackTransferCode, otp },
+      { headers: paystackHeaders() }
+    );
+
+    const paystackStatus = data.data?.status || '';
+    w.paystackStatus = paystackStatus;
+    if (paystackStatus === 'success') w.status = 'success';
+    await w.save();
+
+    if (w.status === 'success') {
+      const [user, estate] = await Promise.all([
+        User.findById(w.userId).select('email name'),
+        Estate.findById(w.estateId).select('name estateCode'),
+      ]);
+      if (user?.email) {
+        sendWithdrawalReceiptEmail({
+          to: user.email,
+          managerName: user.name,
+          estateName: estate?.name || 'Your Estate',
+          estateCode: estate?.estateCode || '',
+          amount: w.amount,
+          bankName: w.bankName,
+          accountNumber: w.accountNumber,
+          accountName: w.accountName,
+          reference: w.reference,
+          transferCode: w.paystackTransferCode,
+          status: 'success',
+          createdAt: w.updatedAt,
+        }).catch(e => console.error('[WithdrawalEmail]', e.message));
+      }
+    }
+
+    return res.json({ success: true, data: w });
+  } catch (err) {
+    const msg = err.response?.data?.message || 'Could not finalise transfer';
+    console.error('[Admin finalize otp]', err.response?.data || err.message);
+    return res.status(400).json({ success: false, message: msg });
+  }
+};
+
+// POST /:id/resend-otp — Paystack re-sends the OTP to the business phone
+exports.resendWithdrawalOtp = async (req, res) => {
+  try {
+    const w = await Withdrawal.findById(req.params.id);
+    if (!w) return res.status(404).json({ success: false, message: 'Withdrawal not found' });
+    if (!isRealTransferCode(w.paystackTransferCode)) {
+      return res.status(400).json({ success: false, message: 'No Paystack transfer for this withdrawal' });
+    }
+    await axios.post(
+      `${PAYSTACK_BASE}/transfer/resend_otp`,
+      { transfer_code: w.paystackTransferCode, reason: 'transfer' },
+      { headers: paystackHeaders() }
+    );
+    return res.json({ success: true, message: 'OTP re-sent to the Paystack business phone' });
+  } catch (err) {
+    const msg = err.response?.data?.message || 'Could not resend OTP';
+    console.error('[Admin resend otp]', err.response?.data || err.message);
+    return res.status(400).json({ success: false, message: msg });
   }
 };

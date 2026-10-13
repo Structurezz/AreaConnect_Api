@@ -10,5 +10,7 @@ router.get('/balance',             ctrl.getBalance);
 router.post('/:id/mark-paid',      ctrl.markWithdrawalPaid);
 router.post('/:id/process',        ctrl.processWithdrawalViaPaystack);
 router.post('/:id/reject',         ctrl.rejectWithdrawal);
+router.post('/:id/finalize-otp',   ctrl.finalizeWithdrawalOtp);
+router.post('/:id/resend-otp',     ctrl.resendWithdrawalOtp);
 
 module.exports = router;

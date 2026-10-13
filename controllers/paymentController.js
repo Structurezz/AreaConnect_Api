@@ -979,6 +979,7 @@ exports.withdrawFromWallet = async (req, res) => {
           { headers: paystackHeaders() }
         );
         withdrawal.status = data.data?.status === 'success' ? 'success' : 'pending';
+        withdrawal.paystackStatus = data.data?.status || '';
         withdrawal.paystackTransferCode = data.data?.transfer_code || null;
       } catch (err) {
         const msg = err.response?.data?.message || 'Transfer failed';
@@ -1011,7 +1012,9 @@ exports.withdrawFromWallet = async (req, res) => {
       data: {
         message: withdrawal.status === 'success'
           ? 'Withdrawal successful — funds are on their way to your bank.'
-          : 'Withdrawal initiated — funds will arrive in your bank shortly.',
+          : withdrawal.paystackStatus === 'otp'
+            ? 'Withdrawal submitted — awaiting payout authorisation. You\'ll get an email once it\'s sent.'
+            : 'Withdrawal initiated — funds will arrive in your bank shortly.',
         withdrawalId: withdrawal._id,
         reference,
         transferCode: withdrawal.paystackTransferCode,
@@ -1044,6 +1047,7 @@ exports.settleWithdrawalByReference = async (reference, event, reason) => {
   if (w.status === 'success' && event !== 'transfer.reversed') return w;
 
   w.status = nextStatus;
+  w.paystackStatus = event.replace('transfer.', '');
   if (nextStatus === 'failed') {
     w.failureReason = reason || (event === 'transfer.reversed' ? 'Transfer reversed' : 'Transfer failed');
   }
