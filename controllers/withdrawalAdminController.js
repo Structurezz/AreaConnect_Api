@@ -21,6 +21,9 @@ exports.listWithdrawals = async (req, res) => {
     const q = {};
     if (status && ['pending', 'success', 'failed'].includes(status)) q.status = status;
 
+    // Reconcile in-flight transfers with Paystack so the list matches reality
+    await require('./paymentController').syncPendingWithdrawals({}, 50);
+
     const [withdrawals, counts] = await Promise.all([
       Withdrawal.find(q)
         .populate('userId', 'name email phone')
@@ -337,6 +340,23 @@ exports.resendWithdrawalOtp = async (req, res) => {
   } catch (err) {
     const msg = err.response?.data?.message || 'Could not resend OTP';
     console.error('[Admin resend otp]', err.response?.data || err.message);
+    return res.status(400).json({ success: false, message: msg });
+  }
+};
+
+// POST /:id/sync — check this withdrawal's transfer on Paystack by reference
+exports.syncWithdrawal = async (req, res) => {
+  try {
+    const w = await Withdrawal.findById(req.params.id);
+    if (!w) return res.status(404).json({ success: false, message: 'Withdrawal not found' });
+    if (w.status !== 'pending') return res.json({ success: true, data: w });
+    const updated = await require('./paymentController').syncWithdrawalWithPaystack(w);
+    return res.json({ success: true, data: updated });
+  } catch (err) {
+    const msg = err.response?.status === 404
+      ? 'Paystack has no transfer with this reference — if you paid it from the dashboard, use Mark as paid'
+      : err.response?.data?.message || 'Could not check Paystack';
+    console.error('[Admin sync withdrawal]', err.response?.data || err.message);
     return res.status(400).json({ success: false, message: msg });
   }
 };

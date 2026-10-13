@@ -12,5 +12,6 @@ router.post('/:id/process',        ctrl.processWithdrawalViaPaystack);
 router.post('/:id/reject',         ctrl.rejectWithdrawal);
 router.post('/:id/finalize-otp',   ctrl.finalizeWithdrawalOtp);
 router.post('/:id/resend-otp',     ctrl.resendWithdrawalOtp);
+router.post('/:id/sync',           ctrl.syncWithdrawal);
 
 module.exports = router;

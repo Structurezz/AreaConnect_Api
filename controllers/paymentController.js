@@ -728,6 +728,9 @@ exports.getWallet = async (req, res) => {
       'paystackRecipientCode bankCode bankName accountNumber accountName'
     );
 
+    // Pull the real outcome of any in-flight transfers before computing
+    await exports.syncPendingWithdrawals({ userId: req.user._id }, 10);
+
     // Dynamic balance: all paid payments for this estate minus all withdrawals
     const [paymentsAgg, withdrawalsAgg, withdrawals] = await Promise.all([
       Payment.aggregate([
@@ -1074,4 +1077,48 @@ exports.settleWithdrawalByReference = async (reference, event, reason) => {
     }).catch(e => console.error('[WithdrawalEmail]', e.message));
   }
   return w;
+};
+
+// Ask Paystack for the real state of a withdrawal's transfer and settle it.
+// Safety net for when the transfer.* webhook never arrives (webhook URL not
+// set, transfer approved from the Paystack dashboard, etc.).
+const PAYSTACK_FAILED = ['failed', 'reversed', 'abandoned', 'rejected', 'blocked'];
+const syncWithdrawalWithPaystack = async (w) => {
+  if (!process.env.PAYSTACK_SECRET_KEY || w.status !== 'pending') return w;
+  const { data } = await axios.get(
+    `${PAYSTACK_BASE}/transfer/verify/${encodeURIComponent(w.reference)}`,
+    { headers: paystackHeaders(), timeout: 8000 }
+  );
+  const t = data.data || {};
+  if (t.status === 'success') {
+    return exports.settleWithdrawalByReference(w.reference, 'transfer.success');
+  }
+  if (PAYSTACK_FAILED.includes(t.status)) {
+    return exports.settleWithdrawalByReference(
+      w.reference, t.status === 'reversed' ? 'transfer.reversed' : 'transfer.failed',
+      `Paystack status: ${t.status}`
+    );
+  }
+  if (t.status && t.status !== w.paystackStatus) {
+    w.paystackStatus = t.status;
+    if (!w.paystackTransferCode && t.transfer_code) w.paystackTransferCode = t.transfer_code;
+    await w.save();
+  }
+  return w;
+};
+exports.syncWithdrawalWithPaystack = syncWithdrawalWithPaystack;
+
+// Sync every pending withdrawal (matching `filter`) that has a live Paystack
+// transfer. Errors per-withdrawal are logged and skipped.
+exports.syncPendingWithdrawals = async (filter = {}, limit = 25) => {
+  if (!process.env.PAYSTACK_SECRET_KEY) return;
+  const pending = await Withdrawal.find({
+    ...filter,
+    status: 'pending',
+    paystackTransferCode: { $nin: [null, 'TRF_test_mock'], $not: /^MANUAL-/ },
+  }).sort({ createdAt: -1 }).limit(limit);
+  await Promise.all(pending.map(w =>
+    syncWithdrawalWithPaystack(w).catch(e =>
+      console.error('[Withdrawal sync]', w.reference, e.response?.data?.message || e.message))
+  ));
 };
