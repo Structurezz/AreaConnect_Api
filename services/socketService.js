@@ -1,3 +1,6 @@
+const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
+const User = require('../models/User');
 let io = null;
 
 // ── In-memory podcast rooms ──────────────────────────────────────────────
@@ -64,17 +67,47 @@ const initSocket = (server) => {
   io.on('connection', (socket) => {
     console.log('Socket connected:', socket.id);
 
-    socket.on('join', ({ userId, estateId, role }) => {
-      socket.join(`estate:${estateId}`);
-      socket.join(`user:${userId}`);
-      if (role === 'security') {
-        socket.join(`estate:${estateId}:security`);
-        socket.join(`estate:${estateId}:staff`);
-      } else if (role === 'estate_manager' || role === 'super_admin') {
-        socket.join(`estate:${estateId}:estate_manager`);
-        socket.join(`estate:${estateId}:staff`);
+    // Room membership is decided server-side from the user's real record —
+    // never from the role/estate the client claims. Web apps send their JWT in
+    // the handshake (verified); older mobile builds only send userId, so we
+    // fall back to looking that user up. Either way the role and estate come
+    // from the database, so a client can't join another estate's staff or
+    // security rooms, and mobile apps that never sent a role (and so never
+    // received staff/security alerts) now land in the right rooms.
+    socket.on('join', async ({ userId: claimedUserId } = {}) => {
+      try {
+        let userId = claimedUserId;
+        const token = socket.handshake?.auth?.token;
+        if (token) {
+          // Signature proves identity; expiry is ignored on purpose — a guard
+          // whose access token lapsed must keep receiving alerts.
+          try { userId = jwt.verify(token, process.env.JWT_SECRET, { ignoreExpiration: true }).userId; }
+          catch { return socket.emit('join_error', { message: 'Invalid token' }); }
+        }
+        if (!userId || !mongoose.isValidObjectId(userId)) return;
+
+        const user = await User.findById(userId).select('role estateId isActive').lean();
+        if (!user || !user.isActive || !user.estateId) return;
+
+        const estateId = String(user.estateId);
+        for (const room of [...socket.rooms]) {
+          if (room.startsWith('estate:') || room.startsWith('user:')) socket.leave(room);
+        }
+        socket.join(`estate:${estateId}`);
+        socket.join(`user:${userId}`);
+        if (user.role === 'security') {
+          socket.join(`estate:${estateId}:security`);
+          socket.join(`estate:${estateId}:staff`);
+        } else if (user.role === 'estate_manager' || user.role === 'super_admin') {
+          socket.join(`estate:${estateId}:estate_manager`);
+          socket.join(`estate:${estateId}:staff`);
+        }
+        socket.data.userId = String(userId);
+        socket.data.role = user.role;
+        connectedUsers.set(String(userId), socket.id);
+      } catch (e) {
+        console.error('[socket join]', e.message);
       }
-      connectedUsers.set(userId, socket.id);
     });
 
     socket.on('send_message', (data) => {
@@ -416,7 +449,13 @@ const emitAlert = (estateId, alert) => {
   if (audience === 'staff') room = `estate:${estateId}:staff`;
   else if (audience === 'estate_manager') room = `estate:${estateId}:estate_manager`;
   else if (audience === 'security') room = `estate:${estateId}:security`;
-  io.to(room).emit('new_alert', alert);
+  // The raiser always hears about their own alert too (e.g. a resident whose
+  // staff-only alert gets acknowledged). Socket.io de-duplicates sockets that
+  // are in both rooms.
+  const raiser = alert?.residentId?._id || alert?.residentId;
+  let target = io.to(room);
+  if (raiser) target = target.to(`user:${raiser}`);
+  target.emit('new_alert', alert);
 };
 
 /** Emit visitor check-in/out event */

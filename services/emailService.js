@@ -1589,7 +1589,100 @@ ${preheaderBlock}
   return { sent: true };
 };
 
+
+// ── Emergency alert emails ──────────────────────────────────────────────────
+// Sent alongside the real-time socket alert so anyone without the app open
+// still hears about it. Uses Resend's batch API (≤100 per request) — firing
+// one request per recipient trips Resend's rate limit on large estates.
+const ALERT_TYPE_LABEL = {
+  security: 'Security threat', fire: 'Fire emergency', medical: 'Medical emergency',
+  noise: 'Noise complaint', other: 'Alert',
+};
+const ALERT_SEVERITY_COLOR = { critical: '#B91C1C', high: '#DC2626', medium: '#D97706', low: '#2563EB' };
+const APP_URL_BY_ROLE = {
+  resident:       process.env.RESIDENTS_URL || 'https://area-mates.areaconnect.pro',
+  estate_manager: process.env.CLIENT_URL    || 'https://area-connector.areaconnect.pro',
+  super_admin:    process.env.CLIENT_URL    || 'https://area-connector.areaconnect.pro',
+  security:       process.env.SECURITY_URL  || 'https://area-guards.areaconnect.pro',
+};
+
+const escapeHtml = (v) => String(v ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+const buildAlertEmailHtml = ({ name, estateName, alert, raisedBy, isBroadcast, url }) => {
+  const sev    = alert.severity || 'high';
+  const color  = ALERT_SEVERITY_COLOR[sev] || ALERT_SEVERITY_COLOR.high;
+  const label  = ALERT_TYPE_LABEL[alert.type] || 'Alert';
+  const title  = escapeHtml(alert.title || label);
+  const rows = [
+    ['Type', label],
+    ['Severity', sev.charAt(0).toUpperCase() + sev.slice(1)],
+    alert.location && ['Location', alert.location],
+    raisedBy?.unit && ['Unit', raisedBy.unit],
+    raisedBy?.name && [isBroadcast ? 'Sent by' : 'Raised by', `${raisedBy.name}${raisedBy.roleLabel ? ` (${raisedBy.roleLabel})` : ''}`],
+    (alert.contactNumber || raisedBy?.phone) && ['Contact', alert.contactNumber || raisedBy.phone],
+    ['Time', new Date(alert.createdAt || Date.now()).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos' })],
+  ].filter(Boolean);
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:24px 12px;background:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
+<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #E2E8F0;">
+  <div style="background:${color};padding:22px 24px;color:#fff;">
+    <div style="font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;opacity:.85;">
+      ${isBroadcast ? 'Emergency broadcast' : 'Emergency alert'} &middot; ${escapeHtml(estateName)}
+    </div>
+    <div style="font-size:22px;font-weight:800;line-height:1.25;margin-top:6px;">${title}</div>
+  </div>
+  <div style="padding:22px 24px;">
+    <p style="margin:0 0 14px;font-size:15px;color:#334155;">Hi ${escapeHtml((name || 'there').split(' ')[0])},</p>
+    ${alert.note ? `<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#0F172A;background:#F8FAFC;border-left:3px solid ${color};padding:12px 14px;border-radius:6px;">${escapeHtml(alert.note)}</p>` : ''}
+    ${alert.actionRequired ? `<p style="margin:0 0 16px;font-size:14px;line-height:1.5;color:#92400E;background:#FFFBEB;border:1px solid #FDE68A;padding:10px 14px;border-radius:8px;"><strong>What to do:</strong> ${escapeHtml(alert.actionRequired)}</p>` : ''}
+    <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:20px;">
+      ${rows.map(([k, v]) => `<tr><td style="padding:7px 0;color:#64748B;width:110px;vertical-align:top;">${k}</td><td style="padding:7px 0;color:#0F172A;font-weight:600;">${escapeHtml(v)}</td></tr>`).join('')}
+    </table>
+    <a href="${url}" style="display:block;text-align:center;background:#0F172A;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:14px;border-radius:10px;">Open alerts</a>
+    <p style="margin:16px 0 0;font-size:12px;color:#94A3B8;line-height:1.5;">In immediate danger? Call 112 (Nigeria emergency line) first.</p>
+  </div>
+</div>
+<p style="text-align:center;font-size:11px;color:#94A3B8;margin:14px 0 0;">AreaConnect &middot; ${escapeHtml(estateName)}</p>
+</body></html>`;
+};
+
+/**
+ * recipients: [{ email, name, role }]
+ * raisedBy:   { name, phone, unit, roleLabel }
+ */
+const sendEmergencyAlertEmails = async ({ recipients, alert, estateName, raisedBy, isBroadcast }) => {
+  if (!process.env.RESEND_API_KEY || !recipients?.length) return { skipped: true, sent: 0 };
+  const label   = ALERT_TYPE_LABEL[alert.type] || 'Alert';
+  const subject = `🚨 ${isBroadcast ? 'Emergency broadcast' : label}: ${alert.title || label} — ${estateName}`;
+  const emails  = recipients.map((r) => ({
+    from: FROM(),
+    to: r.email,
+    subject,
+    html: buildAlertEmailHtml({
+      name: r.name, estateName, alert, raisedBy, isBroadcast,
+      url: `${APP_URL_BY_ROLE[r.role] || APP_URL_BY_ROLE.resident}/alerts`,
+    }),
+  }));
+
+  let sent = 0;
+  for (let i = 0; i < emails.length; i += 100) {
+    const chunk = emails.slice(i, i + 100);
+    try {
+      const { error } = await getResend().batch.send(chunk);
+      if (error) console.error('[alert email] batch error', error.message || error);
+      else sent += chunk.length;
+    } catch (e) {
+      console.error('[alert email] batch failed', e.message);
+    }
+    if (i + 100 < emails.length) await new Promise((r) => setTimeout(r, 600)); // stay under rate limit
+  }
+  return { sent };
+};
+
 module.exports = {
+  sendEmergencyAlertEmails,
   sendVisitorPass,
   sendInviteEmail,
   sendManagerNotificationEmail,
