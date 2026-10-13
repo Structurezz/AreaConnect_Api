@@ -5,7 +5,11 @@ async function geocodeAddress(address) {
   const key = process.env.GOOGLE_MAPS_API_KEY;
   if (!key || !address) return null;
 
-  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${key}`;
+  // Bias results to Nigeria (override with GEOCODING_REGION env if you serve other countries).
+  // components=country: filters strictly; region= is a soft bias for ambiguous names.
+  const region  = process.env.GEOCODING_REGION  || 'ng';
+  const country = process.env.GEOCODING_COUNTRY || 'NG';
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&region=${region}&components=country:${country}&key=${key}`;
   try {
     const res = await fetch(url);
     const json = await res.json();
