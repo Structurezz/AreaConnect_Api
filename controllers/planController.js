@@ -484,6 +484,20 @@ exports.paystackWebhook = async (req, res) => {
     const event = req.body;
     if (!event || !event.event) return res.status(200).end();
 
+    // Manager withdrawals — finalise the Withdrawal doc from the transfer outcome
+    if (['transfer.success', 'transfer.failed', 'transfer.reversed'].includes(event.event)) {
+      try {
+        const paymentCtrl = require('./paymentController');
+        const reference = event.data?.reference;
+        if (reference) {
+          await paymentCtrl.settleWithdrawalByReference(reference, event.event);
+        }
+      } catch (e) {
+        console.error('[paystackWebhook withdrawal]', e.message);
+      }
+      return res.status(200).end();
+    }
+
     // We only care about successful charges
     if (event.event !== 'charge.success') return res.status(200).end();
 

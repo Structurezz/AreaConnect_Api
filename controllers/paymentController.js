@@ -893,16 +893,22 @@ exports.saveBankAccount = async (req, res) => {
   }
 };
 
-// Managers request a withdrawal — no funds move automatically. The request
-// lands as a 'pending' Withdrawal that a super admin processes manually (via
-// their Paystack dashboard, then marks paid; or via the one-click admin
-// endpoint that fires /transfer on their behalf).
+// Managers withdraw directly — fires a Paystack /transfer to their saved
+// recipient with no admin involvement. The Withdrawal is created as 'pending'
+// BEFORE the transfer so the balance is reserved (no double-spend from rapid
+// repeat taps); the transfer.success/failed/reversed webhook finalises it.
+// Requires OTP to be disabled for transfers on the Paystack account.
 exports.withdrawFromWallet = async (req, res) => {
+  let withdrawal = null;
   try {
-    const { amount } = req.body;
+    const amount = Number(req.body.amount);
 
     if (!amount || amount < 100) {
       return res.status(400).json({ success: false, message: 'Minimum withdrawal is ₦100' });
+    }
+
+    if (!process.env.PAYSTACK_SECRET_KEY) {
+      return res.status(503).json({ success: false, message: 'Payment gateway not configured' });
     }
 
     const user = await User.findById(req.user._id).select(
@@ -913,27 +919,28 @@ exports.withdrawFromWallet = async (req, res) => {
       return res.status(400).json({ success: false, message: 'No bank account saved. Add your bank account first.' });
     }
 
-    // Compute live balance (paid payments minus pending/success withdrawals)
-    const [paymentsAgg, withdrawalsAgg] = await Promise.all([
-      Payment.aggregate([
-        { $match: { estateId: req.estateId, status: 'paid' } },
-        { $group: { _id: null, total: { $sum: '$amount' } } },
-      ]),
-      Withdrawal.aggregate([
-        { $match: { userId: req.user._id, status: { $in: ['pending', 'success'] } } },
-        { $group: { _id: null, total: { $sum: '$amount' } } },
-      ]),
-    ]);
-    const liveBalance = Math.max(0, (paymentsAgg[0]?.total || 0) - (withdrawalsAgg[0]?.total || 0));
+    const liveBalance = async () => {
+      const [paymentsAgg, withdrawalsAgg] = await Promise.all([
+        Payment.aggregate([
+          { $match: { estateId: req.estateId, status: 'paid' } },
+          { $group: { _id: null, total: { $sum: '$amount' } } },
+        ]),
+        Withdrawal.aggregate([
+          { $match: { userId: req.user._id, status: { $in: ['pending', 'success'] } } },
+          { $group: { _id: null, total: { $sum: '$amount' } } },
+        ]),
+      ]);
+      return (paymentsAgg[0]?.total || 0) - (withdrawalsAgg[0]?.total || 0);
+    };
 
-    if (liveBalance < amount) {
+    if ((await liveBalance()) < amount) {
       return res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
     }
 
     const estate = await Estate.findById(req.estateId).select('name estateCode');
     const reference = generateRef();
 
-    const withdrawal = await Withdrawal.create({
+    withdrawal = await Withdrawal.create({
       userId: req.user._id,
       estateId: req.estateId,
       amount,
@@ -945,8 +952,45 @@ exports.withdrawFromWallet = async (req, res) => {
       accountName: user.accountName,
     });
 
-    // Manager receipt — reuse the receipt email in 'pending' mode so they get
-    // a PDF record of the request even before admin processes it.
+    // Re-check after reserving — if two requests raced past the first check,
+    // the later one sees a negative balance and backs out.
+    if ((await liveBalance()) < 0) {
+      withdrawal.status = 'failed';
+      withdrawal.failureReason = 'Insufficient wallet balance';
+      await withdrawal.save();
+      return res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
+    }
+
+    const isTestMode = process.env.PAYSTACK_SECRET_KEY.startsWith('sk_test_');
+    if (isTestMode && user.paystackRecipientCode === 'RCP_test_mock') {
+      withdrawal.status = 'success';
+      withdrawal.paystackTransferCode = 'TRF_test_mock';
+    } else {
+      try {
+        const { data } = await axios.post(
+          `${PAYSTACK_BASE}/transfer`,
+          {
+            source: 'balance',
+            amount: Math.round(amount * 100),
+            recipient: user.paystackRecipientCode,
+            reason: `Estate manager withdrawal — ${reference}`,
+            reference,
+          },
+          { headers: paystackHeaders() }
+        );
+        withdrawal.status = data.data?.status === 'success' ? 'success' : 'pending';
+        withdrawal.paystackTransferCode = data.data?.transfer_code || null;
+      } catch (err) {
+        const msg = err.response?.data?.message || 'Transfer failed';
+        console.error('[Withdraw transfer]', err.response?.data || err.message);
+        withdrawal.status = 'failed';
+        withdrawal.failureReason = msg;
+        await withdrawal.save();
+        return res.status(502).json({ success: false, message: `Withdrawal failed: ${msg}` });
+      }
+    }
+    await withdrawal.save();
+
     sendWithdrawalReceiptEmail({
       to: user.email,
       managerName: user.name,
@@ -957,22 +1001,73 @@ exports.withdrawFromWallet = async (req, res) => {
       accountNumber: user.accountNumber,
       accountName: user.accountName,
       reference,
-      transferCode: null,
-      status: 'pending',
+      transferCode: withdrawal.paystackTransferCode,
+      status: withdrawal.status,
       createdAt: withdrawal.createdAt,
     }).catch(e => console.error('[WithdrawalEmail]', e.message));
 
     return res.json({
       success: true,
       data: {
-        message: 'Withdrawal request submitted. The admin will process it shortly.',
+        message: withdrawal.status === 'success'
+          ? 'Withdrawal successful — funds are on their way to your bank.'
+          : 'Withdrawal initiated — funds will arrive in your bank shortly.',
         withdrawalId: withdrawal._id,
         reference,
-        status: 'pending',
+        transferCode: withdrawal.paystackTransferCode,
+        status: withdrawal.status,
       },
     });
   } catch (err) {
     console.error('[Withdraw]', err.message);
-    return res.status(500).json({ success: false, message: 'Withdrawal request failed. Please try again.' });
+    // Release the reserved balance if we failed before the transfer resolved
+    if (withdrawal && withdrawal.status === 'pending' && !withdrawal.paystackTransferCode) {
+      withdrawal.status = 'failed';
+      withdrawal.failureReason = 'Withdrawal could not be completed';
+      await withdrawal.save().catch(() => {});
+    }
+    return res.status(500).json({ success: false, message: 'Withdrawal failed. Please try again.' });
   }
+};
+
+// Called by the Paystack webhook on transfer.success / transfer.failed /
+// transfer.reversed. Idempotent — only moves a withdrawal out of 'pending'
+// (or 'success' → 'failed' on reversal). Failed/reversed withdrawals drop out
+// of the balance query, so the manager's funds come back automatically.
+exports.settleWithdrawalByReference = async (reference, event, reason) => {
+  const w = await Withdrawal.findOne({ reference });
+  if (!w) return null;
+
+  const nextStatus = event === 'transfer.success' ? 'success' : 'failed';
+  if (w.status === nextStatus) return w;
+  if (w.status === 'failed') return w;
+  if (w.status === 'success' && event !== 'transfer.reversed') return w;
+
+  w.status = nextStatus;
+  if (nextStatus === 'failed') {
+    w.failureReason = reason || (event === 'transfer.reversed' ? 'Transfer reversed' : 'Transfer failed');
+  }
+  await w.save();
+
+  const [user, estate] = await Promise.all([
+    User.findById(w.userId).select('email name'),
+    Estate.findById(w.estateId).select('name estateCode'),
+  ]);
+  if (user?.email) {
+    sendWithdrawalReceiptEmail({
+      to: user.email,
+      managerName: user.name,
+      estateName: estate?.name || 'Your Estate',
+      estateCode: estate?.estateCode || '',
+      amount: w.amount,
+      bankName: w.bankName,
+      accountNumber: w.accountNumber,
+      accountName: w.accountName,
+      reference: w.reference,
+      transferCode: w.paystackTransferCode,
+      status: w.status,
+      createdAt: w.updatedAt,
+    }).catch(e => console.error('[WithdrawalEmail]', e.message));
+  }
+  return w;
 };
