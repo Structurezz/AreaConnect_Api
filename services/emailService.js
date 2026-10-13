@@ -426,7 +426,7 @@ const sendSubscriptionReminderEmail = async ({ to, managerName, estateName, days
           </tr>`).join('')}
       </table>
       <div style="background:#F8FAFC;border-top:1px solid #E2E8F0;padding:14px 20px;">
-        <span style="font-size:11px;color:#94A3B8;">AreaConnect Estate Management &nbsp;&middot;&nbsp; areaconnect.pro</span>
+        <span style="font-size:11px;color:#94A3B8;">Powered by <strong style="color:#10B981;">Area Connector Technologies</strong> &nbsp;&middot;&nbsp; RC 9607864</span>
       </div>
     </div>`;
 
@@ -613,7 +613,7 @@ const sendPasswordResetRequestEmail = async ({
       </p>
     </div>
     <div style="background:#F8FAFC;border-top:1px solid #E2E8F0;padding:12px 20px;">
-      <span style="font-size:11px;color:#94A3B8;">AreaConnect Estate Management</span>
+      <span style="font-size:11px;color:#94A3B8;">Powered by <strong style="color:#10B981;">Area Connector Technologies</strong> &nbsp;&middot;&nbsp; RC 9607864</span>
     </div>
   </div>
 </div>
@@ -1382,7 +1382,8 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
   <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;line-height:1.8;">
     You're receiving this because you were identified as a property professional in Nigeria.<br>
     <a href="${FRONTEND_URL}/unsubscribe" style="color:#CBD5E1;text-decoration:none;">Unsubscribe</a>
-    &nbsp;·&nbsp; AreaConnect &nbsp;·&nbsp; Lagos, Nigeria
+    &nbsp;·&nbsp; AreaConnect &nbsp;·&nbsp; Lagos, Nigeria<br>
+    Powered by Area Connector Technologies &nbsp;&middot;&nbsp; RC 9607864
   </p>
 </div>
 </body></html>`,

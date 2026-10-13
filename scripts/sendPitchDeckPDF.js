@@ -598,7 +598,7 @@ async function generatePdf() {
       </p>
     </div>
     <div style="background:#F8FAFC;border-top:1px solid #E2E8F0;padding:12px 20px;">
-      <span style="font-size:11px;color:#94A3B8;">AreaConnect Estate Management &middot; areaconnect.pro</span>
+      <span style="font-size:11px;color:#94A3B8;">Powered by <strong style="color:#10B981;">Area Connector Technologies</strong> &nbsp;&middot;&nbsp; RC 9607864</span>
     </div>
   </div>
 </div>
