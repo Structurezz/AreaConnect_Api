@@ -12,9 +12,12 @@ router.post(
   express.raw({ type: 'application/json', limit: '2mb' }),
   (req, res, next) => {
     try {
-      // Expose raw body for the controller's HMAC check, then parse into req.body
-      req.rawBody = req.body?.toString('utf8') || '';
-      req.body = req.rawBody ? JSON.parse(req.rawBody) : {};
+      // Normally the global JSON parser already parsed the body and kept the
+      // raw bytes in req.rawBody (see index.js). Only parse here if it didn't.
+      if (req.rawBody === undefined) {
+        req.rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
+        req.body = req.rawBody ? JSON.parse(req.rawBody) : {};
+      }
       next();
     } catch (e) {
       return res.status(400).json({ success: false, message: 'Invalid JSON' });

@@ -16,6 +16,7 @@ const server = http.createServer(app);
 
 // Initialize Socket.io
 initSocket(server);
+require('./services/callService').startSweeper(); // tidies calls left hanging by a restart
 
 // Security middleware
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
@@ -49,7 +50,16 @@ app.use(cors({
 }));
 
 // Body parsing
-app.use(express.json({ limit: '10mb' }));
+// `verify` keeps the exact raw bytes for the Paystack webhook: its HMAC must
+// be computed over the body as sent. (Previously this global parser consumed
+// the body first, the webhook route then tried to JSON.parse "[object Object]"
+// and answered 400 to every Paystack webhook.)
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, _res, buf) => {
+    if (req.originalUrl.startsWith('/api/plans/webhook')) req.rawBody = buf.toString('utf8');
+  },
+}));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
@@ -95,6 +105,8 @@ app.use('/api/campaigns', require('./routes/campaigns'));
 app.use('/api/admin/withdrawals', require('./routes/adminWithdrawals'));
 app.use('/api/admin/payments',    require('./routes/adminPayments'));
 app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/calls', require('./routes/calls'));
+app.use('/api/public/avatar', require('./routes/publicAvatar'));
 
 // Health check
 app.get('/health', (req, res) => {
