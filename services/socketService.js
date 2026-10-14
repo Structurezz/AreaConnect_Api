@@ -89,14 +89,20 @@ const initSocket = (server) => {
         if (!userId || !mongoose.isValidObjectId(userId)) return;
 
         const user = await User.findById(userId).select('role estateId isActive').lean();
-        if (!user || !user.isActive || !user.estateId) return;
+        if (!user || !user.isActive) return;
 
-        const estateId = String(user.estateId);
         for (const room of [...socket.rooms]) {
           if (room.startsWith('estate:') || room.startsWith('user:')) socket.leave(room);
         }
-        socket.join(`estate:${estateId}`);
+        // Personal room for everyone (calls, direct notifications) — including
+        // AreaConnect admins, who don't belong to an estate.
         socket.join(`user:${userId}`);
+        socket.data.userId = String(userId);
+        socket.data.role = user.role;
+        if (!user.estateId) return;
+
+        const estateId = String(user.estateId);
+        socket.join(`estate:${estateId}`);
         if (user.role === 'security') {
           socket.join(`estate:${estateId}:security`);
           socket.join(`estate:${estateId}:staff`);
@@ -104,8 +110,6 @@ const initSocket = (server) => {
           socket.join(`estate:${estateId}:estate_manager`);
           socket.join(`estate:${estateId}:staff`);
         }
-        socket.data.userId = String(userId);
-        socket.data.role = user.role;
         connectedUsers.set(String(userId), socket.id);
       } catch (e) {
         console.error('[socket join]', e.message);

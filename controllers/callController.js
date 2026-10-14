@@ -287,3 +287,44 @@ exports.getBuzzes = async (req, res) => {
     .populate('fromId', 'name profilePhoto').lean();
   res.json({ success: true, data: list });
 };
+
+// ── AreaConnect admin calling (platform-wide, always free) ──────────────────
+
+exports.adminDirectory = async (req, res) => {
+  try {
+    const users = await User.find({ role: { $in: ['estate_manager', 'security'] }, isActive: true })
+      .select('name role profilePhoto estateId managedEstates').populate('estateId', 'name').lean();
+    const list = users.map((u) => ({ ...publicProfile(u), estate: u.estateId?.name || '' }))
+      .sort((a, b) => (b.online - a.online) || a.estate.localeCompare(b.estate) || a.name.localeCompare(b.name));
+    res.json({ success: true, data: list });
+  } catch (e) {
+    console.error('[calls.adminDirectory]', e);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+exports.adminStartCall = async (req, res) => {
+  try {
+    const { calleeId } = req.body;
+    const callee = await User.findById(calleeId).select('name role profilePhoto estateId managedEstates isActive unitId').populate('unitId', 'unitNumber block').lean();
+    const estateId = callee?.estateId || callee?.managedEstates?.[0];
+    if (!callee || !callee.isActive || !estateId) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const busy = await Call.findOne({ status: { $in: ['ringing', 'active'] }, $or: [{ callerId: { $in: [req.user._id, callee._id] } }, { calleeId: { $in: [req.user._id, callee._id] } }] }).select('callerId calleeId').lean();
+    if (busy) {
+      const meBusy = [String(busy.callerId), String(busy.calleeId)].includes(String(req.user._id));
+      return res.status(409).json({ success: false, code: 'BUSY', message: meBusy ? 'You\'re already on a call' : `${callee.name.split(' ')[0]} is on another call` });
+    }
+
+    const call = await Call.create({ estateId, callerId: req.user._id, calleeId: callee._id, kind: 'staff', ratePerMinute: 0 });
+    calls.startRinging(call, {
+      callId: String(call._id), kind: 'staff',
+      from: { _id: req.user._id, name: `${req.user.name} · AreaConnect`, role: 'super_admin', profilePhoto: req.user.profilePhoto || '', unit: 'AreaConnect support', online: true },
+      iceServers: iceServers(),
+    });
+    res.status(201).json({ success: true, data: { call, callee: publicProfile(callee), iceServers: iceServers() } });
+  } catch (e) {
+    console.error('[calls.adminStart]', e);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};

@@ -4,6 +4,16 @@ const ctrl = require('../controllers/callController');
 const validate = require('../middleware/validate');
 const { authenticate, scopeToEstate, requireEstate, requireActiveSubscription } = require('../middleware/auth');
 
+// AreaConnect admins aren't in an estate, so their routes come before the
+// estate-scoped middleware below.
+const { authorize } = require('../middleware/auth');
+const admin = [authenticate, authorize('super_admin')];
+router.get('/admin/directory', admin, ctrl.adminDirectory);
+router.get('/admin/history', admin, ctrl.getHistory);
+router.post('/admin', admin, [body('calleeId').isMongoId()], validate, ctrl.adminStartCall);
+router.post('/admin/:id/cancel', admin, ctrl.cancelCall);
+router.post('/admin/:id/end', admin, ctrl.endCall);
+
 router.use(authenticate, scopeToEstate, requireEstate, requireActiveSubscription);
 
 router.get('/config', ctrl.getConfig);
