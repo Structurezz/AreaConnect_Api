@@ -394,8 +394,9 @@ exports.adminStats = async (req, res) => {
 
 exports.adminListings = async (req, res) => {
   try {
-    const { status, q, category } = req.query;
+    const { status, q, category, sellerId } = req.query;
     const filter = { estateId: req.estateId };
+    if (sellerId && mongoose.isValidObjectId(sellerId)) filter.sellerId = sellerId;
     if (status && status !== 'all') filter.status = status;
     if (category) filter.category = category;
     if (q?.trim()) { const re = new RegExp(escapeRe(q.trim()), 'i'); filter.$or = [{ title: re }, { description: re }]; }
