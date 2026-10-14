@@ -43,8 +43,13 @@ exports.getConfig = async (req, res) => {
 exports.getDirectory = async (req, res) => {
   try {
     const estateId = req.estateId;
+    // Residents only see neighbours who chose to be discoverable. Estate staff
+    // (managers, security) can reach every resident — that's their job.
+    const isStaff = STAFF_ROLES.includes(req.user.role);
+    const residentFilter = { estateId, role: 'resident', isActive: true, _id: { $ne: req.user._id } };
+    if (!isStaff) residentFilter.isDiscoverable = { $ne: false };
     const [neighbours, staff] = await Promise.all([
-      User.find({ estateId, role: 'resident', isActive: true, isDiscoverable: { $ne: false }, _id: { $ne: req.user._id } })
+      User.find(residentFilter)
         .select('name role profilePhoto unitId').populate('unitId', 'unitNumber block').sort({ name: 1 }).lean(),
       User.find({
         isActive: true, _id: { $ne: req.user._id },
