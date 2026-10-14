@@ -23,16 +23,10 @@ const publicProfile = (u) => u && ({
   unit: unitLabel(u.unitId), online: isOnline(u._id),
 });
 
-// STUN is free; TURN relays audio when two phones can't reach each other
-// directly (common on mobile networks). Configure via env:
-//   TURN_URLS="turn:turn.example.com:3478,turns:turn.example.com:443"
-//   TURN_USERNAME / TURN_CREDENTIAL
-function iceServers() {
-  const servers = [{ urls: ['stun:stun.l.google.com:19302', 'stun:global.stun.twilio.com:3478'] }];
-  const urls = (process.env.TURN_URLS || '').split(',').map((s) => s.trim()).filter(Boolean);
-  if (urls.length) servers.push({ urls, username: process.env.TURN_USERNAME || '', credential: process.env.TURN_CREDENTIAL || '' });
-  return servers;
-}
+// STUN only (free, public) — lets two devices find a direct path when one
+// exists. When it doesn't, calls carry on over our own audio relay
+// (services/callService.relayAudio); there is no TURN dependency.
+const iceServers = () => [{ urls: ['stun:stun.l.google.com:19302', 'stun:global.stun.twilio.com:3478'] }];
 
 // Is `user` (any role) a member of `estateId`? Managers may manage several.
 const inEstate = (user, estateId) =>
@@ -43,7 +37,7 @@ const inEstate = (user, estateId) =>
 
 exports.getConfig = async (req, res) => {
   const balance = await getBalance(req.user._id);
-  res.json({ success: true, data: { iceServers: iceServers(), ratePerMinute: RATE_PER_MINUTE, packs: CREDIT_PACKS, balance, turnConfigured: iceServers().length > 1 } });
+  res.json({ success: true, data: { iceServers: iceServers(), ratePerMinute: RATE_PER_MINUTE, packs: CREDIT_PACKS, balance } });
 };
 
 exports.getDirectory = async (req, res) => {

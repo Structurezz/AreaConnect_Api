@@ -121,6 +121,8 @@ const initSocket = (server) => {
       callService().bindDevice(socket, callId).catch(() => {}).finally(() => { if (typeof ack === 'function') ack(true); });
     });
     socket.on('call:signal', (msg) => { callService().relaySignal(socket, msg).catch(() => {}); });
+    // Call audio relay (binary μ-law frames) — see callService.relayAudio.
+    socket.on('call:audio', (callId, frame) => callService().relayAudio(socket, callId, frame));
 
     socket.on('send_message', (data) => {
       if (data.isGroupMessage) {

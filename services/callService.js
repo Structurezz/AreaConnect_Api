@@ -1,9 +1,13 @@
 const Call = require('../models/Call');
 const { RATE_PER_MINUTE, chargeCredits, getBalance } = require('../utils/credits');
 
-// Call lifecycle + billing. REST (callController) starts/answers/ends calls;
-// sockets carry the WebRTC signalling (socketService → relaySignal) between
-// the two specific devices bound to a call.
+// Call lifecycle + billing + media relay. REST (callController) starts/
+// answers/ends calls; sockets carry, between the two devices bound to a call:
+//   • WebRTC signalling (relaySignal) for a direct peer-to-peer link, and
+//   • the call audio itself (relayAudio) — our own relay, used from the
+//     moment a call connects and for the whole call whenever the two devices
+//     can't reach each other directly (strict mobile NAT). No third-party
+//     TURN service: audio goes over the same WebSocket the app already uses.
 //
 // Billing: standard (resident↔resident) calls cost RATE_PER_MINUTE credits per
 // started minute of *connected* time, charged to the caller when the call
@@ -16,6 +20,7 @@ const DISCONNECT_GRACE_MS = 20_000;
 const MAX_FREE_CALL_S   = 2 * 60 * 60;   // safety cap for free calls
 
 const timers  = new Map();   // callId → { ring, limit, warn, grace }
+const active  = new Set();   // callIds currently connected (audio may flow)
 const devices = new Map();   // callId → { caller: socketId, callee: socketId }
 
 const io = () => require('./socketService').getIO();
@@ -68,6 +73,7 @@ async function answer(callId, calleeId) {
   if (!call) return null;
 
   clearTimers(callId);
+  active.add(String(callId));
   setTimer(callId, 'limit', maxSeconds * 1000, () =>
     finalize(callId, { reason: ringing.kind === 'standard' ? 'credits_exhausted' : 'max_duration' }).catch(() => {}));
   if (ringing.kind === 'standard' && maxSeconds > LOW_CREDIT_WARN_S) {
@@ -94,6 +100,7 @@ async function finalize(callId, { ringingStatus = 'cancelled', reason = 'hangup'
   ).lean();
   if (!before) return null; // already finished elsewhere
   clearTimers(callId);
+  active.delete(String(callId));
 
   let status = 'ended';
   let durationSec = 0;
@@ -148,6 +155,32 @@ async function relaySignal(socket, { callId, data } = {}) {
   if (d.callee === socket.id) return toSocket(d.caller, 'call:signal', { callId, data });
 }
 
+// ── Media relay ─────────────────────────────────────────────────────────────
+// 40 ms μ-law frames are ~640 bytes; anything much bigger isn't ours.
+const MAX_FRAME_BYTES = 4096;
+const MAX_FRAMES_PER_SEC = 60;
+
+/** Forward one audio frame to the other party's device (connected calls only). */
+function relayAudio(socket, callId, frame) {
+  const id = String(callId);
+  if (!active.has(id) || !frame) return;
+  const size = frame.byteLength ?? frame.length ?? 0;
+  if (!size || size > MAX_FRAME_BYTES) return;
+
+  // Per-socket rate limit (1-second window).
+  const now = Date.now();
+  const rl = socket.data.audioRate || (socket.data.audioRate = { t: now, n: 0 });
+  if (now - rl.t >= 1000) { rl.t = now; rl.n = 0; }
+  if (++rl.n > MAX_FRAMES_PER_SEC) return;
+
+  const d = devices.get(id);
+  if (!d) return;
+  const target = d.caller === socket.id ? d.callee : d.callee === socket.id ? d.caller : null;
+  // volatile: if the receiver is congested, drop the frame rather than queue
+  // stale audio (the client's jitter buffer copes with gaps).
+  if (target) io()?.to(target).volatile.emit('call:audio', id, frame);
+}
+
 /** A bound device dropped: give it a short grace period to reconnect. */
 function handleDisconnect(socket) {
   for (const callId of socket.data?.calls || []) {
@@ -184,5 +217,5 @@ function startSweeper() {
 
 module.exports = {
   RATE_PER_MINUTE, RING_TIMEOUT_MS,
-  startRinging, answer, finalize, bindDevice, relaySignal, handleDisconnect, startSweeper,
+  startRinging, answer, finalize, bindDevice, relaySignal, relayAudio, handleDisconnect, startSweeper,
 };
