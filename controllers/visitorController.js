@@ -274,6 +274,8 @@ exports.checkIn = async (req, res) => {
     });
 
     emitVisitorUpdate(visitor.estateId.toString(), visitor);
+    // Gate watch: alert security if this guest's host is under a safety block.
+    require('../services/safetyService').onVisitorCheckIn(visitor);
 
     return res.json({ success: true, message: 'Visitor checked in', data: visitor });
   } catch (err) {

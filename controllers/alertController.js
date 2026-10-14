@@ -244,3 +244,7 @@ exports.getAllAlertsAdmin = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
+// Reused by the safety service (stalking alarms go through the same path).
+exports.emailAlert = emailAlert;
+exports.ALERT_POPULATE = POPULATE;

@@ -10,6 +10,7 @@ const { getIO, emitNotification } = require('../services/socketService');
 const { RATE_PER_MINUTE, CREDIT_PACKS, packById, addCredits, getBalance } = require('../utils/credits');
 const { avatarUrl } = require('../utils/avatarUrl');
 const { sendBuzzEmail } = require('../services/emailService');
+const safety = require('../services/safetyService');
 const { emailCreditReceipt, creditReceiptPdf } = require('../services/creditReceiptService');
 
 const PAYSTACK_BASE = 'https://api.paystack.co';
@@ -48,7 +49,12 @@ exports.getDirectory = async (req, res) => {
     // (managers, security) can reach every resident — that's their job.
     const isStaff = STAFF_ROLES.includes(req.user.role);
     const residentFilter = { estateId, role: 'resident', isActive: true, _id: { $ne: req.user._id } };
-    if (!isStaff) residentFilter.isDiscoverable = { $ne: false };
+    if (!isStaff) {
+      residentFilter.isDiscoverable = { $ne: false };
+      // Safety blocks hide both people from each other.
+      const hidden = await safety.hiddenIdsFor(req.user._id);
+      if (hidden.length) residentFilter._id = { $nin: [req.user._id, ...hidden] };
+    }
     const [neighbours, staff] = await Promise.all([
       User.find(residentFilter)
         .select('name role profilePhoto unitId').populate('unitId', 'unitNumber block').sort({ name: 1 }).lean(),
@@ -89,6 +95,15 @@ exports.startCall = async (req, res) => {
     } else return res.status(403).json({ success: false, message: 'You can\'t call this account' });
 
     if (kind === 'standard') {
+      // Safety block between the two residents: refuse with a neutral message
+      // (never reveal the block); log attempts by the blocked person.
+      const block = await safety.findBlockBetween(me._id, callee._id);
+      if (block) {
+        if (String(block.blockedId) === String(me._id)) {
+          safety.recordContactAttempt({ estateId: req.estateId, protectedId: block.protectedId, blockedId: me._id, type: 'call_attempt' });
+        }
+        return res.status(409).json({ success: false, code: 'UNAVAILABLE', message: `${callee.name.split(' ')[0]} isn't available right now` });
+      }
       const balance = await getBalance(me._id);
       if (balance < RATE_PER_MINUTE) {
         return res.status(402).json({ success: false, code: 'NO_CREDITS', message: 'You need call credits to call a neighbour. Emergency calls to security and management are free.' });
@@ -274,6 +289,15 @@ exports.sendBuzz = async (req, res) => {
     if (!isManager) toFilter.isDiscoverable = { $ne: false };
     const to = await User.findOne(toFilter).select('name email').lean();
     if (!to) return res.status(404).json({ success: false, message: 'Neighbour not found' });
+    if (!isManager) {
+      const block = await safety.findBlockBetween(req.user._id, to._id);
+      if (block) {
+        if (String(block.blockedId) === String(req.user._id)) {
+          safety.recordContactAttempt({ estateId: req.estateId, protectedId: block.protectedId, blockedId: req.user._id, type: 'buzz_attempt' });
+        }
+        return res.status(409).json({ success: false, code: 'UNAVAILABLE', message: `${to.name.split(' ')[0]} isn't available right now` });
+      }
+    }
 
     // Friendly, not spammy: one buzz per person every 2 hours; 20 a day for
     // residents, 100 for managers checking on many households.

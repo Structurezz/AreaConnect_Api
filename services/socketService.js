@@ -127,6 +127,8 @@ const initSocket = (server) => {
     socket.on('call:signal', (msg) => { callService().relaySignal(socket, msg).catch(() => {}); });
     // Call audio relay (binary μ-law frames) — see callService.relayAudio.
     socket.on('call:audio', (callId, frame) => callService().relayAudio(socket, callId, frame));
+    // Live location shared with estate staff (only while a share is active).
+    socket.on('safety:location', (pos) => { if (socket.data.userId) require('./safetyService').updateShare(socket.data.userId, pos || {}); });
 
     socket.on('send_message', (data) => {
       if (data.isGroupMessage) {

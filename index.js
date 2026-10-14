@@ -109,6 +109,7 @@ app.use('/api/admin/payments',    require('./routes/adminPayments'));
 app.use('/api/admin/credits',     require('./routes/adminCredits'));
 app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/calls', require('./routes/calls'));
+app.use('/api/safety', require('./routes/safety'));
 app.use('/api/public/avatar', require('./routes/publicAvatar'));
 
 // Health check
