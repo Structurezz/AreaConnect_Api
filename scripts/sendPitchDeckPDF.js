@@ -575,13 +575,13 @@ async function generatePdf() {
     from, to,
     subject: 'AreaConnect — Pitch Deck 2026 (for today\'s estate demo)',
     html: `<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:28px 16px;margin:0;">
-<div style="max-width:600px;margin:0 auto;">
-  <div style="text-align:center;margin-bottom:16px;">
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:16px;">
     <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
   </div>
-  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
+  <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
     <div style="background:linear-gradient(135deg,#064E3B,#047857);padding:28px 32px;color:#fff;">
       <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.75);margin-bottom:4px;">Pitch deck · 2026</div>
       <h1 style="font-size:22px;font-weight:800;letter-spacing:-0.02em;margin:0;">Deck for today's demo &mdash; attached</h1>

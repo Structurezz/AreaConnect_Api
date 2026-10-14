@@ -19,17 +19,17 @@ const sendVisitorPass = async ({ to, visitorName, hostName, code, expectedDate, 
     html: `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>*{box-sizing:border-box;margin:0;padding:0}</style></head>
-<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:32px 16px;">
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;padding:0;">
 
-<div style="max-width:520px;margin:0 auto;">
+<div style="width:100%;max-width:100%;margin:0;">
 
   <!-- Logo bar -->
-  <div style="text-align:center;margin-bottom:24px;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:24px;">
     <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
   </div>
 
   <!-- Card -->
-  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+  <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
 
     <!-- Header stripe -->
     <div style="background:linear-gradient(135deg,#10B981,#059669);padding:28px 32px;">
@@ -76,17 +76,17 @@ const sendInviteEmail = async ({ to, name, estateName, loginUrl, tempPassword })
     html: `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>*{box-sizing:border-box;margin:0;padding:0}</style></head>
-<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:32px 16px;">
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;padding:0;">
 
-<div style="max-width:520px;margin:0 auto;">
+<div style="width:100%;max-width:100%;margin:0;">
 
   <!-- Logo bar -->
-  <div style="text-align:center;margin-bottom:24px;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:24px;">
     <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
   </div>
 
   <!-- Card -->
-  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+  <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
 
     <!-- Header stripe -->
     <div style="background:linear-gradient(135deg,#10B981,#059669);padding:28px 32px;">
@@ -164,15 +164,15 @@ const sendManagerNotificationEmail = async ({ to, managerName, estateName, type,
     html: `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>*{box-sizing:border-box;margin:0;padding:0}</style></head>
-<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:32px 16px;">
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;padding:0;">
 
-<div style="max-width:520px;margin:0 auto;">
+<div style="width:100%;max-width:100%;margin:0;">
 
-  <div style="text-align:center;margin-bottom:24px;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:24px;">
     <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
   </div>
 
-  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+  <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
 
     <div style="background:linear-gradient(135deg,${meta.color},${meta.color}cc);padding:28px 32px;">
       <p style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.75);margin-bottom:6px;">${estateName}</p>
@@ -253,16 +253,16 @@ const generateInvoiceHtml = (inv) => {
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>*{box-sizing:border-box;margin:0;padding:0;}</style></head>
-<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:32px 16px;">
-<div style="max-width:700px;margin:0 auto;">
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;">
 
   <!-- Logo bar -->
-  <div style="text-align:center;margin-bottom:20px;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:20px;">
     <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
   </div>
 
   <!-- Invoice card -->
-  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
+  <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
 
     <!-- Header: two columns -->
     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
@@ -366,10 +366,10 @@ const sendPaymentReceiptEmail = async ({ to, residentName, estateName, inv }) =>
     to,
     subject,
     html: `<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:24px 16px;margin:0;">
-<div style="max-width:600px;margin:0 auto;">
-  <div style="text-align:center;margin-bottom:16px;">
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:16px;">
     <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
   </div>
   <div style="background:#D1FAE5;border:1px solid #A7F3D0;border-radius:10px;padding:14px 20px;font-size:14px;color:#065F46;line-height:1.6;">
@@ -406,7 +406,7 @@ const sendSubscriptionReminderEmail = async ({ to, managerName, estateName, days
   const fmtNGNSub = (n) => n != null ? `&#8358;${Number(n).toLocaleString('en-NG', { minimumFractionDigits: 2 })}` : '&mdash;';
 
   const subInvoiceHtml = `
-    <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);margin-top:20px;">
+    <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;margin-top:20px;">
       <div style="background:#0F172A;padding:20px 24px;">
         <div style="font-size:10px;color:#94A3B8;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;">${estateName}</div>
         <div style="font-size:20px;font-weight:800;color:#fff;">Subscription Summary</div>
@@ -435,15 +435,15 @@ const sendSubscriptionReminderEmail = async ({ to, managerName, estateName, days
     to,
     subject: `${isUrgent ? '🚨 URGENT:' : '⚠️'} Your ${isTrial ? 'trial' : 'subscription'} expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'} — ${estateName}`,
     html: `<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:32px 16px;margin:0;">
-<div style="max-width:600px;margin:0 auto;">
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;">
 
-  <div style="text-align:center;margin-bottom:20px;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:20px;">
     <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
   </div>
 
-  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
+  <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
     <div style="background:linear-gradient(135deg,${color},${color}cc);padding:28px 32px;">
       <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.75);margin-bottom:6px;">${estateName}</div>
       <h1 style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.02em;">
@@ -501,14 +501,14 @@ const sendLiveAnnouncementEmail = async ({
     to,
     subject: `🚨 LIVE NOW: ${hostName} is broadcasting to ${estateName} — tap to listen`,
     html: `<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="background:#0F172A;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:28px 16px;margin:0;">
-<div style="max-width:600px;margin:0 auto;">
-  <div style="text-align:center;margin-bottom:16px;">
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="background:#0F172A;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:16px;">
     <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#fff;">Area<span style="color:#10B981;">Connect</span></span>
   </div>
 
-  <div style="background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 24px 60px rgba(239,68,68,0.3);border:3px solid #DC2626;">
+  <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;border:3px solid #DC2626;">
     <!-- Siren header -->
     <div style="background:linear-gradient(135deg,#7F1D1D 0%,#B91C1C 55%,#DC2626 100%);padding:36px 32px;text-align:center;position:relative;">
       <div style="display:inline-block;background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.3);padding:5px 14px;border-radius:999px;margin-bottom:14px;">
@@ -545,7 +545,7 @@ const sendLiveAnnouncementEmail = async ({
           🎧 Listen now &rarr;
         </a>
       </div>
-      <p style="text-align:center;font-size:11px;color:#94A3B8;margin:14px 0 0;">
+      <p style="text-align:center;font-size:11px;color:#94A3B8;margin:0;padding:14px 16px 20px;">
         You can also open the AreaMates app and tap the red LIVE banner.
       </p>
     </div>
@@ -579,13 +579,13 @@ const sendPasswordResetRequestEmail = async ({
     to,
     subject: `🔐 Password reset request · ${requesterName} (${estateName})`,
     html: `<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:28px 16px;margin:0;">
-<div style="max-width:600px;margin:0 auto;">
-  <div style="text-align:center;margin-bottom:16px;">
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:16px;">
     <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
   </div>
-  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
+  <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
     <div style="background:linear-gradient(135deg,#4F46E5,#6366F1);padding:28px 32px;color:#fff;">
       <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.85);margin-bottom:4px;">${estateName}</div>
       <h1 style="font-size:22px;font-weight:800;letter-spacing:-0.02em;margin:0;">🔐 Password reset request</h1>
@@ -637,13 +637,13 @@ const sendRenewalReceiptEmail = async ({
     to,
     subject: `✅ Payment received — ${estateName} ${planName} renewed`,
     html: `<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:32px 16px;margin:0;">
-<div style="max-width:600px;margin:0 auto;">
-  <div style="text-align:center;margin-bottom:20px;">
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:20px;">
     <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
   </div>
-  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
+  <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
     <div style="background:linear-gradient(135deg,#10B981,#059669);padding:30px 32px;text-align:center;">
       <div style="font-size:40px;line-height:1;margin-bottom:6px;">✅</div>
       <h1 style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.02em;margin:0;">Payment received &middot; ${planName} renewed</h1>
@@ -697,13 +697,13 @@ const sendSubscriptionExpiredEmail = async ({
     to,
     subject: `🚨 Your ${estateName} subscription is paused — action needed`,
     html: `<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:32px 16px;margin:0;">
-<div style="max-width:600px;margin:0 auto;">
-  <div style="text-align:center;margin-bottom:20px;">
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:20px;">
     <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
   </div>
-  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
+  <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
     <div style="background:linear-gradient(135deg,#DC2626,#B91C1C);padding:30px 32px;text-align:center;">
       <div style="font-size:40px;line-height:1;margin-bottom:6px;">🚨</div>
       <h1 style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.02em;margin:0;">Access paused for ${estateName}</h1>
@@ -907,15 +907,15 @@ const sendCompGiftEmail = async ({
       content: pdfBuffer.toString('base64'),
     }] : [],
     html: `<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:32px 16px;margin:0;">
-<div style="max-width:600px;margin:0 auto;">
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;">
 
-  <div style="text-align:center;margin-bottom:20px;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:20px;">
     <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
   </div>
 
-  <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
+  <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
     <div style="background:linear-gradient(135deg,#F59E0B 0%,#D97706 60%,#B45309 100%);padding:36px 32px;text-align:center;">
       <div style="font-size:52px;margin-bottom:6px;line-height:1;">🎁</div>
       <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.85);margin-bottom:8px;">A gift from AreaConnect</div>
@@ -999,17 +999,17 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
     html: `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>*{box-sizing:border-box;margin:0;padding:0;}</style></head>
-<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:24px 20px;margin:0;">
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
 <div style="width:100%;max-width:100%;margin:0 auto;">
 
   <!-- Logo -->
-  <div style="text-align:center;margin-bottom:24px;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:24px;">
     <span style="font-size:26px;font-weight:900;letter-spacing:-0.04em;color:#0F172A;">Area<span style="color:#10B981;">Connect</span></span>
     <div style="font-size:11px;color:#94A3B8;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">Smart Estate Management Platform</div>
   </div>
 
   <!-- Hero card (full-width) -->
-  <div style="background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.12);">
+  <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
 
     <!-- Header gradient -->
     <div style="background:linear-gradient(135deg,#0F172A 0%,#1E3A5F 60%,#10B981 100%);padding:40px 32px;text-align:center;">
@@ -1441,10 +1441,10 @@ const sendWithdrawalReceiptEmail = async ({ to, managerName, estateName, estateC
     to,
     subject: `Withdrawal ${isPending ? 'Initiated' : 'Successful'} — ₦${Number(amount).toLocaleString('en-NG')} | ${estateName}`,
     html: `<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:24px 16px;margin:0;">
-<div style="max-width:600px;margin:0 auto;">
-  <div style="text-align:center;margin-bottom:16px;">
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:16px;">
     <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
   </div>
   <div style="background:${isPending ? '#FEF3C7' : '#D1FAE5'};border:1px solid ${isPending ? '#FDE68A' : '#A7F3D0'};border-radius:10px;padding:14px 20px;font-size:14px;color:${isPending ? '#92400E' : '#065F46'};line-height:1.6;">
@@ -1473,10 +1473,10 @@ const sendWithdrawalRejectedEmail = async ({ to, managerName, estateName, amount
     to,
     subject: `Withdrawal declined — ₦${Number(amount).toLocaleString('en-NG')} | ${estateName}`,
     html: `<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:24px 16px;margin:0;">
-<div style="max-width:600px;margin:0 auto;">
-  <div style="text-align:center;margin-bottom:16px;">
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:16px;">
     <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
   </div>
   <div style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:10px;padding:14px 20px;font-size:14px;color:#991B1B;line-height:1.6;">
@@ -1559,12 +1559,12 @@ const sendCampaignEmail = async ({ to, name, subject, preheader, htmlBody, ctaUr
     subject: finalSubject,
     html: `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${finalSubject}</title></head>
-<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:24px 12px;margin:0;color:#0F172A;">
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#0F172A;margin:0;padding:0;">
 ${preheaderBlock}
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:100%;margin:0;">
   <tr><td align="center" style="padding:8px 0 20px;">${logoBlock}</td></tr>
 
-  <tr><td style="background:#ffffff;border-radius:18px;box-shadow:0 8px 32px rgba(15,23,42,0.08);overflow:hidden;">
+  <tr><td style="background:#ffffff;border-radius:0;box-shadow:none;overflow:hidden;">
     <div style="height:6px;background:linear-gradient(90deg,${primary} 0%,${accent} 100%);"></div>
     <div style="padding:36px 34px 30px;">
       <div style="font-size:15px;color:#0F172A;line-height:1.7;">
@@ -1625,8 +1625,8 @@ const buildAlertEmailHtml = ({ name, estateName, alert, raisedBy, isBroadcast, u
   ].filter(Boolean);
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:24px 12px;background:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
-<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #E2E8F0;">
+<body style="background:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;background:#fff;border-radius:0;overflow:hidden;border:0;">
   <div style="background:${color};padding:22px 24px;color:#fff;">
     <div style="font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;opacity:.85;">
       ${isBroadcast ? 'Emergency broadcast' : 'Emergency alert'} &middot; ${escapeHtml(estateName)}
@@ -1644,7 +1644,7 @@ const buildAlertEmailHtml = ({ name, estateName, alert, raisedBy, isBroadcast, u
     <p style="margin:16px 0 0;font-size:12px;color:#94A3B8;line-height:1.5;">In immediate danger? Call 112 (Nigeria emergency line) first.</p>
   </div>
 </div>
-<p style="text-align:center;font-size:11px;color:#94A3B8;margin:14px 0 0;">AreaConnect &middot; ${escapeHtml(estateName)}</p>
+<p style="text-align:center;font-size:11px;color:#94A3B8;margin:0;padding:14px 16px 20px;">AreaConnect &middot; ${escapeHtml(estateName)}</p>
 </body></html>`;
 };
 
@@ -1703,8 +1703,8 @@ const sendBuzzEmail = async ({ to, toName, fromName, fromPhotoUrl, fromUnit, est
     to,
     subject: `${copy.emoji} ${copy.headline(fromName || 'A neighbour')}`,
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:24px 12px;background:#EEF2FF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
-<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:20px;overflow:hidden;border:1px solid #E0E7FF;">
+<body style="background:#EEF2FF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;background:#fff;border-radius:0;overflow:hidden;border:0;">
   <div style="background:linear-gradient(135deg,#312E81,#4F46E5 60%,#818CF8);height:96px;"></div>
   <div style="margin-top:-52px;text-align:center;padding:0 24px;">
     ${avatar}
@@ -1747,8 +1747,8 @@ const sendCreditReceiptEmail = async ({ to, name, inv, pdf }) => {
     to,
     subject: isGift ? `🎁 ${credits} free call credits from AreaConnect` : `Receipt: ${credits} call credits — ${naira(inv.total)}`,
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:24px 12px;background:#EEF2FF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
-<div style="max-width:540px;margin:0 auto;background:#fff;border-radius:18px;overflow:hidden;border:1px solid #E0E7FF;">
+<body style="background:#EEF2FF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;background:#fff;border-radius:0;overflow:hidden;border:0;">
   <div style="background:linear-gradient(135deg,#312E81,#4F46E5 60%,#818CF8);padding:26px 28px;color:#fff;">
     <div style="font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;opacity:.85;">${isGift ? 'Gift credits' : 'Call credits receipt'} &middot; AreaMates</div>
     <div style="font-size:22px;font-weight:800;line-height:1.3;margin-top:6px;">${escapeHtml(headline)}</div>
@@ -1765,7 +1765,7 @@ const sendCreditReceiptEmail = async ({ to, name, inv, pdf }) => {
     <p style="font-size:12px;color:#94A3B8;line-height:1.5;margin:16px 0 0;">Your ${isGift ? 'gift receipt' : 'invoice'} (${escapeHtml(inv.invoiceNumber)}.pdf) is attached. Credits never expire. Calls to security and estate management are always free.</p>
   </div>
 </div>
-<p style="text-align:center;font-size:11px;color:#94A3B8;margin:14px 0 0;">Powered by Area Connector Technologies &middot; RC 9607864</p>
+<p style="text-align:center;font-size:11px;color:#94A3B8;margin:0;padding:14px 16px 20px;">Powered by Area Connector Technologies &middot; RC 9607864</p>
 </body></html>`,
     attachments: pdf ? [{ filename: `${inv.invoiceNumber}.pdf`, content: pdf.toString('base64') }] : undefined,
   });
