@@ -264,23 +264,33 @@ exports.sendBuzz = async (req, res) => {
     if (!mongoose.isValidObjectId(toUserId) || String(toUserId) === String(req.user._id)) {
       return res.status(400).json({ success: false, message: 'Pick a neighbour to buzz' });
     }
-    const to = await User.findOne({ _id: toUserId, estateId: req.estateId, role: 'resident', isActive: true, isDiscoverable: { $ne: false } })
-      .select('name email').lean();
+    // Residents buzz discoverable neighbours; estate managers can check up on
+    // any resident in their estate.
+    const isManager = ['estate_manager', 'super_admin'].includes(req.user.role);
+    if (!isManager && req.user.role !== 'resident') {
+      return res.status(403).json({ success: false, message: 'Only residents and estate managers can send buzzes' });
+    }
+    const toFilter = { _id: toUserId, estateId: req.estateId, role: 'resident', isActive: true };
+    if (!isManager) toFilter.isDiscoverable = { $ne: false };
+    const to = await User.findOne(toFilter).select('name email').lean();
     if (!to) return res.status(404).json({ success: false, message: 'Neighbour not found' });
 
-    // Friendly, not spammy: one buzz per neighbour every 2 hours, 20 a day.
+    // Friendly, not spammy: one buzz per person every 2 hours; 20 a day for
+    // residents, 100 for managers checking on many households.
     const [lastToThem, today] = await Promise.all([
       Buzz.findOne({ fromId: req.user._id, toId: to._id, createdAt: { $gt: new Date(Date.now() - 2 * 3600_000) } }).select('createdAt').lean(),
       Buzz.countDocuments({ fromId: req.user._id, createdAt: { $gt: new Date(Date.now() - 24 * 3600_000) } }),
     ]);
     if (lastToThem) return res.status(429).json({ success: false, message: `You buzzed ${to.name.split(' ')[0]} recently — give it a little while` });
-    if (today >= 20) return res.status(429).json({ success: false, message: 'Daily buzz limit reached — try again tomorrow' });
+    if (today >= (isManager ? 100 : 20)) return res.status(429).json({ success: false, message: 'Daily buzz limit reached — try again tomorrow' });
 
     const note = typeof message === 'string' ? message.trim().slice(0, 200) : '';
     const buzz = await Buzz.create({ estateId: req.estateId, fromId: req.user._id, toId: to._id, kind, message: note });
 
-    const from = await User.findById(req.user._id).select('name profilePhoto unitId').populate('unitId', 'unitNumber block').lean();
-    const fromProfile = publicProfile({ ...from, role: 'resident' });
+    const from = await User.findById(req.user._id).select('name role profilePhoto unitId').populate('unitId', 'unitNumber block').lean();
+    const fromProfile = publicProfile({ ...from, role: isManager ? 'estate_manager' : 'resident' });
+    // Managers have no unit — show their role instead.
+    if (isManager) fromProfile.unit = 'Estate Manager';
     emitNotification(null, {
       id: `buzz-${buzz._id}`, type: 'neighbour_buzz',
       title: BUZZ_TITLE[kind](from.name.split(' ')[0]),
@@ -292,7 +302,9 @@ exports.sendBuzz = async (req, res) => {
     Estate.findById(req.estateId).select('name').lean().then((estate) => sendBuzzEmail({
       to: to.email, toName: to.name, fromName: from.name, fromPhotoUrl: avatarUrl(from),
       fromUnit: fromProfile.unit, estateName: estate?.name || 'your estate', kind, message: note,
-      appUrl: `${RESIDENTS_URL()}/neighbours?buzzback=${from._id}`,
+      // Residents can buzz a neighbour back; for a manager they call instead.
+      appUrl: isManager ? `${RESIDENTS_URL()}/neighbours` : `${RESIDENTS_URL()}/neighbours?buzzback=${from._id}`,
+      fromIsManager: isManager,
     })).catch((e) => console.error('[buzz email]', e.message));
 
     res.status(201).json({ success: true, message: `Buzzed ${to.name.split(' ')[0]}!`, data: { _id: buzz._id } });

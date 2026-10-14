@@ -1689,7 +1689,7 @@ const BUZZ_COPY = {
   thinking_of_you: { emoji: '💛', headline: (n) => `${n} is thinking of you`, line: 'is thinking of you today.' },
 };
 
-const sendBuzzEmail = async ({ to, toName, fromName, fromPhotoUrl, fromUnit, estateName, kind = 'checkin', message, appUrl }) => {
+const sendBuzzEmail = async ({ to, toName, fromName, fromPhotoUrl, fromUnit, estateName, kind = 'checkin', message, appUrl, fromIsManager = false }) => {
   if (!process.env.RESEND_API_KEY || !to) return { skipped: true };
   const copy = BUZZ_COPY[kind] || BUZZ_COPY.checkin;
   const first = (s) => escapeHtml((s || '').split(' ')[0] || 'there');
@@ -1708,15 +1708,15 @@ const sendBuzzEmail = async ({ to, toName, fromName, fromPhotoUrl, fromUnit, est
   <div style="background:linear-gradient(135deg,#312E81,#4F46E5 60%,#818CF8);height:96px;"></div>
   <div style="margin-top:-52px;text-align:center;padding:0 24px;">
     ${avatar}
-    <div style="font-size:12px;color:#6366F1;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-top:14px;">Neighbour buzz · ${escapeHtml(estateName)}</div>
+    <div style="font-size:12px;color:#6366F1;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-top:14px;">${fromIsManager ? 'Check-in from estate management' : 'Neighbour buzz'} · ${escapeHtml(estateName)}</div>
     <h1 style="font-size:22px;line-height:1.3;color:#0F172A;margin:6px 0 4px;">${copy.emoji} ${escapeHtml(copy.headline(fromName || 'A neighbour'))}</h1>
     <div style="font-size:14px;color:#64748B;">${escapeHtml(fromName || 'Your neighbour')}${fromUnit ? ` &middot; ${escapeHtml(fromUnit)}` : ''}</div>
   </div>
   <div style="padding:22px 28px 28px;">
     <p style="font-size:15px;line-height:1.6;color:#334155;margin:0 0 14px;">Hi ${first(toName)}, ${escapeHtml((fromName || 'your neighbour').split(' ')[0])} ${copy.line}</p>
     ${message ? `<p style="font-size:15px;line-height:1.6;color:#0F172A;background:#F5F3FF;border-left:3px solid #6366F1;padding:12px 14px;border-radius:8px;margin:0 0 18px;">“${escapeHtml(message)}”</p>` : ''}
-    <a href="${appUrl}" style="display:block;text-align:center;background:#4F46E5;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:14px;border-radius:12px;">Buzz back or call ${first(fromName)}</a>
-    <p style="font-size:12px;color:#94A3B8;line-height:1.5;margin:16px 0 0;text-align:center;">You can hide yourself from the neighbours list in AreaMates → Settings → Privacy.</p>
+    <a href="${appUrl}" style="display:block;text-align:center;background:#4F46E5;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:14px;border-radius:12px;">${fromIsManager ? `Call ${first(fromName)} back (free)` : `Buzz back or call ${first(fromName)}`}</a>
+    <p style="font-size:12px;color:#94A3B8;line-height:1.5;margin:16px 0 0;text-align:center;">${fromIsManager ? 'Sent by your estate management via AreaMates.' : 'You can hide yourself from the neighbours list in AreaMates → Settings → Privacy.'}</p>
   </div>
 </div>
 </body></html>`,
