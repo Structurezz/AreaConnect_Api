@@ -60,7 +60,7 @@ exports.getBalance = async (req, res) => {
         { $group: { _id: '$estateId', total: { $sum: '$amount' } } },
       ]),
       Withdrawal.aggregate([
-        { $match: { status: { $in: ['pending', 'success'] } } },
+        { $match: { source: { $ne: 'marketplace' }, status: { $in: ['pending', 'success'] } } },
         { $group: { _id: '$estateId', total: { $sum: '$amount' } } },
       ]),
       Withdrawal.aggregate([
@@ -74,7 +74,9 @@ exports.getBalance = async (req, res) => {
       (sum, p) => sum + Math.max(0, p.total - (withdrawn[String(p._id)] || 0)), 0
     );
     const queued = { total: queuedAgg[0]?.total || 0, count: queuedAgg[0]?.count || 0 };
-    const owed = walletBalances + queued.total;
+    // Marketplace money we hold for sellers: escrow + released-but-not-withdrawn.
+    const sellers = await require('../services/marketplaceAdmin').sellerLiability();
+    const owed = walletBalances + queued.total + sellers.total;
 
     let paystack = null;
     let paystackError = null;
@@ -97,6 +99,7 @@ exports.getBalance = async (req, res) => {
         paystack,
         paystackError,
         walletBalances,
+        sellerWallets: sellers,
         queued,
         owed,
         surplus: paystack ? paystack.balance - owed : null,

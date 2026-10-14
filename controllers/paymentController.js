@@ -747,10 +747,10 @@ exports.getWallet = async (req, res) => {
         { $group: { _id: null, total: { $sum: '$amount' } } },
       ]),
       Withdrawal.aggregate([
-        { $match: { userId: req.user._id, status: { $in: ['pending', 'success'] } } },
+        { $match: { userId: req.user._id, source: { $ne: 'marketplace' }, status: { $in: ['pending', 'success'] } } },
         { $group: { _id: null, total: { $sum: '$amount' } } },
       ]),
-      Withdrawal.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(20),
+      Withdrawal.find({ userId: req.user._id, source: { $ne: 'marketplace' } }).sort({ createdAt: -1 }).limit(20),
     ]);
 
     const collected = paymentsAgg[0]?.total || 0;
@@ -938,7 +938,7 @@ exports.withdrawFromWallet = async (req, res) => {
           { $group: { _id: null, total: { $sum: '$amount' } } },
         ]),
         Withdrawal.aggregate([
-          { $match: { userId: req.user._id, status: { $in: ['pending', 'success'] } } },
+          { $match: { userId: req.user._id, source: { $ne: 'marketplace' }, status: { $in: ['pending', 'success'] } } },
           { $group: { _id: null, total: { $sum: '$amount' } } },
         ]),
       ]);

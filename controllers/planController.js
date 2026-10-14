@@ -493,6 +493,14 @@ exports.paystackWebhook = async (req, res) => {
       return res.status(200).end();
     }
 
+    // Marketplace purchases → escrow (idempotent on the Paystack reference).
+    if (event.event === 'charge.success' && event.data?.metadata?.type === 'marketplace_order') {
+      try {
+        await require('../services/marketplaceEscrow').settleOrder(event.data);
+      } catch (e) { console.error('[webhook marketplace_order]', e.message); }
+      return res.status(200).end();
+    }
+
     // Manager withdrawals — finalise the Withdrawal doc from the transfer outcome
     if (['transfer.success', 'transfer.failed', 'transfer.reversed'].includes(event.event)) {
       try {

@@ -1,6 +1,8 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
 const ctrl = require('../controllers/marketplaceController');
+const orders = require('../controllers/marketplaceOrderController');
+const payments = require('../controllers/paymentController');
 const { authenticate, authorize, scopeToEstate, requireEstate, requireActiveSubscription } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const upload = require('../middleware/upload');
@@ -22,8 +24,23 @@ router.post('/admin/reports/:id/resolve', mgr, ctrl.resolveReport);
 router.get('/admin/sellers', mgr, ctrl.adminSellers);
 router.post('/admin/sellers/:id/suspend', mgr, ctrl.suspendSeller);
 router.post('/admin/sellers/:id/unsuspend', mgr, ctrl.unsuspendSeller);
+router.get('/admin/orders', mgr, orders.adminOrders);
+router.post('/admin/orders/:id/resolve', mgr, orders.resolveDispute);
 router.get('/admin/settings', mgr, ctrl.getSettings);
 router.put('/admin/settings', mgr, ctrl.updateSettings);
+
+// ── Orders (escrow) & seller wallet ──
+router.get('/orders', orders.myOrders);
+router.get('/orders/verify/:reference', orders.verify);
+router.post('/orders/:id/deliver', orders.markDelivered);
+router.post('/orders/:id/confirm', orders.confirmReceived);
+router.post('/orders/:id/cancel', orders.sellerCancel);
+router.post('/orders/:id/dispute', orders.dispute);
+router.get('/wallet', orders.wallet);
+router.get('/wallet/banks', payments.getBanks);
+router.post('/wallet/resolve', payments.resolveAccount);
+router.post('/wallet/bank', payments.saveBankAccount);
+router.post('/wallet/withdraw', orders.withdraw);
 
 // ── Residents ──
 router.get('/rules', ctrl.getRules);
@@ -40,6 +57,7 @@ router.post('/', upload.array('images', 5), [
 ], validate, ctrl.createListing);
 
 router.post('/:id/save', ctrl.toggleSave);
+router.post('/:id/buy', orders.buy);
 router.post('/:id/report', [
   body('reason').isIn(['scam', 'overpriced', 'misleading', 'unsafe', 'not_delivered', 'other']),
 ], validate, ctrl.reportListing);

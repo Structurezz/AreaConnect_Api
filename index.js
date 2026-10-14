@@ -105,6 +105,7 @@ app.use('/api/contact', require('./routes/contact'));
 app.use('/api/court', require('./routes/court'));
 app.use('/api/campaigns', require('./routes/campaigns'));
 app.use('/api/admin/withdrawals', require('./routes/adminWithdrawals'));
+app.use('/api/admin/marketplace', require('./routes/adminMarketplace'));
 app.use('/api/admin/payments',    require('./routes/adminPayments'));
 app.use('/api/admin/credits',     require('./routes/adminCredits'));
 app.use('/api/analytics', require('./routes/analytics'));
@@ -175,6 +176,8 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/estate_ma
       const { startSubscriptionAuditor } = require('./services/subscriptionAuditor');
       startSubscriptionAuditor();
     }
+    // Marketplace escrow: auto-release delivered orders, expire unpaid checkouts.
+    if (process.env.NODE_ENV !== 'test') require('./services/marketplaceEscrow').startEscrowSweeper();
   })
   .catch(err => {
     console.error('❌ MongoDB connection error:', err.message);

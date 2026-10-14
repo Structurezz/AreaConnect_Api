@@ -14,8 +14,12 @@ const withdrawalSchema = new mongoose.Schema({
   accountNumber:        { type: String, default: '' },
   accountName:          { type: String, default: '' },
   failureReason:        { type: String, default: '' },
+  // 'estate' = estate manager's dues wallet · 'marketplace' = a seller's
+  // marketplace earnings. Each wallet only counts its own withdrawals.
+  source:               { type: String, enum: ['estate', 'marketplace'], default: 'estate' },
 }, { timestamps: true });
 
 withdrawalSchema.index({ userId: 1, createdAt: -1 });
+withdrawalSchema.index({ userId: 1, source: 1, status: 1 });
 
 module.exports = mongoose.model('Withdrawal', withdrawalSchema);

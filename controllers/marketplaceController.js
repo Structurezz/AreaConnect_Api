@@ -375,17 +375,22 @@ exports.reviewSeller = async (req, res) => {
 exports.adminStats = async (req, res) => {
   try {
     const e = req.estateId;
-    const [byStatus, openReports, sellers, gmv] = await Promise.all([
+    const MarketplaceOrder = require('../models/MarketplaceOrder');
+    const [byStatus, openReports, sellers, gmv, disputes, orderGmv] = await Promise.all([
       MarketplaceListing.aggregate([{ $match: { estateId: new mongoose.Types.ObjectId(String(e)) } }, { $group: { _id: '$status', n: { $sum: 1 } } }]),
       MarketplaceReport.countDocuments({ estateId: e, status: 'open' }),
       MarketplaceListing.distinct('sellerId', { estateId: e, status: { $in: ['active', 'pending_approval'] } }),
       MarketplaceListing.aggregate([{ $match: { estateId: new mongoose.Types.ObjectId(String(e)), status: 'sold' } }, { $group: { _id: null, v: { $sum: '$price' } } }]),
+      MarketplaceOrder.countDocuments({ estateId: e, status: 'disputed' }),
+      MarketplaceOrder.aggregate([{ $match: { estateId: new mongoose.Types.ObjectId(String(e)), status: { $in: ['completed', 'paid', 'delivered', 'disputed'] } } }, { $group: { _id: null, v: { $sum: '$amount' }, n: { $sum: 1 } } }]),
     ]);
     const s = Object.fromEntries(byStatus.map((r) => [r._id, r.n]));
     return res.json({ success: true, data: {
       active: s.active || 0, pending: s.pending_approval || 0, sold: s.sold || 0,
       rejected: s.rejected || 0, removed: s.removed || 0,
-      openReports, activeSellers: sellers.length, soldValue: gmv[0]?.v || 0,
+      openReports, activeSellers: sellers.length,
+      // Paid through the app (escrow + completed); falls back to listings marked sold.
+      soldValue: orderGmv[0]?.v || gmv[0]?.v || 0, orders: orderGmv[0]?.n || 0, disputes,
     } });
   } catch (err) {
     return fail(res, 500, 'Server error');
