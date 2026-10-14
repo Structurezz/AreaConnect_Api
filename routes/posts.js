@@ -6,6 +6,7 @@ const ctrl     = require('../controllers/postController');
 router.use(authenticate, scopeToEstate, requireActiveSubscription);
 
 router.get('/',                                ctrl.getPosts);
+router.get('/stories',                         ctrl.getStories);
 router.post('/',  upload.array('images', 4),   ctrl.createPost);
 router.delete('/:id',                          ctrl.deletePost);
 router.post('/:id/like',                       ctrl.likePost);

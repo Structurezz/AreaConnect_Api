@@ -13,8 +13,12 @@ const PostSchema = new mongoose.Schema({
   images:   [{ type: String }],
   likes:    [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   comments: [CommentSchema],
+  // 'story' = shown only in the Lounge stories row for 24h, never in the
+  // timeline. 'post' (default, incl. all existing docs) = the timeline.
+  kind:     { type: String, enum: ['post', 'story'], default: 'post' },
 }, { timestamps: true });
 
 PostSchema.index({ estateId: 1, createdAt: -1 });
+PostSchema.index({ estateId: 1, kind: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Post', PostSchema);

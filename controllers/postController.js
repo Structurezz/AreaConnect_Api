@@ -17,13 +17,13 @@ exports.getPosts = async (req, res) => {
     const skip  = (page - 1) * limit;
 
     const [posts, total] = await Promise.all([
-      Post.find({ estateId: req.estateId })
+      Post.find({ estateId: req.estateId, kind: { $ne: 'story' } })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .populate(POPULATE_AUTHOR)
         .populate(POPULATE_COMMENTS),
-      Post.countDocuments({ estateId: req.estateId }),
+      Post.countDocuments({ estateId: req.estateId, kind: { $ne: 'story' } }),
     ]);
 
     return res.json({ success: true, data: posts, total, page, pages: Math.ceil(total / limit) });
@@ -32,10 +32,24 @@ exports.getPosts = async (req, res) => {
   }
 };
 
-// POST /api/posts  (multipart/form-data: content, images[])
+// GET /api/posts/stories — active stories (last 24h), oldest first per author
+exports.getStories = async (req, res) => {
+  try {
+    const stories = await Post.find({ estateId: req.estateId, kind: 'story', createdAt: { $gte: new Date(Date.now() - 24 * 3600_000) } })
+      .sort({ createdAt: 1 })
+      .populate(POPULATE_AUTHOR)
+      .populate(POPULATE_COMMENTS);
+    return res.json({ success: true, data: stories });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// POST /api/posts  (multipart/form-data: content, images[], kind?='post'|'story')
 exports.createPost = async (req, res) => {
   try {
     const { content } = req.body;
+    const kind = req.body.kind === 'story' ? 'story' : 'post';
     const images = (req.files || []).map(f => f.url);
 
     if (!content?.trim() && images.length === 0) {
@@ -47,9 +61,16 @@ exports.createPost = async (req, res) => {
       author:   req.user._id,
       content:  content?.trim() || '',
       images,
+      kind,
     });
 
     await post.populate([POPULATE_AUTHOR, POPULATE_COMMENTS]);
+
+    if (kind === 'story') {
+      // Stories live only in the stories row — no timeline push, no toast.
+      live(req.estateId, 'lounge:story_new', post.toObject());
+      return res.status(201).json({ success: true, data: post });
+    }
 
     live(req.estateId, 'lounge:post_new', post.toObject());
 
