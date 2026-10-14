@@ -10,6 +10,7 @@ const { getIO, emitNotification } = require('../services/socketService');
 const { RATE_PER_MINUTE, CREDIT_PACKS, packById, addCredits, getBalance } = require('../utils/credits');
 const { avatarUrl } = require('../utils/avatarUrl');
 const { sendBuzzEmail } = require('../services/emailService');
+const { emailCreditReceipt, creditReceiptPdf } = require('../services/creditReceiptService');
 
 const PAYSTACK_BASE = 'https://api.paystack.co';
 const paystackHeaders = () => ({ Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`, 'Content-Type': 'application/json' });
@@ -204,6 +205,9 @@ async function settleTopup(tx) {
     description: `Bought ${pack.label}`,
   });
   if (r.added) {
+    // Email the invoice (PDF) — background, once (only the call that
+    // actually applied the credit gets here).
+    CreditTransaction.findOne({ reference: tx.reference }).lean().then((row) => row && emailCreditReceipt(row)).catch(() => {});
     emitNotification(null, {
       id: `credits-${tx.reference}`, type: 'credits_added',
       title: 'Call credits added', body: `${pack.credits} credits added — balance ${r.balance}`,
@@ -213,6 +217,22 @@ async function settleTopup(tx) {
   return { ok: true, ...r, credits: pack.credits };
 }
 exports.settleTopup = settleTopup;
+
+// GET /calls/credits/receipt/:txId — PDF receipt for one of my top-ups or gifts
+exports.creditReceipt = async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.txId)) return res.status(404).json({ success: false, message: 'Receipt not found' });
+    const tx = await CreditTransaction.findOne({ _id: req.params.txId, userId: req.user._id, type: { $in: ['topup', 'grant'] } }).lean();
+    if (!tx) return res.status(404).json({ success: false, message: 'Receipt not found' });
+    const { inv, pdf } = await creditReceiptPdf(tx);
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `attachment; filename="${inv.invoiceNumber}.pdf"`);
+    return res.send(pdf);
+  } catch (e) {
+    console.error('[credits.receipt]', e);
+    return res.status(500).json({ success: false, message: 'Could not generate receipt' });
+  }
+};
 
 exports.verifyTopup = async (req, res) => {
   try {

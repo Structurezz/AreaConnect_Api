@@ -4,6 +4,8 @@ const Estate = require('../models/Estate');
 const CreditGrant = require('../models/CreditGrant');
 const { addCredits } = require('../utils/credits');
 const { emitNotification } = require('../services/socketService');
+const CreditTransaction = require('../models/CreditTransaction');
+const { emailCreditReceiptsInBackground } = require('../services/creditReceiptService');
 
 // AreaConnect admins giving bonus call credits ("airtime") — to any users on
 // the platform, or to every resident of one or more estates.
@@ -79,6 +81,7 @@ exports.grant = async (req, res) => {
     const description = note ? `Bonus from AreaConnect — ${note}` : 'Bonus from AreaConnect';
     let credited = 0;
     let failed = 0;
+    const creditedRefs = [];
     // Batches keep the DB busy but bounded on big estates.
     for (let i = 0; i < recipients.length; i += 50) {
       const batch = recipients.slice(i, i + 50);
@@ -90,6 +93,7 @@ exports.grant = async (req, res) => {
         if (r.status === 'rejected') { failed++; return; }
         if (!r.value.added) return; // already granted by an earlier attempt
         credited++;
+        creditedRefs.push(`GRANT-${requestId}-${batch[j]._id}`);
         emitNotification(null, {
           id: `grant-${grant._id}-${batch[j]._id}`, type: 'credits_added',
           title: `🎁 ${credits} bonus call credits`,
@@ -97,6 +101,14 @@ exports.grant = async (req, res) => {
           meta: { balance: r.value.balance, grantId: String(grant._id) },
         }, batch[j]._id);
       });
+    }
+
+    // Gift receipt emails (with PDF) to everyone credited this time, paced in
+    // the background so a big estate grant returns immediately.
+    if (creditedRefs.length) {
+      CreditTransaction.find({ reference: { $in: creditedRefs } }).select('_id').lean()
+        .then((rows) => emailCreditReceiptsInBackground(rows.map((x) => x._id)))
+        .catch((e) => console.error('[grant receipts]', e.message));
     }
 
     // Retries add whoever the earlier attempt missed.

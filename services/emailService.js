@@ -1724,7 +1724,56 @@ const sendBuzzEmail = async ({ to, toName, fromName, fromPhotoUrl, fromUnit, est
   return { sent: true };
 };
 
+
+// ── Call-credit receipts (purchase or AreaConnect gift) ─────────────────────
+const sendCreditReceiptEmail = async ({ to, name, inv, pdf }) => {
+  if (!process.env.RESEND_API_KEY || !to) return { skipped: true };
+  const { isGift, credits, balanceAfter, note } = inv.meta || {};
+  const first = escapeHtml((name || 'there').split(' ')[0]);
+  const naira = (n) => `₦${Number(n || 0).toLocaleString('en-NG')}`;
+  const value = Math.abs(inv.items[0]?.total || 0);
+  const appUrl = `${process.env.RESIDENTS_URL || 'https://area-mates.areaconnect.pro'}/neighbours`;
+  const headline = isGift ? `🎁 You've received ${credits} free call credits` : `Payment received — ${credits} call credits added`;
+  const rows = [
+    ['Credits', `${credits} (≈ ${credits} min of neighbour calls)`],
+    isGift ? ['Value', `${naira(value)} — on us`] : ['Amount paid', naira(inv.total)],
+    ['New balance', `${balanceAfter ?? '—'} credits`],
+    ['Receipt no.', inv.invoiceNumber],
+    ['Date', new Date(inv.date).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos' })],
+  ];
+
+  await getResend().emails.send({
+    from: FROM(),
+    to,
+    subject: isGift ? `🎁 ${credits} free call credits from AreaConnect` : `Receipt: ${credits} call credits — ${naira(inv.total)}`,
+    html: `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:24px 12px;background:#EEF2FF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
+<div style="max-width:540px;margin:0 auto;background:#fff;border-radius:18px;overflow:hidden;border:1px solid #E0E7FF;">
+  <div style="background:linear-gradient(135deg,#312E81,#4F46E5 60%,#818CF8);padding:26px 28px;color:#fff;">
+    <div style="font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;opacity:.85;">${isGift ? 'Gift credits' : 'Call credits receipt'} &middot; AreaMates</div>
+    <div style="font-size:22px;font-weight:800;line-height:1.3;margin-top:6px;">${escapeHtml(headline)}</div>
+  </div>
+  <div style="padding:24px 28px;">
+    <p style="font-size:15px;color:#334155;line-height:1.6;margin:0 0 16px;">Hi ${first}, ${isGift
+      ? 'AreaConnect has added free call credits to your account. Use them to call your neighbours from AreaMates.'
+      : 'thanks for your purchase. Your call credits are ready to use.'}</p>
+    ${isGift && note ? `<p style="font-size:15px;line-height:1.6;color:#0F172A;background:#F5F3FF;border-left:3px solid #6366F1;padding:12px 14px;border-radius:8px;margin:0 0 16px;">“${escapeHtml(note)}”</p>` : ''}
+    <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:20px;">
+      ${rows.map(([k, v]) => `<tr><td style="padding:7px 0;color:#64748B;width:120px;">${k}</td><td style="padding:7px 0;color:#0F172A;font-weight:600;">${escapeHtml(v)}</td></tr>`).join('')}
+    </table>
+    <a href="${appUrl}" style="display:block;text-align:center;background:#4F46E5;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:14px;border-radius:12px;">Call a neighbour</a>
+    <p style="font-size:12px;color:#94A3B8;line-height:1.5;margin:16px 0 0;">Your ${isGift ? 'gift receipt' : 'invoice'} (${escapeHtml(inv.invoiceNumber)}.pdf) is attached. Credits never expire. Calls to security and estate management are always free.</p>
+  </div>
+</div>
+<p style="text-align:center;font-size:11px;color:#94A3B8;margin:14px 0 0;">Powered by Area Connector Technologies &middot; RC 9607864</p>
+</body></html>`,
+    attachments: pdf ? [{ filename: `${inv.invoiceNumber}.pdf`, content: pdf.toString('base64') }] : undefined,
+  });
+  return { sent: true };
+};
+
 module.exports = {
+  sendCreditReceiptEmail,
   sendBuzzEmail,
   sendEmergencyAlertEmails,
   sendVisitorPass,

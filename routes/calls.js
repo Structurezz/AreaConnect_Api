@@ -29,6 +29,7 @@ router.post('/:id/end',     ctrl.endCall);
 router.get('/credits', ctrl.getCredits);
 router.post('/credits/topup', [body('packId').isString()], validate, ctrl.startTopup);
 router.get('/credits/verify/:reference', ctrl.verifyTopup);
+router.get('/credits/receipt/:txId', ctrl.creditReceipt);
 
 router.get('/buzz', ctrl.getBuzzes);
 router.post('/buzz', [

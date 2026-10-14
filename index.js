@@ -47,6 +47,8 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  // Lets apps read the filename of downloaded files (e.g. credit receipts).
+  exposedHeaders: ['Content-Disposition'],
 }));
 
 // Body parsing
