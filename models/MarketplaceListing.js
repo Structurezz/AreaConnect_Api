@@ -12,11 +12,29 @@ const marketplaceListingSchema = new mongoose.Schema({
     enum: ['food', 'services', 'skills', 'items_for_sale', 'rentals'],
     required: true,
   },
+  // active = live · pending_approval = waiting for estate management ·
+  // rejected / removed = taken down by management (reason in moderation) · sold
   status: {
     type: String,
-    enum: ['active', 'sold', 'pending_approval'],
+    enum: ['active', 'sold', 'pending_approval', 'rejected', 'removed'],
     default: 'active',
   },
+  // Why a listing was held/rejected/removed, and by whom.
+  moderation: {
+    reason: { type: String, default: '' },
+    by:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    at:     { type: Date, default: null },
+  },
+  // Automatic checks that sent it to review (price_outlier, reported, …).
+  flags: [{
+    type:   { type: String, enum: ['price_outlier', 'reported', 'approval_required'] },
+    detail: { type: String, default: '' },
+    at:     { type: Date, default: Date.now },
+    _id: false,
+  }],
+  // Consumer protection: every price the listing has had.
+  priceHistory: [{ price: Number, at: { type: Date, default: Date.now }, _id: false }],
+  reportCount: { type: Number, default: 0 },
   contactPhone: { type: String, default: '' },
   views: { type: Number, default: 0 },
   condition: { type: String, enum: ['new', 'like_new', 'good', 'fair'], default: 'good' },
@@ -25,6 +43,7 @@ const marketplaceListingSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 marketplaceListingSchema.index({ estateId: 1, category: 1, status: 1 });
+marketplaceListingSchema.index({ estateId: 1, sellerId: 1, status: 1 });
 marketplaceListingSchema.index({ title: 'text', description: 'text', tags: 'text' });
 
 module.exports = mongoose.model('MarketplaceListing', marketplaceListingSchema);
