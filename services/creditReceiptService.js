@@ -1,4 +1,5 @@
 const User = require('../models/User');
+require('../models/Unit'); // registered for populate('unitId') — don't rely on load order
 const CreditTransaction = require('../models/CreditTransaction');
 const { generateInvoicePdf } = require('./pdfService');
 const { sendCreditReceiptEmail } = require('./emailService');
@@ -88,8 +89,10 @@ async function emailCreditReceipt(txOrId) {
     if (!user?.email) return;
     const { inv, pdf } = await creditReceiptPdf(tx, user);
     await sendCreditReceiptEmail({ to: user.email, name: user.name, inv, pdf });
+    return true;
   } catch (e) {
     console.error('[credit receipt email]', e.message);
+    return false;
   }
 }
 
