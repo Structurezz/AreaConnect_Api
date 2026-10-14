@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const User = require('../models/User');
+// Lazy: callService requires this module back (for getIO).
+const callService = () => require('./callService');
 let io = null;
 
 // ── In-memory podcast rooms ──────────────────────────────────────────────
@@ -109,6 +111,16 @@ const initSocket = (server) => {
         console.error('[socket join]', e.message);
       }
     });
+
+    // ── 1:1 calls ── signalling only flows between the two devices bound to
+    // a call (see services/callService), never to arbitrary socket ids.
+    // Ack once bound, so a device can wait before answering — otherwise the
+    // caller's offer (sent the moment we answer) could arrive before this
+    // device is registered and be dropped.
+    socket.on('call:bind', ({ callId } = {}, ack) => {
+      callService().bindDevice(socket, callId).catch(() => {}).finally(() => { if (typeof ack === 'function') ack(true); });
+    });
+    socket.on('call:signal', (msg) => { callService().relaySignal(socket, msg).catch(() => {}); });
 
     socket.on('send_message', (data) => {
       if (data.isGroupMessage) {
@@ -415,6 +427,7 @@ const initSocket = (server) => {
     });
 
     socket.on('disconnect', () => {
+      callService().handleDisconnect(socket);
       // Cleanup live-audio room membership (counts are tracked by room size,
       // so leaving via socket.leave on disconnect is implicit — but we still
       // need to broadcast the updated count to the room).

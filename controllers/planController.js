@@ -484,6 +484,15 @@ exports.paystackWebhook = async (req, res) => {
     const event = req.body;
     if (!event || !event.event) return res.status(200).end();
 
+    // Resident call-credit top-ups (idempotent on the Paystack reference).
+    if (event.event === 'charge.success' && event.data?.metadata?.type === 'credit_topup') {
+      try {
+        const { settleTopup } = require('./callController');
+        await settleTopup(event.data);
+      } catch (e) { console.error('[webhook credit_topup]', e.message); }
+      return res.status(200).end();
+    }
+
     // Manager withdrawals — finalise the Withdrawal doc from the transfer outcome
     if (['transfer.success', 'transfer.failed', 'transfer.reversed'].includes(event.event)) {
       try {
