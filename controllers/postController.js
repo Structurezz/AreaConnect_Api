@@ -1,5 +1,9 @@
 const Post = require('../models/Post');
-const { emitNotification } = require('../services/socketService');
+const { emitNotification, getIO } = require('../services/socketService');
+
+// Live Lounge: every change is pushed to the whole estate so feeds update in
+// real time (new posts, likes, comments, deletions).
+const live = (estateId, event, payload) => getIO()?.to(`estate:${estateId}`).emit(event, payload);
 const { deleteGridFSFiles } = require('../utils/gridfs');
 
 const POPULATE_AUTHOR   = { path: 'author',           select: 'name role profilePhoto' };
@@ -47,6 +51,8 @@ exports.createPost = async (req, res) => {
 
     await post.populate([POPULATE_AUTHOR, POPULATE_COMMENTS]);
 
+    live(req.estateId, 'lounge:post_new', post.toObject());
+
     emitNotification(req.estateId, {
       id:    post._id.toString(),
       type:  'new_post',
@@ -79,28 +85,37 @@ exports.deletePost = async (req, res) => {
     // Best-effort cleanup of the underlying GridFS blobs so storage doesn't
     // creep up over time. Failure to delete a file doesn't affect the response.
     deleteGridFSFiles(imageUrls).catch(() => {});
+    live(req.estateId, 'lounge:post_deleted', { postId: String(post._id) });
     return res.json({ success: true });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
-// POST /api/posts/:id/like
+// POST /api/posts/:id/like — toggle. Atomic ($addToSet/$pull) so two people
+// liking at the same moment can't overwrite each other.
 exports.likePost = async (req, res) => {
   try {
-    const post = await Post.findOne({ _id: req.params.id, estateId: req.estateId });
+    const uid = req.user._id;
+    const filter = { _id: req.params.id, estateId: req.estateId };
+    let post = await Post.findOneAndUpdate({ ...filter, likes: { $ne: uid } }, { $addToSet: { likes: uid } }, { new: true }).select('likes author');
+    let liked = true;
+    if (!post) {
+      post = await Post.findOneAndUpdate({ ...filter, likes: uid }, { $pull: { likes: uid } }, { new: true }).select('likes author');
+      liked = false;
+    }
     if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
 
-    const uid = req.user._id.toString();
-    const idx = post.likes.findIndex(l => l.toString() === uid);
-    if (idx > -1) {
-      post.likes.splice(idx, 1);
-    } else {
-      post.likes.push(req.user._id);
+    live(req.estateId, 'lounge:post_like', { postId: String(post._id), likes: post.likes.length, userId: String(uid), liked });
+    // Tell the author (not for their own likes).
+    if (liked && String(post.author) !== String(uid)) {
+      emitNotification(req.estateId, {
+        id: `like-${post._id}-${uid}`, type: 'post_like',
+        title: `${req.user.name.split(' ')[0]} liked your post`, body: 'Tap to see it in the Lounge',
+        meta: { postId: String(post._id) },
+      }, post.author);
     }
-    await post.save();
-
-    return res.json({ success: true, likes: post.likes.length, liked: idx === -1 });
+    return res.json({ success: true, likes: post.likes.length, liked });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
@@ -120,6 +135,14 @@ exports.addComment = async (req, res) => {
     await post.populate(POPULATE_COMMENTS);
 
     const comment = post.comments[post.comments.length - 1];
+    live(req.estateId, 'lounge:post_comment', { postId: String(post._id), comment: comment.toObject(), total: post.comments.length });
+    if (String(post.author) !== String(req.user._id)) {
+      emitNotification(req.estateId, {
+        id: `comment-${comment._id}`, type: 'post_comment',
+        title: `${req.user.name.split(' ')[0]} commented on your post`, body: text.trim().slice(0, 80),
+        meta: { postId: String(post._id) },
+      }, post.author);
+    }
     return res.status(201).json({ success: true, data: comment, total: post.comments.length });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
@@ -143,6 +166,7 @@ exports.deleteComment = async (req, res) => {
 
     comment.deleteOne();
     await post.save();
+    live(req.estateId, 'lounge:comment_deleted', { postId: String(post._id), commentId: req.params.commentId, total: post.comments.length });
     return res.json({ success: true, total: post.comments.length });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
