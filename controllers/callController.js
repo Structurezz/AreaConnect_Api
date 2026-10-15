@@ -156,6 +156,33 @@ const endBy = (ringingStatus, reason) => async (req, res) => {
   res.json({ success: true, data: done });
 };
 exports.declineCall = endBy('declined', 'declined');
+
+// POST /calls/:id/push-decline { token } — the Decline button on a push
+// notification (service worker has no login session, so it carries a
+// short-lived token minted for this call and callee only).
+exports.pushDecline = async (req, res) => {
+  try {
+    const jwt = require('jsonwebtoken');
+    const t = jwt.verify(String(req.body.token || ''), process.env.JWT_SECRET);
+    if (t.purpose !== 'call_decline' || t.callId !== req.params.id) throw new Error('bad token');
+    const call = await Call.findOne({ _id: req.params.id, calleeId: t.userId }).select('_id').lean();
+    if (!call) return res.status(404).json({ success: false });
+    await calls.finalize(call._id, { ringingStatus: 'declined', reason: 'declined', endedBy: t.userId });
+    res.json({ success: true });
+  } catch {
+    res.status(401).json({ success: false, message: 'Invalid or expired' });
+  }
+};
+
+// GET /calls/ringing — a call ringing for me right now (app opened from the
+// notification, or opened mid-ring), shaped like the `call:incoming` event.
+exports.getRinging = async (req, res) => {
+  const call = await Call.findOne({ calleeId: req.user._id, status: 'ringing', createdAt: { $gt: new Date(Date.now() - 60_000) } })
+    .sort({ createdAt: -1 }).lean();
+  if (!call) return res.json({ success: true, data: null });
+  const caller = await User.findById(call.callerId).select('name role profilePhoto unitId').populate('unitId', 'unitNumber block').lean();
+  res.json({ success: true, data: { callId: String(call._id), kind: call.kind, from: publicProfile(caller), iceServers: iceServers() } });
+};
 exports.cancelCall  = endBy('cancelled', 'cancelled');
 exports.endCall     = endBy('cancelled', 'hangup');
 

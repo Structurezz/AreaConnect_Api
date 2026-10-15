@@ -40,11 +40,37 @@ function setTimer(callId, key, ms, fn) {
   timers.set(id, t);
 }
 
+// ── Web Push (rings phones where the app is closed / in the background) ────
+const push = () => require('./pushService');
+const PUSH_REPEAT_MS = [10_000, 20_000, 30_000]; // re-alert while ringing, like a phone
+
+/** Small push payload (photos can be big data URLs, so send a link instead). */
+function pushCallPayload(call, payload) {
+  const { avatarUrl } = require('../utils/avatarUrl');
+  const jwt = require('jsonwebtoken');
+  const from = payload.from || {};
+  return {
+    type: 'call_incoming',
+    callId: String(call._id),
+    kind: payload.kind,
+    from: { name: from.name || 'Someone', unit: from.unit || '', role: from.role || '', photo: avatarUrl(from) },
+    // Lets the notification's Decline button work without the app (no login token in the service worker).
+    declineToken: jwt.sign({ purpose: 'call_decline', callId: String(call._id), userId: String(call.calleeId) }, process.env.JWT_SECRET, { expiresIn: '2m' }),
+    url: `/?incoming=${call._id}`,
+    api: `${(process.env.API_PUBLIC_URL || 'https://areaconnectapi-production.up.railway.app').replace(/\/$/, '')}/api`,
+    sentAt: Date.now(),
+  };
+}
+
 /** Ring the callee; auto-mark missed if nobody answers. */
 function startRinging(call, payload) {
   toUser(call.calleeId, 'call:incoming', payload);
   setTimer(call._id, 'ring', RING_TIMEOUT_MS, () =>
     finalize(call._id, { ringingStatus: 'missed', reason: 'no_answer' }).catch(() => {}));
+  const body = pushCallPayload(call, payload);
+  const send = (repeat) => push().sendToUser(call.calleeId, { ...body, repeat, sentAt: Date.now() }, { ttl: 40, urgency: 'high', topic: `call${call._id}` });
+  send(0);
+  PUSH_REPEAT_MS.forEach((ms, i) => setTimer(call._id, `push${i}`, ms, () => send(i + 1)));
 }
 
 /**
@@ -125,7 +151,32 @@ async function finalize(callId, { ringingStatus = 'cancelled', reason = 'hangup'
   const payload = { callId: String(callId), status, reason, durationSec, creditsCharged };
   toUser(before.callerId, 'call:ended', payload);
   toUser(before.calleeId, 'call:ended', payload);
+  if (before.status === 'ringing') notifyUnanswered(before, status).catch(() => {});
   return { ...before, status, durationSec, creditsCharged };
+}
+
+/**
+ * A ringing call stopped. Clear the ringing notification on the callee's
+ * devices; if they missed it (no answer, or the caller gave up), leave a
+ * "Missed call" notification and tell the open app.
+ */
+async function notifyUnanswered(call, status) {
+  const missed = status === 'missed' || status === 'cancelled';
+  const User = require('../models/User');
+  const caller = missed ? await User.findById(call.callerId).select('name profilePhoto role').lean() : null;
+  const name = caller?.name || 'Someone';
+  push().sendToUser(call.calleeId, {
+    type: 'call_ended', callId: String(call._id), status, missed,
+    from: { name, photo: caller ? require('../utils/avatarUrl').avatarUrl(caller) : null },
+    url: '/?missed=1',
+  }, { ttl: missed ? 24 * 3600 : 60, urgency: 'high', topic: `call${call._id}` });
+  // The open app shows it in-app (toast + notification bell).
+  if (missed) {
+    toUser(call.calleeId, 'call:missed', {
+      callId: String(call._id), at: new Date().toISOString(),
+      from: { _id: String(call.callerId), name, role: caller?.role, profilePhoto: caller?.profilePhoto || '' },
+    });
+  }
 }
 
 // ── Device binding + signalling ─────────────────────────────────────────────

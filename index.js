@@ -106,6 +106,7 @@ app.use('/api/court', require('./routes/court'));
 app.use('/api/campaigns', require('./routes/campaigns'));
 app.use('/api/admin/withdrawals', require('./routes/adminWithdrawals'));
 app.use('/api/admin/marketplace', require('./routes/adminMarketplace'));
+app.use('/api/push', require('./routes/push'));
 app.use('/api/admin/payments',    require('./routes/adminPayments'));
 app.use('/api/admin/credits',     require('./routes/adminCredits'));
 app.use('/api/analytics', require('./routes/analytics'));

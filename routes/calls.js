@@ -14,11 +14,15 @@ router.post('/admin', admin, [body('calleeId').isMongoId()], validate, ctrl.admi
 router.post('/admin/:id/cancel', admin, ctrl.cancelCall);
 router.post('/admin/:id/end', admin, ctrl.endCall);
 
+// Decline from a push notification — authorised by a per-call token, not a login.
+router.post('/:id/push-decline', ctrl.pushDecline);
+
 router.use(authenticate, scopeToEstate, requireEstate, requireActiveSubscription);
 
 router.get('/config', ctrl.getConfig);
 router.get('/directory', ctrl.getDirectory);
 router.get('/history', ctrl.getHistory);
+router.get('/ringing', ctrl.getRinging);
 
 router.post('/', [body('calleeId').isMongoId()], validate, ctrl.startCall);
 router.post('/:id/answer',  ctrl.answerCall);
