@@ -15,12 +15,13 @@ router.get('/:id', authorize('resident', 'estate_manager', 'security', 'super_ad
 router.post('/', authorize('resident', 'estate_manager'), [
   body('visitorName').notEmpty().withMessage('Visitor name required'),
   body('purpose').notEmpty().withMessage('Purpose required'),
-  body('expectedDate').isISO8601().withMessage('Valid date required'),
+  body('expectedDate').if((v, { req }) => !(req.body.instant === true || req.body.instant === 'true')).isISO8601().withMessage('Valid date required'),
 ], validate, ctrl.preRegisterVisitor);
 
 router.patch('/:id/checkin', authorize('security', 'estate_manager'), ctrl.checkIn);
 router.patch('/:id/checkout', authorize('security', 'estate_manager'), ctrl.checkOut);
 router.patch('/:id/blacklist', authorize('estate_manager', 'super_admin'), ctrl.blacklistVisitor);
+router.patch('/:id/cancel', authorize('resident', 'estate_manager', 'super_admin'), ctrl.cancelPass);
 router.post('/:id/approve-early', authorize('resident', 'estate_manager'), ctrl.approveEarlyEntry);
 
 module.exports = router;

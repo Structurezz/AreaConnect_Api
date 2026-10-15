@@ -14,9 +14,13 @@ const visitorSchema = new mongoose.Schema({
   qrCodeUrl: { type: String, default: '' },
   status: {
     type: String,
-    enum: ['pending', 'active', 'checked-in', 'checked-out', 'expired', 'blacklisted'],
+    enum: ['pending', 'active', 'checked-in', 'checked-out', 'expired', 'blacklisted', 'cancelled'],
     default: 'active',
   },
+  // Host (or manager) withdrew the pass before the visitor arrived.
+  cancelledAt: { type: Date },
+  cancelledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  instant: { type: Boolean, default: false }, // valid from the moment it was created
   entryTime: { type: Date },
   exitTime: { type: Date },
   verifiedBySecurityId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

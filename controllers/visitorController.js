@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Visitor = require('../models/Visitor');
 const User = require('../models/User');
 const SecurityLog = require('../models/SecurityLog');
@@ -20,7 +21,10 @@ const makeUniqueCode = async () => {
 
 exports.preRegisterVisitor = async (req, res) => {
   try {
-    const { visitorName, visitorPhone, visitorEmail, purpose, expectedDate, expectedDuration, notes } = req.body;
+    const { visitorName, visitorPhone, visitorEmail, purpose, expectedDuration, notes } = req.body;
+    // Instant pass: the guest is at (or on the way to) the gate — valid from now.
+    const instant = req.body.instant === true || req.body.instant === 'true';
+    const expectedDate = instant ? new Date() : req.body.expectedDate;
     const estateId = req.estateId;
     const resident = req.user;
 
@@ -36,7 +40,9 @@ exports.preRegisterVisitor = async (req, res) => {
       visitorEmail,
       purpose,
       expectedDate: new Date(expectedDate),
-      expectedDuration: expectedDuration || 60,
+      expectedDuration: expectedDuration || (instant ? 120 : 60),
+      instant,
+      earlyEntryApproved: instant || undefined,
       visitorCode,
       qrCodeUrl,
       notes,
@@ -86,21 +92,27 @@ exports.getVisitors = async (req, res) => {
   try {
     const estateId = req.estateId;
     const { status, date, unit, page = 1, limit = 20 } = req.query;
+    const search = String(req.query.search || req.query.q || '').trim().slice(0, 60);
+    const oid = (v) => new mongoose.Types.ObjectId(String(v));
 
-    const filter = { estateId };
-    if (status) filter.status = status;
-    if (unit) filter.hostUnitId = unit;
+    // Base = everything this user may see (+ search); status narrows the list
+    // but not the per-status counts, so filter chips can show their totals.
+    const base = { estateId: oid(estateId) };
+    if (unit && mongoose.isValidObjectId(unit)) base.hostUnitId = oid(unit);
     if (date) {
       const d = new Date(date);
       const next = new Date(d);
       next.setDate(next.getDate() + 1);
-      filter.expectedDate = { $gte: d, $lt: next };
+      base.expectedDate = { $gte: d, $lt: next };
     }
-
     // Residents see only their own visitors
-    if (req.user.role === 'resident') {
-      filter.hostResidentId = req.user._id;
+    if (req.user.role === 'resident') base.hostResidentId = oid(req.user._id);
+    if (search) {
+      const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      base.$or = [{ visitorName: re }, { visitorPhone: re }, { visitorCode: re }, { purpose: re }];
     }
+    const filter = { ...base };
+    if (status) filter.status = status;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const [visitors, total] = await Promise.all([
@@ -113,10 +125,20 @@ exports.getVisitors = async (req, res) => {
         .limit(parseInt(limit)),
       Visitor.countDocuments(filter),
     ]);
+    const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
+    const [byStatus, today] = await Promise.all([
+      Visitor.aggregate([{ $match: base }, { $group: { _id: '$status', n: { $sum: 1 } } }]),
+      Visitor.countDocuments({ ...base, expectedDate: { $gte: dayStart, $lt: dayEnd } }),
+    ]);
+    const counts = Object.fromEntries(byStatus.map((r) => [r._id, r.n]));
+    counts.all = byStatus.reduce((t, r) => t + r.n, 0);
+    counts.today = today;
 
     return res.json({
       success: true,
       data: visitors,
+      counts,
       pagination: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / limit) },
     });
   } catch (err) {
@@ -146,6 +168,10 @@ exports.verifyVisitorCode = async (req, res) => {
 
     if (visitor.status === 'checked-out') {
       return res.status(409).json({ success: false, message: 'Visitor already checked out', data: visitor });
+    }
+
+    if (visitor.status === 'cancelled') {
+      return res.status(410).json({ success: false, code: 'PASS_CANCELLED', message: 'This pass was cancelled by the host', data: visitor });
     }
 
     // Detect early arrival (> 30 min before expectedDate, not yet checked in).
@@ -180,6 +206,28 @@ exports.verifyVisitorCode = async (req, res) => {
     }
 
     return res.json({ success: true, data: visitor });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// PATCH /visitors/:id/cancel — the host (or estate manager) withdraws a pass
+// that hasn't been used yet. The gate will refuse the code from then on.
+exports.cancelPass = async (req, res) => {
+  try {
+    const visitor = await Visitor.findOne({ _id: req.params.id, estateId: req.estateId });
+    if (!visitor) return res.status(404).json({ success: false, message: 'Visitor not found' });
+    const isHost = String(visitor.hostResidentId) === String(req.user._id);
+    const isManager = ['estate_manager', 'super_admin'].includes(req.user.role);
+    if (!isHost && !isManager) return res.status(403).json({ success: false, message: 'Only the host can cancel this pass' });
+    if (visitor.status === 'checked-in') return res.status(409).json({ success: false, message: 'Your visitor is already inside. Ask security to check them out instead.' });
+    if (!['active', 'pending'].includes(visitor.status)) return res.status(409).json({ success: false, message: `This pass is already ${visitor.status.replace('-', ' ')}` });
+    visitor.status = 'cancelled';
+    visitor.cancelledAt = new Date();
+    visitor.cancelledBy = req.user._id;
+    await visitor.save();
+    emitVisitorUpdate(visitor.estateId.toString(), visitor);
+    return res.json({ success: true, message: 'Pass cancelled', data: visitor });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
@@ -227,6 +275,10 @@ exports.checkIn = async (req, res) => {
     if (!visitor) return res.status(404).json({ success: false, message: 'Visitor not found' });
     if (visitor.status === 'checked-in') {
       return res.status(409).json({ success: false, message: 'Already checked in' });
+    }
+    if (['cancelled', 'blacklisted', 'checked-out'].includes(visitor.status)) {
+      const msg = { cancelled: 'This pass was cancelled by the host', blacklisted: 'This visitor is blacklisted', 'checked-out': 'This pass was already used' }[visitor.status];
+      return res.status(409).json({ success: false, code: `PASS_${visitor.status.toUpperCase().replace('-', '_')}`, message: msg });
     }
 
     const now = new Date();
