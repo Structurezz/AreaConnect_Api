@@ -103,6 +103,7 @@ app.use('/api/guards', require('./routes/guards'));
 app.use('/api/pitch',  require('./routes/pitch'));
 app.use('/api/contact', require('./routes/contact'));
 app.use('/api/demo', require('./routes/demo'));
+app.use('/api/blog', require('./routes/blog'));
 app.use('/api/court', require('./routes/court'));
 app.use('/api/campaigns', require('./routes/campaigns'));
 app.use('/api/admin/withdrawals', require('./routes/adminWithdrawals'));
@@ -180,6 +181,9 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/estate_ma
     }
     // Marketplace escrow: auto-release delivered orders, expire unpaid checkouts.
     if (process.env.NODE_ENV !== 'test') require('./services/marketplaceEscrow').startEscrowSweeper();
+    // Landing-site blog: Gemini writes and publishes one article a day.
+    // Opt-out with BLOG_AUTOPUBLISH=off.
+    if (process.env.NODE_ENV !== 'test') require('./services/blogWriter').startBlogWriter();
   })
   .catch(err => {
     console.error('❌ MongoDB connection error:', err.message);
