@@ -20,7 +20,7 @@ router.post('/', async (req, res) => {
   try {
     await getResend().emails.send({
       from: FROM(),
-      to: 'hello@areaconnect.pro',
+      to: 'michael@areaconnect.pro',
       replyTo: email,
       subject: `[Contact] ${subject} — ${name}`,
       html: `
