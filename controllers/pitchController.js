@@ -1,6 +1,7 @@
 const Prospect = require('../models/Prospect');
 const { sendPitchEmail } = require('../services/emailService');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { ZONES, STATES, LEAD_TYPES, ROLES, stateForCity, findState } = require('../utils/nigeriaLeadSearch');
 
 // ── Seed data ──────────────────────────────────────────────────────────────────
 const SEED_PROSPECTS = [
@@ -124,22 +125,27 @@ exports.seedProspects = async (req, res) => {
 
 exports.getProspects = async (req, res) => {
   try {
-    // Auto-seed if empty
-    const count = await Prospect.countDocuments();
-    if (count === 0) {
-      await Prospect.insertMany(SEED_PROSPECTS);
-    }
-
-    const { status, type, search, page = 1, limit = 200 } = req.query;
+    const { status, type, state, search, page = 1, limit = 200 } = req.query;
     const filter = {};
     if (status) filter.status = status;
     if (type)   filter.type   = type;
+    const st = findState(state);
+    if (st) {
+      // Older prospects have no state field — match them by city instead
+      const names = [st.name, ...st.cities, ...(st.name === 'FCT' ? ['Abuja'] : [])];
+      const esc = n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.$and = [{ $or: [
+        { state: st.name },
+        { state: { $in: ['', null] }, city: { $in: names.map(n => new RegExp(`^${esc(n)}$`, 'i')) } },
+      ] }];
+    }
     if (search) {
       filter.$or = [
         { name:    { $regex: search, $options: 'i' } },
         { company: { $regex: search, $options: 'i' } },
         { email:   { $regex: search, $options: 'i' } },
         { city:    { $regex: search, $options: 'i' } },
+        { state:   { $regex: search, $options: 'i' } },
       ];
     }
 
@@ -226,14 +232,72 @@ exports.sendPitchEmails = async (req, res) => {
   }
 };
 
+// State name → number of prospects already in that state (falls back to city mapping)
+const getStateCoverage = async () => {
+  const rows = await Prospect.find({}, 'city state').lean();
+  const coverage = Object.fromEntries(STATES.map(s => [s.name, 0]));
+  for (const r of rows) {
+    const st = r.state || stateForCity(r.city);
+    if (st && coverage[st] !== undefined) coverage[st]++;
+  }
+  return coverage;
+};
+
+// Least-covered states first, random tie-break, so repeated runs spread across Nigeria
+const pickStates = (pool, coverage, n) =>
+  [...pool]
+    .map(s => ({ s, k: (coverage[s.name] || 0) + Math.random() }))
+    .sort((a, b) => a.k - b.k)
+    .slice(0, n)
+    .map(x => x.s);
+
+exports.getSearchOptions = async (req, res) => {
+  try {
+    const coverage = await getStateCoverage();
+    return res.json({
+      success: true,
+      data: {
+        zones: ZONES,
+        states: STATES.map(s => ({ ...s, count: coverage[s.name] || 0 })),
+        types: Object.fromEntries(Object.entries(LEAD_TYPES).map(([k, v]) => [k, v.label])),
+        roles: ROLES,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
 exports.generateProspects = async (req, res) => {
   try {
     if (!process.env.GEMINI_API_KEY) {
       return res.status(503).json({ success: false, message: 'Gemini API key not configured' });
     }
 
-    const { count = 25 } = req.body;
+    const {
+      count = 25,
+      states = [],          // state names; empty = nationwide
+      zones = [],           // zone keys; narrows the nationwide pool
+      types = [],           // LEAD_TYPES keys; empty = all
+      roles = [],           // decision-maker titles; empty = defaults
+      keywords = '',        // free-text extra terms, e.g. "Lekki Phase 1", "serviced apartments"
+      statesPerRun = 3,
+    } = req.body;
     const batchSize = Math.min(Math.max(Number(count) || 25, 5), 50);
+    const perRun    = Math.min(Math.max(Number(statesPerRun) || 3, 1), 5);
+
+    let pool = states.map(findState).filter(Boolean);
+    if (pool.length === 0) {
+      pool = zones.length ? STATES.filter(s => zones.includes(s.zone)) : STATES;
+    }
+
+    const coverage = await getStateCoverage();
+    const targets  = pickStates(pool, coverage, perRun);
+
+    const typeKeys   = (types.length ? types : Object.keys(LEAD_TYPES)).filter(t => LEAD_TYPES[t]);
+    const roleList   = roles.length ? roles : ['CEO', 'Managing Director', 'Founder', 'Director', 'Estate Manager'];
+    const perState   = Math.ceil(batchSize / targets.length);
+    const extraTerms = String(keywords).trim().slice(0, 200);
 
     const existingEmails    = await Prospect.distinct('email');
     const existingCompanies = await Prospect.distinct('company');
@@ -246,35 +310,37 @@ exports.generateProspects = async (req, res) => {
       tools: [{ googleSearch: {} }],
     });
 
-    const searchQueries = [
-      'CEO MD founder Nigerian real estate developer company email address Lagos Abuja contact',
-      'managing director Nigerian property development company personal email contact Lagos Port Harcourt',
-      'CEO founder Nigerian gated estate company email LinkedIn contact Abuja Enugu Ibadan',
-      'Nigerian real estate investment firm CEO director personal email contact details',
-      'property management company CEO MD Nigeria personal email Kano Kaduna Benin City',
-      'Nigerian estate developer chairman CEO email address contact Lekki Victoria Island Ikoyi',
-      'real estate company founder CEO Nigeria email address Calabar Owerri Asaba Uyo',
-    ];
-    const chosenQuery = searchQueries[Math.floor(Math.random() * searchQueries.length)];
+    const targetLines = targets.map(s =>
+      `- ${s.name} State (${ZONES[s.zone]}): around ${perState} leads — focus on ${s.cities.join(', ')}`
+    ).join('\n');
 
-    const prompt = `Search the web for real decision-makers at Nigerian real estate and property companies. Use this search: "${chosenQuery}"
+    const searchIdeas = targets.flatMap(s => typeKeys.slice(0, 3).map(t =>
+      `"${LEAD_TYPES[t].search} ${s.cities[0]} ${s.name} Nigeria ${roleList[0]} email${extraTerms ? ' ' + extraTerms : ''}"`
+    )).slice(0, 8).join('\n');
 
-Find CEOs, MDs, Founders, Directors at Nigerian property/estate companies. Look at:
-- Company websites (About Us, Team, Leadership pages)
-- LinkedIn profiles
-- Press releases, news interviews
-- Property business directories
+    const prompt = `Search the web for real decision-makers at Nigerian real estate and property organisations who would benefit from estate management software (resident management, visitor access, levy/dues collection, security).
 
-Do NOT include these companies: ${existingCompanies.slice(0, 20).join(', ')}.
+TARGET LOCATIONS — spread results across these states, do not return leads from elsewhere:
+${targetLines}
+
+ORGANISATION TYPES: ${typeKeys.map(t => LEAD_TYPES[t].search).join('; ')}
+DECISION-MAKER ROLES: ${roleList.join(', ')}
+${extraTerms ? `EXTRA FOCUS: ${extraTerms}\n` : ''}
+Suggested searches:
+${searchIdeas}
+
+Look at company websites (About / Team / Leadership / Contact pages), LinkedIn, press releases and news interviews, property directories (e.g. Nigeria Property Centre, PropertyPro, REDAN members), and state housing corporation pages.
+
+Do NOT include these companies: ${existingCompanies.slice(-40).join(', ')}.
 
 YOU MUST RESPOND WITH ONLY A RAW JSON ARRAY. NO TEXT BEFORE OR AFTER. NO MARKDOWN. NO EXPLANATION. NO CODE FENCES.
 
 Start your response with [ and end with ]. Nothing else.
 
 Each element:
-{"name":"full name","title":"CEO/MD/Founder/Director etc","company":"company name","email":"direct personal email preferred over info@","phone":"phone or empty","city":"city","type":"developer|estate_manager|property_company|investment_firm|government","website":"https://...","source":"url where found"}
+{"name":"full name","title":"role","company":"company name","email":"direct personal email preferred over info@","phone":"phone or empty","city":"city","state":"one of: ${targets.map(s => s.name).join(', ')}","type":"${typeKeys.join('|')}","website":"https://...","source":"url where found"}
 
-Prefer direct emails like firstname@company.com over info@ or contact@. If only info@ exists, use it. Include ${batchSize} entries.`;
+Only include entries with a real, publicly listed email. Never invent emails. Prefer direct emails like firstname@company.com over info@ or contact@. If only info@ exists, use it. Include up to ${batchSize} entries.`;
 
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
@@ -287,7 +353,7 @@ Prefer direct emails like firstname@company.com over info@ or contact@. If only 
       generated = JSON.parse(jsonText);
     } catch (parseErr) {
       // Try to find JSON array anywhere in the response
-      const match = text.match(/\[[\s\S]*?\]/);
+      const match = text.match(/\[[\s\S]*\]/);
       if (match) {
         try { generated = JSON.parse(match[0]); } catch { generated = null; }
       }
@@ -308,33 +374,40 @@ Prefer direct emails like firstname@company.com over info@ or contact@. If only 
       return res.status(500).json({ success: false, message: 'AI returned unexpected format. Try again.' });
     }
 
-    const VALID_TYPES = ['developer','estate_manager','property_company','investment_firm','government'];
+    const VALID_TYPES = Prospect.schema.path('type').enumValues;
+    const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const seen        = new Set(existingEmails.map(e => e.toLowerCase()));
 
-    const newProspects = generated.filter(p =>
-      p.email && p.name && p.company &&
-      !existingEmails.includes(p.email.toLowerCase())
-    ).map(p => ({
-      name:    p.name,
-      title:   p.title   || '',
-      company: p.company,
-      email:   p.email.toLowerCase().trim(),
-      phone:   p.phone   || '',
-      city:    p.city    || '',
-      website: p.website || '',
-      type:    VALID_TYPES.includes(p.type) ? p.type : 'estate_manager',
-      notes:   p.source ? `Source: ${p.source}` : '',
-      status:  'new',
-    }));
+    const newProspects = [];
+    for (const p of generated) {
+      const email = String(p.email || '').toLowerCase().trim();
+      if (!p.name || !p.company || !EMAIL_RE.test(email) || seen.has(email)) continue;
+      seen.add(email);
+      newProspects.push({
+        name:    p.name,
+        title:   p.title   || '',
+        company: p.company,
+        email,
+        phone:   p.phone   || '',
+        city:    p.city    || '',
+        state:   findState(p.state)?.name || stateForCity(p.city) || '',
+        website: p.website || '',
+        type:    VALID_TYPES.includes(p.type) ? p.type : 'estate_manager',
+        notes:   p.source ? `Source: ${p.source}` : '',
+        status:  'new',
+      });
+    }
 
+    const searched = targets.map(s => s.name);
     if (newProspects.length === 0) {
-      return res.json({ success: true, added: 0, message: 'No new unique prospects found. Try again for a different batch.' });
+      return res.json({ success: true, added: 0, searched, message: 'No new unique prospects found. Try again for a different batch.' });
     }
 
     await Prospect.insertMany(newProspects, { ordered: false });
     const newTotal = await Prospect.countDocuments();
 
-    console.log(`[generateProspects] Added ${newProspects.length} real prospects. Total: ${newTotal}`);
-    return res.json({ success: true, added: newProspects.length, total: newTotal, data: newProspects });
+    console.log(`[generateProspects] Added ${newProspects.length} prospects from ${searched.join(', ')}. Total: ${newTotal}`);
+    return res.json({ success: true, added: newProspects.length, total: newTotal, searched, data: newProspects });
   } catch (err) {
     console.error('[generateProspects]', err.message);
     return res.status(500).json({ success: false, message: err.message || 'Generation failed' });

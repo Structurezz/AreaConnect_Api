@@ -6,6 +6,7 @@ const admin = [authenticate, authorize('super_admin')];
 
 router.get('/prospects',          ...admin, ctrl.getProspects);
 router.get('/prospects/stats',    ...admin, ctrl.getProspectStats);
+router.get('/prospects/search-options', ...admin, ctrl.getSearchOptions);
 router.patch('/prospects/:id',    ...admin, ctrl.updateProspect);
 router.delete('/prospects/:id',   ...admin, ctrl.deleteProspect);
 router.post('/prospects/seed',     ...admin, ctrl.seedProspects);

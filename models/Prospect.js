@@ -7,9 +7,10 @@ const prospectSchema = new mongoose.Schema({
   email:   { type: String, required: true },
   phone:   { type: String, default: '' },
   city:    { type: String, default: '' },
+  state:   { type: String, default: '' },
   type: {
     type: String,
-    enum: ['developer', 'estate_manager', 'property_company', 'investment_firm', 'government'],
+    enum: ['developer', 'estate_manager', 'property_company', 'investment_firm', 'government', 'residents_assoc'],
     default: 'estate_manager',
   },
   status: {
