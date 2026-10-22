@@ -1045,7 +1045,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
     ['📣', 'Keeping residents informed', 'Notices nobody reads'],
     ['🛡️', 'Security response',         'Getting help fast when something happens'],
   ].map(([icon, label, hint]) => `
-        <tr><td style="padding:0 0 8px;">
+        <td class="stack" width="50%" valign="top" style="padding:0 4px 8px;">
           <a href="${reply(`Re: ${label}${about}`, `Hi Michael,\n\nThe one that costs us the most time is: ${label}.\n\n`)}"
              style="display:block;text-decoration:none;background:#FFFFFF;border:1px solid ${C.line};border-radius:12px;padding:13px 14px;">
             <table width="100%" cellpadding="0" cellspacing="0"><tr>
@@ -1054,17 +1054,18 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
                 <div style="font-size:15px;font-weight:600;color:${C.ink};">${label}</div>
                 <div style="font-size:13px;color:${C.muted};margin-top:1px;">${hint}</div>
               </td>
-              <td width="64" style="vertical-align:middle;text-align:right;font-size:12px;font-weight:600;color:${C.greenDark};white-space:nowrap;">Tap &rsaquo;</td>
+              <td width="44" style="vertical-align:middle;text-align:right;font-size:12px;font-weight:600;color:${C.greenDark};white-space:nowrap;">Tap &rsaquo;</td>
             </tr></table>
           </a>
-        </td></tr>`).join('');
+        </td>`);
+  const painGrid = `<tr>${pains[0]}${pains[1]}</tr><tr>${pains[2]}${pains[3]}</tr>`;
 
   const apps = [
     ['Estate Manager', C.green,  'Residents, dues, payouts and reports in one dashboard.'],
     ['AreaMates',      C.indigo, 'Residents invite guests, pay dues and get notices.'],
     ['Guard',          '#F59E0B','Verify a visitor’s code at the gate in seconds.'],
   ].map(([t, color, d]) => `
-          <td width="33%" valign="top" style="padding:0 10px 0 0;">
+          <td class="stack" width="33%" valign="top" style="padding:0 20px 18px 0;">
             <div style="height:3px;width:28px;border-radius:2px;background:${color};margin-bottom:10px;"></div>
             <div style="font-size:14px;font-weight:700;color:${C.ink};">${t}</div>
             <div style="font-size:13px;line-height:1.5;color:${C.body};margin-top:3px;">${d}</div>
@@ -1079,10 +1080,18 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
     html: `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light">
-<title>AreaConnect</title></head>
+<title>AreaConnect</title>
+<style>
+  @media only screen and (max-width:640px) {
+    .stack { display:block !important; width:100% !important; padding-left:0 !important; padding-right:0 !important; }
+    .phone-col { padding:28px 0 0 !important; }
+    .hero-h1 { font-size:26px !important; }
+  }
+</style></head>
 <body style="margin:0;padding:0;background:#FFFFFF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;color:${C.ink};">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Visitor passes, dues and notices — quietly handled. One question inside, one tap to answer.</div>
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#FFFFFF;"><tr><td align="left" style="padding:28px 24px 36px;text-align:left;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#FFFFFF;"><tr><td align="left" style="padding:28px 32px 36px;text-align:left;">
+<table width="100%" cellpadding="0" cellspacing="0" style="width:100%;"><tr><td align="left">
 
   <!-- Logo -->
   <table cellpadding="0" cellspacing="0" style="margin:0 0 32px;"><tr>
@@ -1090,38 +1099,43 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
     <td style="vertical-align:middle;font-size:18px;font-weight:800;letter-spacing:-0.02em;color:${C.ink};">Area<span style="color:${C.green};">Connect</span></td>
   </tr></table>
 
-  <!-- Intro -->
-  <div style="font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${C.green};margin:0 0 10px;">For ${org}</div>
-  <h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;font-weight:800;letter-spacing:-0.03em;color:${C.ink};">
-    Your whole estate,<br>quietly taken care of.
-  </h1>
-  <p style="margin:0 0 14px;font-size:16px;line-height:1.7;color:${C.body};">Hi ${firstName},</p>
-  <p style="margin:0 0 28px;font-size:16px;line-height:1.7;color:${C.body};">
-    I’m Michael, founder of AreaConnect. We help estates like ${org}${where} run the gate, dues and resident
-    updates from one place &mdash; so evenings are a little calmer for everyone. Here’s what it looks like on a resident’s phone:
-  </p>
+  <!-- Hero: story on the left, live phone beside it -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 38px;"><tr>
+    <td class="stack" valign="top" style="padding:0 32px 0 0;">
+      <div style="font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${C.green};margin:0 0 10px;">For ${org}</div>
+      <h1 class="hero-h1" style="margin:0 0 16px;font-size:32px;line-height:1.15;font-weight:800;letter-spacing:-0.03em;color:${C.ink};">
+        Your whole estate,<br>quietly taken care of.
+      </h1>
+      <p style="margin:0 0 14px;font-size:16px;line-height:1.7;color:${C.body};">Hi ${firstName},</p>
+      <p style="margin:0 0 28px;font-size:16px;line-height:1.7;color:${C.body};">
+        I’m Michael, founder of AreaConnect. We help estates like ${org}${where} run the gate, dues and resident
+        updates from one place &mdash; so evenings are a little calmer for everyone.
+      </p>
 
-  <!-- Animated phone (recorded from areaconnect.pro) -->
-  <a href="https://areaconnect.pro" style="display:inline-block;text-decoration:none;">
-    <img src="cid:ac-phone" width="300" alt="AreaMates app: visitor passes updating live as guests arrive" style="display:block;border:0;width:300px;max-width:100%;height:auto;">
-  </a>
-
-  <!-- An evening, step by step -->
-  <h2 style="margin:32px 0 16px;font-size:19px;font-weight:700;letter-spacing:-0.01em;color:${C.ink};">An ordinary evening, handled</h2>
-  <table cellpadding="0" cellspacing="0" style="margin:0 0 34px;max-width:560px;">${timeline}
-  </table>
+      <!-- An evening, step by step (mirrors the phone) -->
+      <h2 style="margin:0 0 16px;font-size:19px;font-weight:700;letter-spacing:-0.01em;color:${C.ink};">An ordinary evening, handled</h2>
+      <table cellpadding="0" cellspacing="0">${timeline}
+      </table>
+    </td>
+    <td class="stack phone-col" width="320" valign="top" style="width:320px;padding:0;">
+      <a href="https://areaconnect.pro" style="display:inline-block;text-decoration:none;">
+        <img src="cid:ac-phone" width="320" alt="AreaMates app: visitor passes updating live as guests arrive" style="display:block;border:0;width:320px;max-width:100%;height:auto;">
+      </a>
+      <div style="font-size:12px;color:${C.muted};margin-top:6px;">Live on a resident’s phone &middot; AreaMates</div>
+    </td>
+  </tr></table>
 
   <!-- Interactive question -->
-  <div style="background:${C.soft};border:1px solid ${C.line};border-radius:16px;padding:20px 16px 12px;margin:0 0 34px;max-width:560px;">
-    <div style="font-size:18px;font-weight:700;letter-spacing:-0.01em;color:${C.ink};">What takes up most of your week?</div>
-    <div style="font-size:13px;color:${C.muted};margin:4px 0 14px;">Tap one &mdash; it opens a ready-made reply. I read every one myself.</div>
-    <table width="100%" cellpadding="0" cellspacing="0">${pains}
+  <div style="background:${C.soft};border:1px solid ${C.line};border-radius:16px;padding:22px 18px 12px;margin:0 0 38px;">
+    <div style="font-size:18px;font-weight:700;letter-spacing:-0.01em;color:${C.ink};margin:0 4px;">What takes up most of your week?</div>
+    <div style="font-size:13px;color:${C.muted};margin:4px 4px 14px;">Tap one &mdash; it opens a ready-made reply. I read every one myself.</div>
+    <table width="100%" cellpadding="0" cellspacing="0">${painGrid}
     </table>
   </div>
 
   <!-- Three apps -->
   <h2 style="margin:0 0 16px;font-size:19px;font-weight:700;letter-spacing:-0.01em;color:${C.ink};">Three apps, one estate</h2>
-  <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 34px;max-width:620px;"><tr>${apps}
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 38px;"><tr>${apps}
   </tr></table>
 
   <!-- Offer + CTAs -->
@@ -1140,7 +1154,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
   </tr></table>
 
   <!-- Sign-off -->
-  <table cellpadding="0" cellspacing="0" style="border-top:1px solid ${C.line};padding-top:22px;max-width:560px;width:100%;"><tr>
+  <table cellpadding="0" cellspacing="0" style="border-top:1px solid ${C.line};padding-top:22px;width:100%;"><tr>
     <td width="68" valign="top" style="padding-top:22px;"><img src="cid:ac-michael" width="56" height="56" alt="Michael Orizu" style="display:block;border:0;border-radius:50%;"></td>
     <td valign="top" style="padding-top:22px;">
       <div style="font-size:15px;line-height:1.6;color:${C.body};">No pressure either way &mdash; thanks for reading.</div>
@@ -1156,6 +1170,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
     Area Connector Technologies &middot; RC 9607864 &middot; Lagos, Nigeria
   </p>
 
+</td></tr></table>
 </td></tr></table>
 </body></html>`,
   });
