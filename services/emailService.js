@@ -1,7 +1,11 @@
 const { Resend } = require('resend');
 const { generateInvoicePdf } = require('./pdfService');
 
+const { brandMark, withLogo } = require('./emailBrand');
+
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
+// Every single send goes through here so the logo attachment is never missed
+const sendEmail = (payload) => getResend().emails.send(withLogo(payload));
 const FROM      = () => process.env.RESEND_FROM || 'Orizu <noreply@areaconnect.pro>';
 
 // ── Visitor pass ─────────────────────────────────────────────────────────────
@@ -12,7 +16,7 @@ const sendVisitorPass = async ({ to, visitorName, hostName, code, expectedDate, 
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
 
-  await getResend().emails.send({
+  await sendEmail({
     from: FROM(),
     to,
     subject: `Your Visitor Pass — ${estateName}`,
@@ -25,7 +29,7 @@ const sendVisitorPass = async ({ to, visitorName, hostName, code, expectedDate, 
 
   <!-- Logo bar -->
   <div style="text-align:center;padding:20px 16px 0;margin-bottom:24px;">
-    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+    ${brandMark()}
   </div>
 
   <!-- Card -->
@@ -69,7 +73,7 @@ const sendVisitorPass = async ({ to, visitorName, hostName, code, expectedDate, 
 const sendInviteEmail = async ({ to, name, estateName, loginUrl, tempPassword }) => {
   if (!process.env.RESEND_API_KEY) return { skipped: true };
 
-  await getResend().emails.send({
+  await sendEmail({
     from: FROM(),
     to,
     subject: `You're invited to ${estateName} — your login details`,
@@ -82,7 +86,7 @@ const sendInviteEmail = async ({ to, name, estateName, loginUrl, tempPassword })
 
   <!-- Logo bar -->
   <div style="text-align:center;padding:20px 16px 0;margin-bottom:24px;">
-    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+    ${brandMark()}
   </div>
 
   <!-- Card -->
@@ -157,7 +161,7 @@ const sendManagerNotificationEmail = async ({ to, managerName, estateName, type,
 
   const meta = TYPE_META[type] || { label: title, color: '#10B981', icon: '🔔' };
 
-  await getResend().emails.send({
+  await sendEmail({
     from: FROM(),
     to,
     subject: `[${estateName}] ${meta.label}: ${title}`,
@@ -169,7 +173,7 @@ const sendManagerNotificationEmail = async ({ to, managerName, estateName, type,
 <div style="width:100%;max-width:100%;margin:0;">
 
   <div style="text-align:center;padding:20px 16px 0;margin-bottom:24px;">
-    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+    ${brandMark()}
   </div>
 
   <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
@@ -258,7 +262,7 @@ const generateInvoiceHtml = (inv) => {
 
   <!-- Logo bar -->
   <div style="text-align:center;padding:20px 16px 0;margin-bottom:20px;">
-    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+    ${brandMark()}
   </div>
 
   <!-- Invoice card -->
@@ -361,7 +365,7 @@ const sendPaymentReceiptEmail = async ({ to, residentName, estateName, inv }) =>
 
   const pdfBuffer = await generateInvoicePdf(inv);
 
-  await getResend().emails.send({
+  await sendEmail({
     from: FROM(),
     to,
     subject,
@@ -370,7 +374,7 @@ const sendPaymentReceiptEmail = async ({ to, residentName, estateName, inv }) =>
 <body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
 <div style="width:100%;max-width:100%;margin:0;">
   <div style="text-align:center;padding:20px 16px 0;margin-bottom:16px;">
-    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+    ${brandMark()}
   </div>
   <div style="background:#D1FAE5;border:1px solid #A7F3D0;border-radius:10px;padding:14px 20px;font-size:14px;color:#065F46;line-height:1.6;">
     Hi <strong>${residentName}</strong>, ${inv.status === 'paid'
@@ -430,7 +434,7 @@ const sendSubscriptionReminderEmail = async ({ to, managerName, estateName, days
       </div>
     </div>`;
 
-  await getResend().emails.send({
+  await sendEmail({
     from: FROM(),
     to,
     subject: `${isUrgent ? '🚨 URGENT:' : '⚠️'} Your ${isTrial ? 'trial' : 'subscription'} expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'} — ${estateName}`,
@@ -440,7 +444,7 @@ const sendSubscriptionReminderEmail = async ({ to, managerName, estateName, days
 <div style="width:100%;max-width:100%;margin:0;">
 
   <div style="text-align:center;padding:20px 16px 0;margin-bottom:20px;">
-    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+    ${brandMark()}
   </div>
 
   <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
@@ -496,7 +500,7 @@ const sendLiveAnnouncementEmail = async ({
   const safeMsg  = message || title || 'Something important for the estate — tap to listen.';
   const url      = joinUrl || `${FRONTEND_URL}/announcements`;
 
-  await getResend().emails.send({
+  await sendEmail({
     from: FROM(),
     to,
     subject: `🚨 LIVE NOW: ${hostName} is broadcasting to ${estateName} — tap to listen`,
@@ -505,7 +509,7 @@ const sendLiveAnnouncementEmail = async ({
 <body style="background:#0F172A;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
 <div style="width:100%;max-width:100%;margin:0;">
   <div style="text-align:center;padding:20px 16px 0;margin-bottom:16px;">
-    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#fff;">Area<span style="color:#10B981;">Connect</span></span>
+    ${brandMark({ dark: true })}
   </div>
 
   <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;border:3px solid #DC2626;">
@@ -574,7 +578,7 @@ const sendPasswordResetRequestEmail = async ({
   if (!process.env.RESEND_API_KEY || !to) return { skipped: true };
   const unitLine = requesterUnit ? `<strong>${requesterUnit}</strong> · ` : '';
   const roleLabel = requesterRole === 'security' ? 'Security officer' : 'Resident';
-  await getResend().emails.send({
+  await sendEmail({
     from: FROM(),
     to,
     subject: `🔐 Password reset request · ${requesterName} (${estateName})`,
@@ -583,7 +587,7 @@ const sendPasswordResetRequestEmail = async ({
 <body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
 <div style="width:100%;max-width:100%;margin:0;">
   <div style="text-align:center;padding:20px 16px 0;margin-bottom:16px;">
-    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+    ${brandMark()}
   </div>
   <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
     <div style="background:linear-gradient(135deg,#4F46E5,#6366F1);padding:28px 32px;color:#fff;">
@@ -632,7 +636,7 @@ const sendRenewalReceiptEmail = async ({
   const cycleLabel = cycle === 'annual' ? 'Annual' : 'Monthly';
   const cardLabel  = cardLast4 ? `${(cardBrand || 'Card').toUpperCase()} •••• ${cardLast4}` : 'card on file';
 
-  await getResend().emails.send({
+  await sendEmail({
     from: FROM(),
     to,
     subject: `✅ Payment received — ${estateName} ${planName} renewed`,
@@ -641,7 +645,7 @@ const sendRenewalReceiptEmail = async ({
 <body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
 <div style="width:100%;max-width:100%;margin:0;">
   <div style="text-align:center;padding:20px 16px 0;margin-bottom:20px;">
-    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+    ${brandMark()}
   </div>
   <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
     <div style="background:linear-gradient(135deg,#10B981,#059669);padding:30px 32px;text-align:center;">
@@ -692,7 +696,7 @@ const sendSubscriptionExpiredEmail = async ({
     : 'There is no payment method on file, so we could not auto-renew';
   const detail = failureReason ? ` (${failureReason})` : '';
 
-  await getResend().emails.send({
+  await sendEmail({
     from: FROM(),
     to,
     subject: `🚨 Your ${estateName} subscription is paused — action needed`,
@@ -701,7 +705,7 @@ const sendSubscriptionExpiredEmail = async ({
 <body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
 <div style="width:100%;max-width:100%;margin:0;">
   <div style="text-align:center;padding:20px 16px 0;margin-bottom:20px;">
-    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+    ${brandMark()}
   </div>
   <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
     <div style="background:linear-gradient(135deg,#DC2626,#B91C1C);padding:30px 32px;text-align:center;">
@@ -898,7 +902,7 @@ const sendCompGiftEmail = async ({
       </div>
     </div>`;
 
-  await getResend().emails.send({
+  await sendEmail({
     from: FROM(),
     to,
     subject: `🎁 You've been gifted ${planName} access — ${estateName}`,
@@ -912,7 +916,7 @@ const sendCompGiftEmail = async ({
 <div style="width:100%;max-width:100%;margin:0;">
 
   <div style="text-align:center;padding:20px 16px 0;margin-bottom:20px;">
-    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+    ${brandMark()}
   </div>
 
   <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
@@ -1071,7 +1075,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
             <div style="font-size:13px;line-height:1.5;color:${C.body};margin-top:3px;">${d}</div>
           </td>`).join('');
 
-  const { error } = await getResend().emails.send({
+  const { error } = await sendEmail({
     from: FROM(),
     reply_to: REPLY_TO,
     to,
@@ -1224,7 +1228,7 @@ const sendWithdrawalReceiptEmail = async ({ to, managerName, estateName, estateC
 
   const pdfBuffer = await generateInvoicePdf(inv);
 
-  await getResend().emails.send({
+  await sendEmail({
     from: FROM(),
     to,
     subject: `Withdrawal ${isPending ? 'Initiated' : 'Successful'} — ₦${Number(amount).toLocaleString('en-NG')} | ${estateName}`,
@@ -1233,7 +1237,7 @@ const sendWithdrawalReceiptEmail = async ({ to, managerName, estateName, estateC
 <body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
 <div style="width:100%;max-width:100%;margin:0;">
   <div style="text-align:center;padding:20px 16px 0;margin-bottom:16px;">
-    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+    ${brandMark()}
   </div>
   <div style="background:${isPending ? '#FEF3C7' : '#D1FAE5'};border:1px solid ${isPending ? '#FDE68A' : '#A7F3D0'};border-radius:10px;padding:14px 20px;font-size:14px;color:${isPending ? '#92400E' : '#065F46'};line-height:1.6;">
     Hi <strong>${managerName || 'Manager'}</strong>, your withdrawal of <strong>₦${Number(amount).toLocaleString('en-NG')}</strong> from <strong>${estateName}</strong>
@@ -1256,7 +1260,7 @@ const sendWithdrawalReceiptEmail = async ({ to, managerName, estateName, estateC
 const sendWithdrawalRejectedEmail = async ({ to, managerName, estateName, amount, reference, reason }) => {
   if (!process.env.RESEND_API_KEY) return { skipped: true };
 
-  await getResend().emails.send({
+  await sendEmail({
     from: FROM(),
     to,
     subject: `Withdrawal declined — ₦${Number(amount).toLocaleString('en-NG')} | ${estateName}`,
@@ -1265,7 +1269,7 @@ const sendWithdrawalRejectedEmail = async ({ to, managerName, estateName, amount
 <body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
 <div style="width:100%;max-width:100%;margin:0;">
   <div style="text-align:center;padding:20px 16px 0;margin-bottom:16px;">
-    <span style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#111;">Area<span style="color:#10B981;">Connect</span></span>
+    ${brandMark()}
   </div>
   <div style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:10px;padding:14px 20px;font-size:14px;color:#991B1B;line-height:1.6;">
     Hi <strong>${managerName || 'Manager'}</strong>, your withdrawal request of
@@ -1322,6 +1326,8 @@ const sendCampaignEmail = async ({ to, name, subject, preheader, htmlBody, ctaUr
 
   const logoBlock = logoUrl
     ? `<img src="${logoUrl}" alt="${brandName}" style="height:36px;display:inline-block;" />`
+    : brandName === 'AreaConnect'
+    ? brandMark({ size: 24 })
     : `<span style="font-size:24px;font-weight:800;letter-spacing:-0.03em;color:#0F172A;">${
         brandName.startsWith('Area')
           ? `Area<span style="color:${primary};">${brandName.slice(4) || 'Connect'}</span>`
@@ -1341,7 +1347,7 @@ const sendCampaignEmail = async ({ to, name, subject, preheader, htmlBody, ctaUr
       </td></tr>
     </table>`;
 
-  await getResend().emails.send({
+  await sendEmail({
     from: FROM(),
     to,
     subject: finalSubject,
@@ -1416,6 +1422,7 @@ const buildAlertEmailHtml = ({ name, estateName, alert, raisedBy, isBroadcast, u
 <body style="background:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
 <div style="width:100%;max-width:100%;margin:0;background:#fff;border-radius:0;overflow:hidden;border:0;">
   <div style="background:${color};padding:22px 24px;color:#fff;">
+    <div style="margin:0 0 14px;">${brandMark({ dark: true, size: 15, hosted: true })}</div>
     <div style="font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;opacity:.85;">
       ${isBroadcast ? 'Emergency broadcast' : 'Emergency alert'} &middot; ${escapeHtml(estateName)}
     </div>
@@ -1486,14 +1493,16 @@ const sendBuzzEmail = async ({ to, toName, fromName, fromPhotoUrl, fromUnit, est
     ? `<img src="${fromPhotoUrl}" width="88" height="88" alt="${escapeHtml(fromName)}" style="display:block;width:88px;height:88px;border-radius:50%;object-fit:cover;border:4px solid #fff;box-shadow:0 6px 18px rgba(79,70,229,.25);margin:0 auto;">`
     : `<div style="width:88px;height:88px;border-radius:50%;background:#6366F1;color:#fff;font-size:32px;font-weight:800;line-height:88px;text-align:center;border:4px solid #fff;margin:0 auto;">${initials}</div>`;
 
-  await getResend().emails.send({
+  await sendEmail({
     from: FROM(),
     to,
     subject: `${copy.emoji} ${copy.headline(fromName || 'A neighbour')}`,
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="background:#EEF2FF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
 <div style="width:100%;max-width:100%;margin:0;background:#fff;border-radius:0;overflow:hidden;border:0;">
-  <div style="background:linear-gradient(135deg,#312E81,#4F46E5 60%,#818CF8);height:96px;"></div>
+  <div style="background:linear-gradient(135deg,#312E81,#4F46E5 60%,#818CF8);height:108px;text-align:center;">
+    <div style="padding-top:14px;">${brandMark({ dark: true, size: 15 })}</div>
+  </div>
   <div style="margin-top:-52px;text-align:center;padding:0 24px;">
     ${avatar}
     <div style="font-size:12px;color:#6366F1;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-top:14px;">${fromIsManager ? 'Check-in from estate management' : 'Neighbour buzz'} · ${escapeHtml(estateName)}</div>
@@ -1530,7 +1539,7 @@ const sendCreditReceiptEmail = async ({ to, name, inv, pdf }) => {
     ['Date', new Date(inv.date).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos' })],
   ];
 
-  await getResend().emails.send({
+  await sendEmail({
     from: FROM(),
     to,
     subject: isGift ? `🎁 ${credits} free call credits from AreaConnect` : `Receipt: ${credits} call credits — ${naira(inv.total)}`,
@@ -1538,6 +1547,7 @@ const sendCreditReceiptEmail = async ({ to, name, inv, pdf }) => {
 <body style="background:#EEF2FF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
 <div style="width:100%;max-width:100%;margin:0;background:#fff;border-radius:0;overflow:hidden;border:0;">
   <div style="background:linear-gradient(135deg,#312E81,#4F46E5 60%,#818CF8);padding:26px 28px;color:#fff;">
+    <div style="margin:0 0 14px;">${brandMark({ dark: true, size: 15 })}</div>
     <div style="font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;opacity:.85;">${isGift ? 'Gift credits' : 'Call credits receipt'} &middot; AreaMates</div>
     <div style="font-size:22px;font-weight:800;line-height:1.3;margin-top:6px;">${escapeHtml(headline)}</div>
   </div>

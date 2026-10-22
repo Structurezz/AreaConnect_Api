@@ -4,6 +4,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { Resend } = require('resend');
+const { brandMark, withLogo } = require('../services/emailBrand');
 const gcal = require('../services/googleCalendarService');
 const zoho = require('../services/zohoMeetingService');
 const DemoBooking = require('../models/DemoBooking');
@@ -111,7 +112,7 @@ function guestEmailHtml({ name, when, joinLink, meetingName, start, end }) {
   <div style="background:#F8FAFC;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;">
     <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:20px;overflow:hidden;border:1px solid #E2E8F0;">
       <div style="background:#0F172A;padding:24px 28px;">
-        <div style="font-size:16px;font-weight:800;color:#fff;">Area<span style="color:#34D399;">Connect</span></div>
+        ${brandMark({ dark: true, size: 16 })}
       </div>
       <div style="padding:28px;">
         <h1 style="margin:0 0 8px;font-size:22px;color:#0F172A;">You're booked, ${esc(name.split(' ')[0])}!</h1>
@@ -212,23 +213,24 @@ router.post('/book', bookLimiter, async (req, res) => {
       const ics = icsInvite({ uid: `${booking._id}@areaconnect.pro`, start, end, summary: 'AreaConnect demo call', description: `${details}\n\nJoin: ${joinLink || 'link to follow'}`, location: joinLink || '', organizer: HOST_EMAIL, attendee: { email, name } });
 
       // To the customer — branded invite from the host, with a calendar file.
-      resend.emails.send({
+      resend.emails.send(withLogo({
         from: `Michael at AreaConnect <${HOST_EMAIL}>`,
         to: email,
         replyTo: HOST_EMAIL,
         subject: `Your AreaConnect demo — ${when} WAT`,
         html: guestEmailHtml({ name, when, joinLink, meetingName, start, end }),
         attachments: [{ filename: 'areaconnect-demo.ics', content: Buffer.from(ics).toString('base64') }],
-      }).catch(err => console.error('Demo guest email error:', err));
+      })).catch(err => console.error('Demo guest email error:', err));
 
       // To the host.
-      resend.emails.send({
+      resend.emails.send(withLogo({
         from: FROM(),
         to: HOST_EMAIL,
         replyTo: email,
         subject: `[Demo booked] ${when} — ${name}`,
         html: `
           <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;background:#fff;">
+            <div style="margin:0 0 22px;">${brandMark({ size: 16 })}</div>
             <h2 style="font-size:20px;font-weight:800;color:#111;margin:0 0 20px;">New demo call booked</h2>
             <table style="width:100%;border-collapse:collapse;">
               ${row('When', `${when} WAT`)}${row('Name', name)}${row('Email', email)}${row('Estate / company', company)}${row('Phone', phone)}
@@ -239,7 +241,7 @@ router.post('/book', bookLimiter, async (req, res) => {
             ${joinLink ? '' : '<p style="color:#b45309;font-size:13px;margin-top:20px;">No meeting provider is connected — send the guest a meeting link manually.</p>'}
           </div>`,
         attachments: [{ filename: 'areaconnect-demo.ics', content: Buffer.from(ics).toString('base64') }],
-      }).catch(err => console.error('Demo host email error:', err));
+      })).catch(err => console.error('Demo host email error:', err));
     }
 
     res.json({ ok: true, start: start.toISOString(), when, meetLink: joinLink, provider: provider(), invited: !!joinLink });

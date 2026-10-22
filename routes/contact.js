@@ -1,6 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const { Resend } = require('resend');
+const { brandMark, withLogo } = require('../services/emailBrand');
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 const FROM = () => process.env.RESEND_FROM || 'AreaConnect <noreply@areaconnect.pro>';
@@ -18,13 +19,14 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    await getResend().emails.send({
+    await getResend().emails.send(withLogo({
       from: FROM(),
       to: 'michael@areaconnect.pro',
       replyTo: email,
       subject: `[Contact] ${subject} — ${name}`,
       html: `
         <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;background:#fff;">
+          <div style="margin:0 0 22px;">${brandMark({ size: 16 })}</div>
           <h2 style="font-size:20px;font-weight:800;color:#111;margin:0 0 24px;">New contact form submission</h2>
           <table style="width:100%;border-collapse:collapse;">
             <tr><td style="padding:8px 0;color:#6b7280;font-size:13px;width:120px;">Name</td><td style="padding:8px 0;font-weight:600;color:#111;">${name}</td></tr>
@@ -38,7 +40,7 @@ router.post('/', async (req, res) => {
           <p style="color:#9ca3af;font-size:12px;">Sent via areaconnect.pro contact form — reply directly to respond to ${name}.</p>
         </div>
       `,
-    });
+    }));
 
     res.json({ ok: true });
   } catch (err) {
