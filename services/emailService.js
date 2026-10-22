@@ -1149,7 +1149,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
       <a href="${REGISTER}" style="display:inline-block;background:${C.green};color:#FFFFFF;font-size:15px;font-weight:700;text-decoration:none;padding:13px 22px;border-radius:999px;">Start my free month &rarr;</a>
     </td>
     <td style="padding:0 0 10px;">
-      <a href="${reply(`Walkthrough for ${company || 'our estate'}`, `Hi Michael,\n\nI'd like a 15-minute walkthrough. A good time for me is:\n\n`)}" style="display:inline-block;background:#FFFFFF;color:${C.greenDark};font-size:15px;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:999px;border:1px solid #A7F3D0;">Book a 15-min walkthrough</a>
+      <a href="https://areaconnect.pro/contact#book-demo" style="display:inline-block;background:#FFFFFF;color:${C.greenDark};font-size:15px;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:999px;border:1px solid #A7F3D0;">Book a 15-min walkthrough</a>
     </td>
   </tr></table>
 
