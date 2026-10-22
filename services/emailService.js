@@ -1108,7 +1108,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
     <td class="stack" valign="top" style="padding:0 32px 0 0;">
       <div style="font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${C.green};margin:0 0 10px;">For ${org}</div>
       <h1 class="hero-h1" style="margin:0 0 16px;font-size:32px;line-height:1.15;font-weight:800;letter-spacing:-0.03em;color:${C.ink};">
-        Your whole estate,<br>quietly taken care of.
+        Your whole estate, quietly taken care of.
       </h1>
       <p style="margin:0 0 14px;font-size:16px;line-height:1.7;color:${C.body};">Hi ${firstName},</p>
       <p style="margin:0 0 28px;font-size:16px;line-height:1.7;color:${C.body};">
@@ -1179,6 +1179,177 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
 </body></html>`,
   });
   // Resend reports failures in the response rather than throwing
+  if (error) throw Object.assign(new Error(error.message), { name: error.name, statusCode: error.statusCode });
+
+  return { sent: true };
+};
+
+// ── Trial ending: check-in + nudge to subscribe (same look as the pitch) ──
+const sendTrialEndingEmail = async ({ to, managerName, estateName, trialEndsAt, planName, monthlyPrice }) => {
+  if (!process.env.RESEND_API_KEY || !to) return { skipped: true };
+
+  const REPLY_TO  = 'michael@areaconnect.pro';
+  const UPGRADE   = `${FRONTEND_URL}/upgrade`;
+  const BOOK      = 'https://areaconnect.pro/contact#book-demo';
+  const firstName = escapeHtml((managerName || '').trim().split(' ')[0] || 'there');
+  const estate    = escapeHtml(estateName || 'your estate');
+  const plan      = escapeHtml(planName || 'Starter');
+  const daysLeft  = trialEndsAt ? Math.max(0, Math.ceil((new Date(trialEndsAt) - Date.now()) / 864e5)) : null;
+  const endsLine  = daysLeft === null ? 'soon'
+    : daysLeft <= 1 ? (new Date(trialEndsAt).toDateString() === new Date().toDateString() ? 'today' : 'tomorrow')
+    : `in ${daysLeft} days`;
+  const endDate   = trialEndsAt ? fmtDate(trialEndsAt) : '';
+
+  const reply = (subject, body) =>
+    `mailto:${REPLY_TO}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const about = estateName ? ` (${estateName})` : '';
+
+  const C = { ink: '#0F172A', body: '#475569', muted: '#94A3B8', line: '#E2E8F0', soft: '#F8FAFC', green: '#10B981', greenDark: '#059669', indigo: '#6366F1' };
+
+  // How was it? One tap each — opens a pre-written reply
+  const feelings = [
+    ['😍', 'Loving it',               'It’s already saving us time'],
+    ['🙂', 'It’s been okay',          'Useful, but a few things could be better'],
+    ['🧩', 'Stuck on something',      'I could use a hand setting it up'],
+    ['⏳', 'Haven’t really tried it', 'Life got busy — can I have a little more time?'],
+  ].map(([icon, label, hint]) => `
+        <td class="stack" width="50%" valign="top" style="padding:0 4px 8px;">
+          <a href="${reply(`My AreaConnect trial: ${label}${about}`, `Hi Michael,\n\nHow the trial went for us: ${label} — ${hint}.\n\n`)}"
+             style="display:block;text-decoration:none;background:#FFFFFF;border:1px solid ${C.line};border-radius:12px;padding:13px 14px;">
+            <table width="100%" cellpadding="0" cellspacing="0"><tr>
+              <td width="32" style="font-size:19px;vertical-align:middle;">${icon}</td>
+              <td style="vertical-align:middle;">
+                <div style="font-size:15px;font-weight:600;color:${C.ink};">${label}</div>
+                <div style="font-size:13px;color:${C.muted};margin-top:1px;">${hint}</div>
+              </td>
+              <td width="44" style="vertical-align:middle;text-align:right;font-size:12px;font-weight:600;color:${C.greenDark};white-space:nowrap;">Tap &rsaquo;</td>
+            </tr></table>
+          </a>
+        </td>`);
+  const feelingGrid = `<tr>${feelings[0]}${feelings[1]}</tr><tr>${feelings[2]}${feelings[3]}</tr>`;
+
+  // What stays switched on once they subscribe
+  const keep = [
+    ['🚪', 'Visitor passes & gate checks', 'Codes, QR passes and the guard app keep working.'],
+    ['💳', 'Dues, receipts & payouts',     'Residents keep paying in-app; you keep withdrawing.'],
+    ['📣', 'Notices & emergency alerts',   'Every resident stays one tap away.'],
+    ['💬', 'Lounge, chat & calls',         'Your community stays connected.'],
+  ].map(([icon, t, d]) => `
+          <tr>
+            <td width="34" valign="top" style="padding:0 0 14px;font-size:18px;">${icon}</td>
+            <td valign="top" style="padding:0 0 14px;">
+              <div style="font-size:15px;font-weight:600;color:${C.ink};">${t}</div>
+              <div style="font-size:14px;line-height:1.5;color:${C.body};margin-top:1px;">${d}</div>
+            </td>
+          </tr>`).join('');
+
+  const { error } = await sendEmail({
+    from: FROM(),
+    reply_to: REPLY_TO,
+    to,
+    subject: `How’s ${estateName || 'your estate'} finding AreaConnect? Your trial ends ${endsLine}`,
+    attachments: getPitchAssets(),
+    html: `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light">
+<title>AreaConnect</title>
+<style>
+  @media only screen and (max-width:640px) {
+    .stack { display:block !important; width:100% !important; padding-left:0 !important; padding-right:0 !important; }
+    .phone-col { padding:28px 0 0 !important; }
+    .hero-h1 { font-size:26px !important; }
+  }
+</style></head>
+<body style="margin:0;padding:0;background:#FFFFFF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;color:${C.ink};">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your free trial ends ${endsLine}. One quick question — and how to keep everything running.</div>
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#FFFFFF;"><tr><td align="left" style="padding:28px 32px 36px;text-align:left;">
+<table width="100%" cellpadding="0" cellspacing="0" style="width:100%;"><tr><td align="left">
+
+  <!-- Logo -->
+  <table cellpadding="0" cellspacing="0" style="margin:0 0 32px;"><tr>
+    <td style="vertical-align:middle;padding-right:10px;"><img src="cid:ac-logo" width="36" height="36" alt="AreaConnect" style="display:block;border:0;border-radius:9px;"></td>
+    <td style="vertical-align:middle;font-size:18px;font-weight:800;letter-spacing:-0.02em;color:${C.ink};">Area<span style="color:${C.green};">Connect</span></td>
+  </tr></table>
+
+  <!-- Hero: check-in on the left, live phone beside it -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 38px;"><tr>
+    <td class="stack" valign="top" style="padding:0 32px 0 0;">
+      <div style="font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${C.green};margin:0 0 10px;">${estate} &middot; Trial ends ${endsLine}</div>
+      <h1 class="hero-h1" style="margin:0 0 16px;font-size:32px;line-height:1.15;font-weight:800;letter-spacing:-0.03em;color:${C.ink};">
+        How has your trial been so far?
+      </h1>
+      <p style="margin:0 0 14px;font-size:16px;line-height:1.7;color:${C.body};">Hi ${firstName},</p>
+      <p style="margin:0 0 14px;font-size:16px;line-height:1.7;color:${C.body};">
+        It’s Michael, founder of AreaConnect. Thank you for trying us out with ${estate}.
+        Your free trial on the <strong style="color:${C.ink};">${plan}</strong> plan ends <strong style="color:${C.ink};">${endsLine}</strong>${endDate ? ` (${endDate})` : ''},
+        and I’d genuinely love to hear how it’s gone.
+      </p>
+      <p style="margin:0 0 26px;font-size:16px;line-height:1.7;color:${C.body};">
+        If it’s been useful, you can keep everything exactly as it is &mdash; your residents, passes, dues and history all stay put.
+      </p>
+      <table cellpadding="0" cellspacing="0"><tr>
+        <td style="padding:0 10px 10px 0;">
+          <a href="${UPGRADE}" style="display:inline-block;background:${C.green};color:#FFFFFF;font-size:15px;font-weight:700;text-decoration:none;padding:13px 22px;border-radius:999px;">Keep my estate running &rarr;</a>
+        </td>
+        <td style="padding:0 0 10px;">
+          <a href="${BOOK}" style="display:inline-block;background:#FFFFFF;color:${C.greenDark};font-size:15px;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:999px;border:1px solid #A7F3D0;">Book a 15-min walkthrough</a>
+        </td>
+      </tr></table>
+    </td>
+    <td class="stack phone-col" width="320" valign="top" style="width:320px;padding:0;">
+      <a href="https://areaconnect.pro" style="display:inline-block;text-decoration:none;">
+        <img src="cid:ac-phone" width="320" alt="AreaMates app: visitor passes updating live as guests arrive" style="display:block;border:0;width:320px;max-width:100%;height:auto;">
+      </a>
+      <div style="font-size:12px;color:${C.muted};margin-top:6px;">What your residents see &middot; AreaMates</div>
+    </td>
+  </tr></table>
+
+  <!-- Interactive check-in -->
+  <div style="background:${C.soft};border:1px solid ${C.line};border-radius:16px;padding:22px 18px 12px;margin:0 0 38px;">
+    <div style="font-size:18px;font-weight:700;letter-spacing:-0.01em;color:${C.ink};margin:0 4px;">How has it been for ${estate}?</div>
+    <div style="font-size:13px;color:${C.muted};margin:4px 4px 14px;">Tap one &mdash; it opens a ready-made reply. I read every one myself, and if you need more time or help, just say so.</div>
+    <table width="100%" cellpadding="0" cellspacing="0">${feelingGrid}
+    </table>
+  </div>
+
+  <!-- What stays on -->
+  <h2 style="margin:0 0 16px;font-size:19px;font-weight:700;letter-spacing:-0.01em;color:${C.ink};">What keeps working when you subscribe</h2>
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">${keep}
+  </table>
+
+  <p style="margin:0 0 6px;font-size:16px;line-height:1.7;color:${C.body};">
+    ${monthlyPrice ? `${plan} is <strong style="color:${C.ink};">${fmtNGN(monthlyPrice)}/month</strong>, or a little less if you pay yearly.` : 'Pick the plan that fits your estate.'}
+    You can change plans or cancel anytime from your dashboard.
+  </p>
+  <p style="margin:0 0 22px;font-size:13px;color:${C.muted};">If the trial ends before you subscribe, nothing is deleted &mdash; you can pick up where you left off.</p>
+  <table cellpadding="0" cellspacing="0" style="margin:0 0 36px;"><tr>
+    <td style="padding:0 10px 10px 0;">
+      <a href="${UPGRADE}" style="display:inline-block;background:${C.green};color:#FFFFFF;font-size:15px;font-weight:700;text-decoration:none;padding:13px 22px;border-radius:999px;">Choose my plan &rarr;</a>
+    </td>
+    <td style="padding:0 0 10px;">
+      <a href="${reply(`More time for ${estateName || 'our estate'}`, `Hi Michael,\n\nCould we get a little more time on the trial? Here's why:\n\n`)}" style="display:inline-block;background:#FFFFFF;color:${C.greenDark};font-size:15px;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:999px;border:1px solid #A7F3D0;">Ask for more time</a>
+    </td>
+  </tr></table>
+
+  <!-- Sign-off -->
+  <table cellpadding="0" cellspacing="0" style="border-top:1px solid ${C.line};padding-top:22px;width:100%;"><tr>
+    <td width="68" valign="top" style="padding-top:22px;"><img src="cid:ac-michael" width="56" height="56" alt="Michael Orizu" style="display:block;border:0;border-radius:50%;"></td>
+    <td valign="top" style="padding-top:22px;">
+      <div style="font-size:15px;line-height:1.6;color:${C.body};">Whatever you decide, thank you for giving us a try.</div>
+      <div style="font-size:15px;font-weight:700;color:${C.ink};margin-top:6px;">Michael Orizu</div>
+      <div style="font-size:13px;color:${C.muted};">Founder, AreaConnect &middot; <a href="mailto:${REPLY_TO}" style="color:${C.greenDark};text-decoration:none;">${REPLY_TO}</a></div>
+    </td>
+  </tr></table>
+
+  <p style="margin:30px 0 0;font-size:12px;line-height:1.8;color:${C.muted};">
+    You’re receiving this because ${estate} is on an AreaConnect free trial.<br>
+    Area Connector Technologies &middot; RC 9607864 &middot; Lagos, Nigeria
+  </p>
+
+</td></tr></table>
+</td></tr></table>
+</body></html>`,
+  });
   if (error) throw Object.assign(new Error(error.message), { name: error.name, statusCode: error.statusCode });
 
   return { sent: true };
@@ -1588,5 +1759,6 @@ module.exports = {
   sendPasswordResetRequestEmail,
   generateInvoiceHtml,
   sendPitchEmail,
+  sendTrialEndingEmail,
   sendCampaignEmail,
 };
