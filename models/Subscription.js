@@ -25,6 +25,8 @@ const subscriptionSchema = new mongoose.Schema({
 
   // Tracks which day-thresholds have already had a reminder email sent (e.g. [7, 3, 1])
   remindersSent: { type: [Number], default: [] },
+  // When the one-off "how was your trial?" check-in email went out (services/trialCheckin)
+  trialCheckinSentAt: { type: Date, default: null },
 
   // ── Paystack authorization (recurring charge) ────────────────────────────
   // Captured on first successful payment so the auditor can re-bill the

@@ -211,7 +211,9 @@ const sendManagerNotificationEmail = async ({ to, managerName, estateName, type,
 const fmtNGN = (n) => `&#8358;${Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' }) : '&mdash;';
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://estatemanager.areaconnect.pro';
+// Estate manager web app — links in manager-facing emails (upgrade, dashboard)
+const FRONTEND_URL = process.env.ESTATE_MANAGER_URL || 'https://area-connector.areaconnect.pro';
+const RESIDENTS_APP_URL = process.env.RESIDENTS_URL || 'https://area-mates.areaconnect.pro';
 const DEFAULT_HERO  = `${FRONTEND_URL}/estate-hero.jpeg`;
 
 const METHOD_LABELS = {
@@ -498,7 +500,7 @@ const sendLiveAnnouncementEmail = async ({
   if (!process.env.RESEND_API_KEY || !to) return { skipped: true };
   const safeName = (name || 'Neighbour').split(' ')[0];
   const safeMsg  = message || title || 'Something important for the estate — tap to listen.';
-  const url      = joinUrl || `${FRONTEND_URL}/announcements`;
+  const url      = joinUrl || `${RESIDENTS_APP_URL}/announcements`;
 
   await sendEmail({
     from: FROM(),
@@ -1170,7 +1172,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
   <!-- Quiet opt-out -->
   <p style="margin:30px 0 0;font-size:12px;line-height:1.8;color:${C.muted};">
     Not the right time? <a href="${reply(`Not right now${about}`, 'Hi Michael,\n\nNot right now, thanks.\n')}" style="color:${C.body};">Let me know</a>
-    and I won’t follow up. &middot; <a href="${FRONTEND_URL}/unsubscribe" style="color:${C.muted};">Unsubscribe</a><br>
+    and I won’t follow up. &middot; <a href="${reply(`Unsubscribe${about}`, 'Please remove me from AreaConnect emails.')}" style="color:${C.muted};">Unsubscribe</a><br>
     Area Connector Technologies &middot; RC 9607864 &middot; Lagos, Nigeria
   </p>
 

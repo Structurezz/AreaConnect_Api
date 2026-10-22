@@ -179,6 +179,9 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/estate_ma
       const { startSubscriptionAuditor } = require('./services/subscriptionAuditor');
       startSubscriptionAuditor();
     }
+    // Trial check-in: emails each trial estate's manager once, ≤3 days before
+    // the trial ends. Opt-out with TRIAL_CHECKIN=off.
+    if (process.env.NODE_ENV !== 'test' && process.env.TRIAL_CHECKIN !== 'off') require('./services/trialCheckin').startTrialCheckin();
     // Marketplace escrow: auto-release delivered orders, expire unpaid checkouts.
     if (process.env.NODE_ENV !== 'test') require('./services/marketplaceEscrow').startEscrowSweeper();
     // Landing-site blog: Gemini writes and publishes one article a day.
