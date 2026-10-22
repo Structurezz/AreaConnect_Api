@@ -985,409 +985,182 @@ const sendCompGiftEmail = async ({
   return { sent: true };
 };
 
+// Inline images for the pitch email (CID attachments — no hosting needed).
+// areamates-phone.gif is a recording of the landing page hero iPhone animation.
+const PITCH_ASSET_DIR = require('path').join(__dirname, '../assets/email');
+let pitchAssets;
+const getPitchAssets = () => {
+  if (!pitchAssets) {
+    const fs = require('fs');
+    const file = (filename, contentId) => ({
+      filename, contentId,
+      content: fs.readFileSync(require('path').join(PITCH_ASSET_DIR, filename)),
+    });
+    pitchAssets = [
+      file('logo.png', 'ac-logo'),
+      file('areamates-phone.gif', 'ac-phone'),
+      file('michael.png', 'ac-michael'),
+    ];
+  }
+  return pitchAssets;
+};
+
 const sendPitchEmail = async ({ to, name, title, company, city }) => {
   if (!process.env.RESEND_API_KEY) return { skipped: true };
 
-  const firstName = (name || '').split(' ')[0] || 'there';
-  const greeting = title ? `${title} ${(name || '').split(' ').slice(-1)[0]}` : firstName;
+  const REPLY_TO  = 'michael@areaconnect.pro';
+  const REGISTER  = 'https://area-connector.areaconnect.pro/register';
+  const firstName = escapeHtml((name || '').trim().split(' ')[0] || 'there');
+  const org       = escapeHtml(company || 'your estate');
+  const where     = city ? ` in ${escapeHtml(city)}` : '';
+  const about     = company ? ` (${company})` : '';
 
-  await getResend().emails.send({
+  // Tap-to-reply: each option opens a pre-written reply, so answering takes one tap
+  const reply = (subject, body) =>
+    `mailto:${REPLY_TO}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+  const C = { ink: '#0F172A', body: '#475569', muted: '#94A3B8', line: '#E2E8F0', soft: '#F8FAFC', green: '#10B981', greenDark: '#059669', indigo: '#6366F1' };
+
+  // An ordinary evening on AreaConnect — mirrors what the phone animation shows
+  const timeline = [
+    ['6:28 PM', C.indigo, 'Ada creates a visitor pass',     'Tunde gets a 6-digit code by SMS.'],
+    ['6:31 PM', C.green,  'Gate 2 verifies the code',       'The guard checks it in seconds — no phone calls, no paper log.'],
+    ['6:31 PM', '#0EA5E9','Ada gets a ping',                '“Tunde Adeyemi has arrived.”'],
+    ['9:04 PM', '#F59E0B','Service charge paid',            'Receipt sent automatically. The manager sees it on the dashboard.'],
+  ].map(([time, dot, head, text], i, arr) => `
+        <tr>
+          <td width="64" valign="top" style="padding:0 0 ${i === arr.length - 1 ? 0 : 18}px;font-size:12px;font-weight:600;color:${C.muted};white-space:nowrap;">${time}</td>
+          <td width="22" valign="top" style="padding:3px 0 0;">
+            <div style="width:10px;height:10px;border-radius:50%;background:${dot};"></div>
+          </td>
+          <td valign="top" style="padding:0 0 ${i === arr.length - 1 ? 0 : 18}px;">
+            <div style="font-size:15px;font-weight:600;color:${C.ink};">${head}</div>
+            <div style="font-size:14px;line-height:1.55;color:${C.body};margin-top:2px;">${text}</div>
+          </td>
+        </tr>`).join('');
+
+  const pains = [
+    ['🚪', 'Gate & visitor access',     'Who’s coming in — and did anyone check?'],
+    ['💳', 'Levies & service charges',  'Chasing payments on WhatsApp'],
+    ['📣', 'Keeping residents informed', 'Notices nobody reads'],
+    ['🛡️', 'Security response',         'Getting help fast when something happens'],
+  ].map(([icon, label, hint]) => `
+        <tr><td style="padding:0 0 8px;">
+          <a href="${reply(`Re: ${label}${about}`, `Hi Michael,\n\nThe one that costs us the most time is: ${label}.\n\n`)}"
+             style="display:block;text-decoration:none;background:#FFFFFF;border:1px solid ${C.line};border-radius:12px;padding:13px 14px;">
+            <table width="100%" cellpadding="0" cellspacing="0"><tr>
+              <td width="32" style="font-size:19px;vertical-align:middle;">${icon}</td>
+              <td style="vertical-align:middle;">
+                <div style="font-size:15px;font-weight:600;color:${C.ink};">${label}</div>
+                <div style="font-size:13px;color:${C.muted};margin-top:1px;">${hint}</div>
+              </td>
+              <td width="64" style="vertical-align:middle;text-align:right;font-size:12px;font-weight:600;color:${C.greenDark};white-space:nowrap;">Tap &rsaquo;</td>
+            </tr></table>
+          </a>
+        </td></tr>`).join('');
+
+  const apps = [
+    ['Estate Manager', C.green,  'Residents, dues, payouts and reports in one dashboard.'],
+    ['AreaMates',      C.indigo, 'Residents invite guests, pay dues and get notices.'],
+    ['Guard',          '#F59E0B','Verify a visitor’s code at the gate in seconds.'],
+  ].map(([t, color, d]) => `
+          <td width="33%" valign="top" style="padding:0 10px 0 0;">
+            <div style="height:3px;width:28px;border-radius:2px;background:${color};margin-bottom:10px;"></div>
+            <div style="font-size:14px;font-weight:700;color:${C.ink};">${t}</div>
+            <div style="font-size:13px;line-height:1.5;color:${C.body};margin-top:3px;">${d}</div>
+          </td>`).join('');
+
+  const { error } = await getResend().emails.send({
     from: FROM(),
-    reply_to: 'michael@areaconnect.pro',
+    reply_to: REPLY_TO,
     to,
-    subject: `Try AreaConnect Free for 30 Days — Transform How You Manage ${company || 'Your Estate'}`,
+    subject: `A calmer evening at ${company || 'your estate'}`,
+    attachments: getPitchAssets(),
     html: `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>*{box-sizing:border-box;margin:0;padding:0;}</style></head>
-<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
-<div style="width:100%;max-width:100%;margin:0 auto;">
+<meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light">
+<title>AreaConnect</title></head>
+<body style="margin:0;padding:0;background:#FFFFFF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;color:${C.ink};">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">Visitor passes, dues and notices — quietly handled. One question inside, one tap to answer.</div>
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#FFFFFF;"><tr><td align="left" style="padding:28px 24px 36px;text-align:left;">
 
   <!-- Logo -->
-  <div style="text-align:center;padding:20px 16px 0;margin-bottom:24px;">
-    <span style="font-size:26px;font-weight:900;letter-spacing:-0.04em;color:#0F172A;">Area<span style="color:#10B981;">Connect</span></span>
-    <div style="font-size:11px;color:#94A3B8;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;">Smart Estate Management Platform</div>
-  </div>
+  <table cellpadding="0" cellspacing="0" style="margin:0 0 32px;"><tr>
+    <td style="vertical-align:middle;padding-right:10px;"><img src="cid:ac-logo" width="36" height="36" alt="AreaConnect" style="display:block;border:0;border-radius:9px;"></td>
+    <td style="vertical-align:middle;font-size:18px;font-weight:800;letter-spacing:-0.02em;color:${C.ink};">Area<span style="color:${C.green};">Connect</span></td>
+  </tr></table>
 
-  <!-- Hero card (full-width) -->
-  <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
-
-    <!-- Header gradient -->
-    <div style="background:linear-gradient(135deg,#0F172A 0%,#1E3A5F 60%,#10B981 100%);padding:40px 32px;text-align:center;">
-      <div style="display:inline-block;background:rgba(16,185,129,0.2);border:1px solid rgba(16,185,129,0.4);color:#34D399;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 14px;border-radius:20px;margin-bottom:16px;">
-        30 Days Free · No Card Required
-      </div>
-      <h1 style="font-size:28px;font-weight:900;color:#fff;letter-spacing:-0.03em;line-height:1.2;margin-bottom:8px;">
-        Try AreaConnect Free<br>for a Full Month
-      </h1>
-      <p style="font-size:15px;color:rgba(255,255,255,0.85);line-height:1.6;">
-        Run your entire estate on us for 30 days — every feature, no charge, no commitment.
-      </p>
-    </div>
-
-    <!-- Body -->
-    <div style="padding:36px 32px;">
-
-      <!-- Greeting -->
-      <p style="font-size:16px;color:#374151;line-height:1.7;margin-bottom:24px;">
-        Hi <strong style="color:#0F172A;">${greeting}</strong>,
-      </p>
-      <p style="font-size:15px;color:#4B5563;line-height:1.8;margin-bottom:20px;">
-        Managing <strong>${company}</strong>${city ? ` in <strong>${city}</strong>` : ''} comes with real challenges —
-        tracking residents, managing security, collecting levies, and keeping everyone informed.
-        <strong style="color:#0F172A;">AreaConnect</strong> was built specifically for estates like yours.
-      </p>
-      <p style="font-size:15px;color:#4B5563;line-height:1.8;margin-bottom:28px;">
-        That's why we're inviting you to <strong style="color:#059669;">try the entire platform free for 30 days</strong> —
-        the full feature set, unlimited residents, real support from our team. If it doesn't save you hours every week,
-        walk away. No card, no auto-charge, no strings.
-      </p>
-
-      <!-- Three-phone showcase: Manager · Resident · Guard (mirrors real app source) -->
-      <div style="background:linear-gradient(160deg,#0F172A 0%,#1E293B 55%,#0F172A 100%);border-radius:18px;padding:28px 8px 22px;margin-bottom:32px;text-align:center;position:relative;overflow:hidden;">
-        <p style="font-size:10px;font-weight:800;color:#34D399;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:4px;">One platform · Three apps</p>
-        <p style="font-size:17px;font-weight:800;color:#fff;letter-spacing:-0.02em;margin-bottom:22px;">Purpose-built for every role in your estate</p>
-
-        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-          <tr>
-
-            <!-- ─── PHONE 1 · ESTATE MANAGER (bg #F8FAFB, green #10B981) ─── -->
-            <td width="33%" align="center" valign="top" style="padding:0 2px;">
-              <div style="display:inline-block;width:136px;background:#0B1220;border:2px solid #1F2937;border-radius:22px;padding:5px 4px 4px;box-shadow:0 12px 30px rgba(0,0,0,0.45);">
-                <div style="width:40px;height:5px;background:#000;border-radius:3px;margin:2px auto 4px;"></div>
-                <div style="background:#F8FAFB;border-radius:15px;padding:0;text-align:left;overflow:hidden;">
-
-                  <!-- Hero: white card w/ green border & green glow -->
-                  <div style="background:#fff;border:1px solid rgba(16,185,129,0.20);border-radius:10px;margin:6px 5px 5px;padding:7px 7px 8px;position:relative;overflow:hidden;">
-                    <div style="position:absolute;top:-18px;left:-18px;width:56px;height:56px;border-radius:50%;background:rgba(16,185,129,0.10);"></div>
-                    <table width="100%" cellpadding="0" cellspacing="0" style="position:relative;"><tr>
-                      <td style="vertical-align:top;">
-                        <div style="display:inline-block;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.20);border-radius:99px;padding:1px 5px;font-size:5px;font-weight:700;color:#10B981;letter-spacing:0.03em;">FRI, AUG 1</div>
-                        <div style="font-size:9px;font-weight:800;color:#0F172A;line-height:1.15;margin-top:3px;letter-spacing:-0.02em;">Good morning,<br/>Michael 👋</div>
-                        <div style="font-size:5px;color:#475569;margin-top:2px;">Palm Estate — what's happening</div>
-                      </td>
-                      <td width="18" style="vertical-align:top;text-align:right;">
-                        <div style="width:16px;height:16px;border-radius:50%;background:#10B981;color:#fff;font-size:9px;font-weight:800;text-align:center;line-height:16px;">M</div>
-                      </td>
-                    </tr></table>
-                    <!-- Hero action buttons: Visitors + Alerts -->
-                    <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:5px;border-collapse:separate;border-spacing:3px 0;"><tr>
-                      <td width="50%" style="background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.20);border-radius:6px;padding:3px 4px;text-align:center;">
-                        <span style="font-size:6px;color:#10B981;font-weight:700;">👤＋ Visitors</span>
-                      </td>
-                      <td width="50%" style="background:#10B981;border-radius:6px;padding:3px 4px;text-align:center;">
-                        <span style="font-size:6px;color:#fff;font-weight:700;">🔔 Alerts</span>
-                        <span style="display:inline-block;background:#EF4444;color:#fff;font-size:5px;font-weight:800;border-radius:99px;padding:0 3px;margin-left:2px;">2</span>
-                      </td>
-                    </tr></table>
-                  </div>
-
-                  <!-- 2×2 Stats grid: Residents / Visitors Today / Inside Now / Open Alerts -->
-                  <div style="padding:0 5px 4px;">
-                    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:3px;">
-                      <tr>
-                        <td width="50%" style="background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:6px;padding:5px 4px;">
-                          <div style="width:12px;height:12px;border-radius:4px;background:rgba(99,102,241,0.10);color:#6366F1;font-size:8px;line-height:12px;text-align:center;">👥</div>
-                          <div style="font-size:11px;font-weight:800;color:#6366F1;letter-spacing:-0.03em;margin-top:2px;">248</div>
-                          <div style="font-size:5px;color:#475569;font-weight:500;">Residents</div>
-                        </td>
-                        <td width="50%" style="background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:6px;padding:5px 4px;">
-                          <div style="width:12px;height:12px;border-radius:4px;background:rgba(16,185,129,0.10);color:#10B981;font-size:8px;line-height:12px;text-align:center;">＋</div>
-                          <div style="font-size:11px;font-weight:800;color:#10B981;letter-spacing:-0.03em;margin-top:2px;">17</div>
-                          <div style="font-size:5px;color:#475569;font-weight:500;">Visitors Today</div>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:6px;padding:5px 4px;">
-                          <div style="width:12px;height:12px;border-radius:4px;background:rgba(251,191,36,0.10);color:#FBBF24;font-size:8px;line-height:12px;text-align:center;">🚶</div>
-                          <div style="font-size:11px;font-weight:800;color:#FBBF24;letter-spacing:-0.03em;margin-top:2px;">9</div>
-                          <div style="font-size:5px;color:#475569;font-weight:500;">Inside Now</div>
-                        </td>
-                        <td style="background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:6px;padding:5px 4px;">
-                          <div style="width:12px;height:12px;border-radius:4px;background:rgba(239,68,68,0.10);color:#EF4444;font-size:8px;line-height:12px;text-align:center;">⚠</div>
-                          <div style="font-size:11px;font-weight:800;color:#EF4444;letter-spacing:-0.03em;margin-top:2px;">2</div>
-                          <div style="font-size:5px;color:#475569;font-weight:500;">Open Alerts</div>
-                        </td>
-                      </tr>
-                    </table>
-                  </div>
-
-                  <!-- Bottom tab bar: Home · People · Alerts · Chat · More -->
-                  <div style="border-top:1px solid rgba(0,0,0,0.06);background:#fff;padding:4px 2px;">
-                    <table width="100%" cellpadding="0" cellspacing="0"><tr>
-                      <td width="20%" align="center" style="font-size:7px;color:#10B981;font-weight:800;line-height:1.1;">⌂<br/><span style="font-size:5px;">Home</span></td>
-                      <td width="20%" align="center" style="font-size:7px;color:#94A3B8;line-height:1.1;">👥<br/><span style="font-size:5px;">People</span></td>
-                      <td width="20%" align="center" style="font-size:7px;color:#94A3B8;line-height:1.1;">⚠<br/><span style="font-size:5px;">Alerts</span></td>
-                      <td width="20%" align="center" style="font-size:7px;color:#94A3B8;line-height:1.1;">💬<br/><span style="font-size:5px;">Chat</span></td>
-                      <td width="20%" align="center" style="font-size:7px;color:#94A3B8;line-height:1.1;">⋯<br/><span style="font-size:5px;">More</span></td>
-                    </tr></table>
-                  </div>
-                </div>
-              </div>
-              <div style="margin-top:10px;font-size:11px;font-weight:800;color:#fff;letter-spacing:-0.01em;">Estate Manager</div>
-              <div style="font-size:9px;color:#94A3B8;margin-top:2px;">Run everything from one dashboard</div>
-            </td>
-
-            <!-- ─── PHONE 2 · RESIDENT (bg #F7F5F1 cream, hero INDIGO #6366F1) ─── -->
-            <td width="33%" align="center" valign="top" style="padding:0 2px;">
-              <div style="display:inline-block;width:136px;background:#0B1220;border:2px solid #1F2937;border-radius:22px;padding:5px 4px 4px;box-shadow:0 12px 30px rgba(0,0,0,0.45);">
-                <div style="width:40px;height:5px;background:#000;border-radius:3px;margin:2px auto 4px;"></div>
-                <div style="background:#F7F5F1;border-radius:15px;padding:0;text-align:left;overflow:hidden;">
-
-                  <!-- Indigo hero card -->
-                  <div style="background:#6366F1;padding:8px 8px 9px;margin:5px 5px 6px;border-radius:10px;">
-                    <table width="100%" cellpadding="0" cellspacing="0"><tr>
-                      <td style="vertical-align:top;">
-                        <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:99px;padding:1px 5px;font-size:5px;font-weight:700;color:rgba(255,255,255,0.9);letter-spacing:0.05em;text-transform:uppercase;">🏢 PALM ESTATE</div>
-                        <div style="font-size:6px;color:rgba(255,255,255,0.75);margin-top:3px;">Good morning,</div>
-                        <div style="font-size:12px;font-weight:700;color:#fff;line-height:1.1;">Michael 👋</div>
-                        <div style="font-size:6px;color:rgba(255,255,255,0.65);margin-top:2px;">📍 Unit 12 · Block B</div>
-                      </td>
-                      <td style="vertical-align:top;text-align:right;">
-                        <div style="display:inline-block;background:rgba(197,48,48,0.9);border-radius:99px;padding:2px 5px;font-size:5px;font-weight:700;color:#fff;letter-spacing:0.05em;">🛡 ALERT</div>
-                      </td>
-                    </tr></table>
-                    <!-- Stats row: Active Passes / All Visitors / Notices -->
-                    <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:6px;border-collapse:separate;border-spacing:2px 0;"><tr>
-                      <td width="33%" style="background:rgba(255,255,255,0.12);border-radius:5px;padding:4px 2px;text-align:center;">
-                        <div style="font-size:7px;color:rgba(255,255,255,0.7);">✓</div>
-                        <div style="font-size:10px;color:#fff;font-weight:700;">3</div>
-                        <div style="font-size:4px;color:rgba(255,255,255,0.65);font-weight:600;">Active Passes</div>
-                      </td>
-                      <td width="33%" style="background:rgba(255,255,255,0.12);border-radius:5px;padding:4px 2px;text-align:center;">
-                        <div style="font-size:7px;color:rgba(255,255,255,0.7);">👥</div>
-                        <div style="font-size:10px;color:#fff;font-weight:700;">28</div>
-                        <div style="font-size:4px;color:rgba(255,255,255,0.65);font-weight:600;">All Visitors</div>
-                      </td>
-                      <td width="33%" style="background:rgba(255,255,255,0.12);border-radius:5px;padding:4px 2px;text-align:center;">
-                        <div style="font-size:7px;color:rgba(255,255,255,0.7);">📢</div>
-                        <div style="font-size:10px;color:#fff;font-weight:700;">5</div>
-                        <div style="font-size:4px;color:rgba(255,255,255,0.65);font-weight:600;">Notices</div>
-                      </td>
-                    </tr></table>
-                  </div>
-
-                  <!-- "QUICK ACTIONS" section heading -->
-                  <div style="padding:0 6px;font-size:5px;color:#4A5568;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px;">Quick Actions</div>
-
-                  <!-- 2×2 Quick Actions: white cards, colored icon on tinted bg, colored label -->
-                  <div style="padding:0 5px 4px;">
-                    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:3px;">
-                      <tr>
-                        <td width="50%" style="background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:6px;padding:4px;text-align:center;">
-                          <div style="display:inline-block;width:16px;height:16px;border-radius:5px;background:rgba(39,103,73,0.10);color:#276749;font-size:10px;line-height:16px;text-align:center;">＋</div>
-                          <div style="font-size:6px;font-weight:700;color:#276749;margin-top:2px;">Invite Visitor</div>
-                        </td>
-                        <td width="50%" style="background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:6px;padding:4px;text-align:center;">
-                          <div style="display:inline-block;width:16px;height:16px;border-radius:5px;background:rgba(43,108,176,0.10);color:#2B6CB0;font-size:10px;line-height:16px;text-align:center;">🛍</div>
-                          <div style="font-size:6px;font-weight:700;color:#2B6CB0;margin-top:2px;">Marketplace</div>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:6px;padding:4px;text-align:center;">
-                          <div style="display:inline-block;width:16px;height:16px;border-radius:5px;background:rgba(107,70,193,0.10);color:#6B46C1;font-size:10px;line-height:16px;text-align:center;">💬</div>
-                          <div style="font-size:6px;font-weight:700;color:#6B46C1;margin-top:2px;">Community</div>
-                        </td>
-                        <td style="background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:6px;padding:4px;text-align:center;">
-                          <div style="display:inline-block;width:16px;height:16px;border-radius:5px;background:rgba(197,48,48,0.10);color:#C53030;font-size:10px;line-height:16px;text-align:center;">🛡</div>
-                          <div style="font-size:6px;font-weight:700;color:#C53030;margin-top:2px;">Alert Security</div>
-                        </td>
-                      </tr>
-                    </table>
-                  </div>
-
-                  <!-- Bottom tab bar: Home · Visitors · Chat · Market · More (indigo active) -->
-                  <div style="border-top:1px solid rgba(0,0,0,0.07);background:#fff;padding:4px 2px;">
-                    <table width="100%" cellpadding="0" cellspacing="0"><tr>
-                      <td width="20%" align="center" style="font-size:7px;color:#6366F1;font-weight:800;line-height:1.1;">⌂<br/><span style="font-size:5px;">Home</span></td>
-                      <td width="20%" align="center" style="font-size:7px;color:#A0AEC0;line-height:1.1;">👤<br/><span style="font-size:5px;">Visitors</span></td>
-                      <td width="20%" align="center" style="font-size:7px;color:#A0AEC0;line-height:1.1;">💬<br/><span style="font-size:5px;">Chat</span></td>
-                      <td width="20%" align="center" style="font-size:7px;color:#A0AEC0;line-height:1.1;">🛍<br/><span style="font-size:5px;">Market</span></td>
-                      <td width="20%" align="center" style="font-size:7px;color:#A0AEC0;line-height:1.1;">⋯<br/><span style="font-size:5px;">More</span></td>
-                    </tr></table>
-                  </div>
-                </div>
-              </div>
-              <div style="margin-top:10px;font-size:11px;font-weight:800;color:#fff;letter-spacing:-0.01em;">Resident App</div>
-              <div style="font-size:9px;color:#94A3B8;margin-top:2px;">Passes, notices, security — one tap</div>
-            </td>
-
-            <!-- ─── PHONE 3 · GUARD (bg #060C18, gold #F59E0B, code-entry screen) ─── -->
-            <td width="33%" align="center" valign="top" style="padding:0 2px;">
-              <div style="display:inline-block;width:136px;background:#0B1220;border:2px solid #1F2937;border-radius:22px;padding:5px 4px 4px;box-shadow:0 12px 30px rgba(0,0,0,0.45);">
-                <div style="width:40px;height:5px;background:#000;border-radius:3px;margin:2px auto 4px;"></div>
-                <div style="background:#060C18;border-radius:15px;padding:0;text-align:left;overflow:hidden;">
-
-                  <!-- Centered shield header -->
-                  <div style="padding:10px 8px 6px;text-align:center;">
-                    <div style="display:inline-block;width:26px;height:26px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.25);border-radius:9px;color:#F59E0B;font-size:15px;line-height:26px;text-align:center;">🛡</div>
-                    <div style="font-size:11px;font-weight:800;color:#fff;margin-top:4px;letter-spacing:0.02em;">Gate Security</div>
-                    <div style="font-size:5px;color:rgba(255,255,255,0.55);margin-top:2px;">Enter visitor access code to verify</div>
-                  </div>
-
-                  <!-- Code card: dark card w/ label, QR + input, dots, gold Verify button -->
-                  <div style="margin:0 6px;background:#0F1A2E;border:1px solid rgba(255,255,255,0.07);border-radius:9px;padding:7px 6px 6px;">
-                    <div style="font-size:5px;color:rgba(255,255,255,0.30);font-weight:700;letter-spacing:0.12em;text-align:center;text-transform:uppercase;">Visitor Access Code</div>
-                    <!-- Input row -->
-                    <div style="background:#0D172A;border:1px solid rgba(245,158,11,0.25);border-radius:6px;padding:4px 6px;margin-top:4px;">
-                      <table width="100%" cellpadding="0" cellspacing="0"><tr>
-                        <td width="12" style="vertical-align:middle;font-size:8px;color:rgba(255,255,255,0.30);">▦</td>
-                        <td style="text-align:center;font-family:'Courier New',monospace;font-size:12px;font-weight:800;color:#F59E0B;letter-spacing:0.35em;">ABC123</td>
-                      </tr></table>
-                    </div>
-                    <!-- Progress dots (6 bars) -->
-                    <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:5px;border-collapse:separate;border-spacing:2px 0;"><tr>
-                      <td style="height:3px;background:#F59E0B;border-radius:99px;"></td>
-                      <td style="height:3px;background:#F59E0B;border-radius:99px;"></td>
-                      <td style="height:3px;background:#F59E0B;border-radius:99px;"></td>
-                      <td style="height:3px;background:#F59E0B;border-radius:99px;"></td>
-                      <td style="height:3px;background:#F59E0B;border-radius:99px;"></td>
-                      <td style="height:3px;background:#F59E0B;border-radius:99px;"></td>
-                    </tr></table>
-                    <!-- Verify button (gold, black text) -->
-                    <div style="background:#F59E0B;border-radius:6px;padding:5px;text-align:center;margin-top:5px;">
-                      <span style="font-size:8px;font-weight:800;color:#000;">🔍 Verify Code</span>
-                    </div>
-                  </div>
-
-                  <div style="height:14px;"></div>
-
-                  <!-- Bottom tab bar (dark): Gate · Alerts · Log · Profile -->
-                  <div style="border-top:1px solid rgba(255,255,255,0.07);background:#0A1020;padding:4px 2px;">
-                    <table width="100%" cellpadding="0" cellspacing="0"><tr>
-                      <td width="25%" align="center" style="font-size:8px;color:#F59E0B;font-weight:800;line-height:1.1;">🛡<br/><span style="font-size:5px;">Gate</span></td>
-                      <td width="25%" align="center" style="font-size:8px;color:rgba(255,255,255,0.30);line-height:1.1;">⚠<br/><span style="font-size:5px;">Alerts</span></td>
-                      <td width="25%" align="center" style="font-size:8px;color:rgba(255,255,255,0.30);line-height:1.1;">☰<br/><span style="font-size:5px;">Entry Log</span></td>
-                      <td width="25%" align="center" style="font-size:8px;color:rgba(255,255,255,0.30);line-height:1.1;">👤<br/><span style="font-size:5px;">Profile</span></td>
-                    </tr></table>
-                  </div>
-                </div>
-              </div>
-              <div style="margin-top:10px;font-size:11px;font-weight:800;color:#fff;letter-spacing:-0.01em;">Guard App</div>
-              <div style="font-size:9px;color:#94A3B8;margin-top:2px;">Verify visitors by code in seconds</div>
-            </td>
-
-          </tr>
-        </table>
-
-        <p style="font-size:11px;color:#94A3B8;margin-top:20px;line-height:1.6;">
-          Three connected apps. One shared source of truth. Zero data re-entry.
-        </p>
-      </div>
-
-      <!-- Feature grid -->
-      <div style="margin-bottom:32px;">
-        <p style="font-size:11px;font-weight:800;color:#94A3B8;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:16px;">What You Get</p>
-        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-          ${[
-            ['🏠', 'Resident Management',    'Digital resident directory, unit assignment, lease tracking'],
-            ['🔐', 'Security & Access',       'Visitor pre-registration, QR codes, guard dashboard, security logs'],
-            ['💰', 'Levy & Payment Tracking', 'Automated billing, payment history, invoices & receipts via email'],
-            ['📢', 'Announcements & Alerts',  'Broadcast messages, emergency alerts, community noticeboard'],
-            ['💬', 'Community Lounge',        'Social feed, polls, marketplace — residents stay connected'],
-            ['📊', 'Analytics Dashboard',     'Occupancy rates, payment stats, visitor trends at a glance'],
-          ].map(([icon, title, desc], i) => `
-          <tr style="background:${i % 2 === 0 ? '#F8FAFC' : '#fff'};">
-            <td style="padding:14px 16px;width:40px;font-size:22px;vertical-align:top;">${icon}</td>
-            <td style="padding:14px 8px 14px 0;vertical-align:top;">
-              <div style="font-size:14px;font-weight:700;color:#0F172A;margin-bottom:3px;">${title}</div>
-              <div style="font-size:12px;color:#6B7280;line-height:1.5;">${desc}</div>
-            </td>
-          </tr>`).join('')}
-        </table>
-      </div>
-
-      <!-- Pricing callout -->
-      <div style="background:linear-gradient(135deg,#F0FDF4,#ECFDF5);border:1.5px solid #A7F3D0;border-radius:14px;padding:22px 24px;margin-bottom:28px;">
-        <p style="font-size:11px;font-weight:800;color:#059669;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;">30 Days Free · Then Pick a Plan</p>
-        <p style="font-size:12px;color:#065F46;line-height:1.6;margin-bottom:14px;">
-          You won't be charged during your first month. After that, choose the plan that fits your estate — or cancel with one click.
-        </p>
-        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-          ${[
-            ['Starter',    'Free 30 days, then &#8358;20,000/mo',  'Up to 50 residents &middot; security, announcements, visitor mgmt'],
-            ['Growth',     'Free 30 days, then &#8358;47,000/mo',  'Up to 150 residents &middot; payments, AI, community chat, events'],
-            ['Premium',    'Free 30 days, then &#8358;80,000/mo',  'Up to 300 residents &middot; marketplace, lounge, white-label'],
-            ['Enterprise', 'Free 30 days, then &#8358;100,000/mo', 'Up to 500 residents &middot; full suite, API access, priority support'],
-          ].map(([plan, price, desc]) => `
-          <tr>
-            <td style="padding:6px 0;font-size:13px;font-weight:700;color:#0F172A;width:110px;">${plan}</td>
-            <td style="padding:6px 0;font-size:14px;font-weight:800;color:#059669;width:130px;">${price}</td>
-            <td style="padding:6px 0;font-size:12px;color:#6B7280;">${desc}</td>
-          </tr>`).join('')}
-        </table>
-      </div>
-
-      <!-- Social proof -->
-      <div style="background:#F8FAFC;border-radius:12px;padding:18px 20px;margin-bottom:28px;border-left:4px solid #10B981;">
-        <p style="font-size:13px;font-style:italic;color:#374151;line-height:1.7;margin-bottom:8px;">
-          "AreaConnect reduced our security incidents by 60% in the first month. The visitor management system alone is worth every kobo."
-        </p>
-        <p style="font-size:12px;font-weight:600;color:#6B7280;">— Estate Manager, Lekki Phase 1, Lagos</p>
-      </div>
-
-      <!-- Stats row -->
-      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:32px;">
-        ${[
-          ['30 Days','Free Trial'],
-          ['500+',   'Active Estates'],
-          ['50,000+','Residents Managed'],
-          ['99.9%',  'Platform Uptime'],
-        ].map(([num, label]) => `
-        <td style="text-align:center;padding:16px 8px;background:#F8FAFC;border-radius:10px;margin:4px;">
-          <div style="font-size:22px;font-weight:900;color:#10B981;letter-spacing:-0.03em;">${num}</div>
-          <div style="font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-top:3px;">${label}</div>
-        </td>`).join('')}
-      </table>
-
-      <!-- CTA -->
-      <div style="text-align:center;margin-bottom:20px;">
-        <a href="https://area-connector.areaconnect.pro/register"
-          style="display:inline-block;background:linear-gradient(135deg,#10B981,#059669);color:#fff;font-weight:800;font-size:16px;text-decoration:none;padding:16px 48px;border-radius:12px;letter-spacing:-0.01em;box-shadow:0 4px 16px rgba(16,185,129,0.4);">
-          Start My Free 30 Days &rarr;
-        </a>
-        <p style="font-size:12px;color:#94A3B8;margin-top:10px;">No credit card required &nbsp;·&nbsp; Cancel anytime &nbsp;·&nbsp; Setup in under 10 minutes</p>
-      </div>
-
-      <!-- CEO personal sign-off -->
-      <div style="border-top:1px solid #E2E8F0;padding-top:24px;margin-top:4px;">
-        <table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;">
-          <tr>
-            <td style="vertical-align:top;padding-right:16px;width:52px;">
-              <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#10B981,#059669);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#fff;text-align:center;line-height:48px;">
-                MO
-              </div>
-            </td>
-            <td style="vertical-align:top;">
-              <p style="font-size:14px;color:#374151;line-height:1.7;margin:0 0 10px;">
-                I built AreaConnect because I've seen first-hand how much time Nigerian estate managers lose to manual processes — WhatsApp dues reminders, handwritten visitor logs, security gaps. That's why I'm giving you <strong style="color:#059669;">30 days on the house</strong> — spin up <strong>${company}</strong> on AreaConnect, put every feature through its paces, and only pay if it earns its keep. If it doesn't work for you, no card was ever charged.
-              </p>
-              <p style="font-size:13px;color:#374151;margin:0;">
-                Feel free to reach me directly —<br>
-                <a href="mailto:michael@areaconnect.pro" style="color:#10B981;font-weight:700;text-decoration:none;font-size:14px;">michael@areaconnect.pro</a>
-              </p>
-              <div style="margin-top:12px;">
-                <div style="font-size:14px;font-weight:800;color:#0F172A;">Michael Orizu</div>
-                <div style="font-size:12px;color:#64748B;margin-top:1px;">CEO &amp; Co-founder, AreaConnect</div>
-                <div style="margin-top:6px;">
-                  <a href="https://areaconnect.pro" style="color:#10B981;font-size:12px;font-weight:600;text-decoration:none;">areaconnect.pro</a>
-                </div>
-              </div>
-            </td>
-          </tr>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;line-height:1.8;">
-    You're receiving this because you were identified as a property professional in Nigeria.<br>
-    <a href="${FRONTEND_URL}/unsubscribe" style="color:#CBD5E1;text-decoration:none;">Unsubscribe</a>
-    &nbsp;·&nbsp; AreaConnect &nbsp;·&nbsp; Lagos, Nigeria<br>
-    Powered by Area Connector Technologies &nbsp;&middot;&nbsp; RC 9607864
+  <!-- Intro -->
+  <div style="font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${C.green};margin:0 0 10px;">For ${org}</div>
+  <h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;font-weight:800;letter-spacing:-0.03em;color:${C.ink};">
+    Your whole estate,<br>quietly taken care of.
+  </h1>
+  <p style="margin:0 0 14px;font-size:16px;line-height:1.7;color:${C.body};">Hi ${firstName},</p>
+  <p style="margin:0 0 28px;font-size:16px;line-height:1.7;color:${C.body};">
+    I’m Michael, founder of AreaConnect. We help estates like ${org}${where} run the gate, dues and resident
+    updates from one place &mdash; so evenings are a little calmer for everyone. Here’s what it looks like on a resident’s phone:
   </p>
-</div>
+
+  <!-- Animated phone (recorded from areaconnect.pro) -->
+  <a href="https://areaconnect.pro" style="display:inline-block;text-decoration:none;">
+    <img src="cid:ac-phone" width="300" alt="AreaMates app: visitor passes updating live as guests arrive" style="display:block;border:0;width:300px;max-width:100%;height:auto;">
+  </a>
+
+  <!-- An evening, step by step -->
+  <h2 style="margin:32px 0 16px;font-size:19px;font-weight:700;letter-spacing:-0.01em;color:${C.ink};">An ordinary evening, handled</h2>
+  <table cellpadding="0" cellspacing="0" style="margin:0 0 34px;max-width:560px;">${timeline}
+  </table>
+
+  <!-- Interactive question -->
+  <div style="background:${C.soft};border:1px solid ${C.line};border-radius:16px;padding:20px 16px 12px;margin:0 0 34px;max-width:560px;">
+    <div style="font-size:18px;font-weight:700;letter-spacing:-0.01em;color:${C.ink};">What takes up most of your week?</div>
+    <div style="font-size:13px;color:${C.muted};margin:4px 0 14px;">Tap one &mdash; it opens a ready-made reply. I read every one myself.</div>
+    <table width="100%" cellpadding="0" cellspacing="0">${pains}
+    </table>
+  </div>
+
+  <!-- Three apps -->
+  <h2 style="margin:0 0 16px;font-size:19px;font-weight:700;letter-spacing:-0.01em;color:${C.ink};">Three apps, one estate</h2>
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 34px;max-width:620px;"><tr>${apps}
+  </tr></table>
+
+  <!-- Offer + CTAs -->
+  <p style="margin:0 0 6px;font-size:16px;line-height:1.7;color:${C.body};">
+    If you’d like to try it, <strong style="color:${C.ink};">the first month is free</strong> &mdash; every feature, no card, nothing to cancel.
+    Setup takes about ten minutes, and I’m happy to do it with you.
+  </p>
+  <p style="margin:0 0 22px;font-size:13px;color:${C.muted};">After that, plans start at &#8358;20,000/month.</p>
+  <table cellpadding="0" cellspacing="0" style="margin:0 0 36px;"><tr>
+    <td style="padding:0 10px 10px 0;">
+      <a href="${REGISTER}" style="display:inline-block;background:${C.green};color:#FFFFFF;font-size:15px;font-weight:700;text-decoration:none;padding:13px 22px;border-radius:999px;">Start my free month &rarr;</a>
+    </td>
+    <td style="padding:0 0 10px;">
+      <a href="${reply(`Walkthrough for ${company || 'our estate'}`, `Hi Michael,\n\nI'd like a 15-minute walkthrough. A good time for me is:\n\n`)}" style="display:inline-block;background:#FFFFFF;color:${C.greenDark};font-size:15px;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:999px;border:1px solid #A7F3D0;">Book a 15-min walkthrough</a>
+    </td>
+  </tr></table>
+
+  <!-- Sign-off -->
+  <table cellpadding="0" cellspacing="0" style="border-top:1px solid ${C.line};padding-top:22px;max-width:560px;width:100%;"><tr>
+    <td width="68" valign="top" style="padding-top:22px;"><img src="cid:ac-michael" width="56" height="56" alt="Michael Orizu" style="display:block;border:0;border-radius:50%;"></td>
+    <td valign="top" style="padding-top:22px;">
+      <div style="font-size:15px;line-height:1.6;color:${C.body};">No pressure either way &mdash; thanks for reading.</div>
+      <div style="font-size:15px;font-weight:700;color:${C.ink};margin-top:6px;">Michael Orizu</div>
+      <div style="font-size:13px;color:${C.muted};">Founder, AreaConnect &middot; <a href="mailto:${REPLY_TO}" style="color:${C.greenDark};text-decoration:none;">${REPLY_TO}</a></div>
+    </td>
+  </tr></table>
+
+  <!-- Quiet opt-out -->
+  <p style="margin:30px 0 0;font-size:12px;line-height:1.8;color:${C.muted};">
+    Not the right time? <a href="${reply(`Not right now${about}`, 'Hi Michael,\n\nNot right now, thanks.\n')}" style="color:${C.body};">Let me know</a>
+    and I won’t follow up. &middot; <a href="${FRONTEND_URL}/unsubscribe" style="color:${C.muted};">Unsubscribe</a><br>
+    Area Connector Technologies &middot; RC 9607864 &middot; Lagos, Nigeria
+  </p>
+
+</td></tr></table>
 </body></html>`,
   });
+  // Resend reports failures in the response rather than throwing
+  if (error) throw Object.assign(new Error(error.message), { name: error.name, statusCode: error.statusCode });
 
   return { sent: true };
 };
