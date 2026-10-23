@@ -15,6 +15,8 @@ const genTempPassword = () => {
   return s;
 };
 
+const hasSignedIn = (u) => !!u.lastSeen && new Date(u.lastSeen) - new Date(u.createdAt) > 5000;
+
 const publicMember = (u, estate) => ({
   _id: u._id,
   name: u.name,
@@ -27,7 +29,9 @@ const publicMember = (u, estate) => ({
   isOwner: u.teamRole !== 'member',
   isPrimary: String(estate?.managerId || '') === String(u._id),
   permissions: u.teamRole === 'member' ? u.permissions : Object.keys(AREAS),
-  pendingFirstLogin: !!u.mustChangePassword,
+  // lastSeen starts at account creation and moves on every sign-in
+  pendingFirstLogin: u.teamRole === 'member' && !hasSignedIn(u),
+  needsPasswordChange: u.teamRole === 'member' && hasSignedIn(u) && !!u.mustChangePassword,
 });
 
 // Everyone who manages this estate: owner(s) + invited members
@@ -150,6 +154,7 @@ exports.resendInvite = async (req, res) => {
     member.passwordHash = await bcrypt.hash(tempPassword, 12);
     member.mustChangePassword = true;
     member.refreshToken = null;
+    member.lastSeen = member.createdAt; // back to 'invite pending' until they sign in
     await member.save();
     const estate = await Estate.findById(req.estateId).select('name').lean();
     await sendTeamInviteEmail({
