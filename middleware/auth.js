@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Subscription = require('../models/Subscription');
+const { canAccess, requiredAreas } = require('../utils/teamAccess');
 
 const authenticate = async (req, res, next) => {
   try {
@@ -18,6 +19,15 @@ const authenticate = async (req, res, next) => {
     }
 
     req.user = user;
+    // Invited team members only reach the areas they were given
+    if (!canAccess(user, req)) {
+      return res.status(403).json({
+        success: false,
+        code: 'TEAM_NO_ACCESS',
+        areas: requiredAreas(req),
+        message: "You don't have access to this part of the estate. Ask your estate manager for access.",
+      });
+    }
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {

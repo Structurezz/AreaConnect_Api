@@ -13,6 +13,11 @@ const userSchema = new mongoose.Schema({
   },
   estateId: { type: mongoose.Schema.Types.ObjectId, ref: 'Estate' },
   managedEstates: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Estate' }],
+  // Estate manager teams: 'owner' = full access (every manager before teams);
+  // 'member' = invited teammate limited to `permissions` (utils/teamAccess AREAS).
+  teamRole:    { type: String, enum: ['owner', 'member'], default: 'owner' },
+  permissions: { type: [String], default: [] },
+  invitedBy:   { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   unitId: { type: mongoose.Schema.Types.ObjectId, ref: 'Unit' },
   profilePhoto: { type: String, default: '' },
   isActive: { type: Boolean, default: true },

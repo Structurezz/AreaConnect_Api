@@ -147,6 +147,65 @@ const sendInviteEmail = async ({ to, name, estateName, loginUrl, tempPassword })
   return { sent: true };
 };
 
+// ── Estate manager team invite ────────────────────────────────────────────────
+const sendTeamInviteEmail = async ({ to, name, estateName, inviterName, permissions = [], loginUrl, tempPassword }) => {
+  if (!process.env.RESEND_API_KEY) return { skipped: true };
+  const estate  = escapeHtml(estateName || 'your estate');
+  const inviter = escapeHtml(inviterName || 'Your estate manager');
+  const areas   = permissions.map(p => `
+          <tr><td width="22" valign="top" style="padding:0 0 8px;color:#10B981;font-weight:800;">&check;</td>
+              <td style="padding:0 0 8px;font-size:14px;color:#0F172A;">${escapeHtml(p)}</td></tr>`).join('');
+
+  const { error } = await sendEmail({
+    from: FROM(),
+    to,
+    subject: `${inviterName || 'Your estate manager'} added you to the ${estateName || 'estate'} team on AreaConnect`,
+    html: `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:24px;">${brandMark()}</div>
+  <div style="background:#fff;">
+    <div style="background:linear-gradient(135deg,#10B981,#059669);padding:28px 32px;">
+      <p style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.75);margin:0 0 6px;">${estate} &middot; Management team</p>
+      <h1 style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.02em;margin:0;">You've joined the team</h1>
+    </div>
+    <div style="padding:32px;">
+      <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 22px;">
+        Hi <strong>${escapeHtml(name || 'there')}</strong>, ${inviter} has added you to the management team for <strong>${estate}</strong> on AreaConnect.
+      </p>
+
+      <p style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9CA3AF;margin:0 0 10px;">You can manage</p>
+      <table cellpadding="0" cellspacing="0" style="margin:0 0 26px;">${areas}</table>
+
+      <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;padding:24px;margin-bottom:28px;">
+        <p style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9CA3AF;margin:0 0 16px;">Your login</p>
+        <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#9CA3AF;margin:0 0 4px;">Email</p>
+        <p style="font-size:15px;font-weight:600;color:#111827;margin:0 0 16px;">${escapeHtml(to)}</p>
+        <div style="border-top:1px solid #E5E7EB;padding-top:16px;">
+          <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#9CA3AF;margin:0 0 8px;">Temporary password</p>
+          <p style="font-family:'Courier New',Courier,monospace;font-size:22px;font-weight:800;letter-spacing:0.08em;color:#047857;background:#F0FDF9;border:1px solid #A7F3D0;border-radius:8px;padding:10px 14px;display:inline-block;margin:0;">${escapeHtml(tempPassword)}</p>
+        </div>
+      </div>
+
+      <div style="text-align:center;margin-bottom:24px;">
+        <a href="${loginUrl}" style="display:inline-block;background:linear-gradient(135deg,#10B981,#059669);color:#fff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 40px;border-radius:10px;">Sign in to AreaConnect &rarr;</a>
+      </div>
+      <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:14px 16px;">
+        <p style="font-size:13px;color:#92400E;line-height:1.5;margin:0;">You'll be asked to set your own password the first time you sign in. Keep your login private.</p>
+      </div>
+    </div>
+  </div>
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">
+    Not expecting this? You can ignore this email. &nbsp;&middot;&nbsp; Powered by Area Connector Technologies &middot; RC 9607864
+  </p>
+</div>
+</body></html>`,
+  });
+  if (error) throw Object.assign(new Error(error.message), { name: error.name, statusCode: error.statusCode });
+  return { sent: true };
+};
+
 // ── Manager notification email ────────────────────────────────────────────────
 const TYPE_META = {
   payment_received: { label: 'Payment Received',  color: '#10B981', icon: '💰' },
@@ -1749,6 +1808,7 @@ module.exports = {
   sendEmergencyAlertEmails,
   sendVisitorPass,
   sendInviteEmail,
+  sendTeamInviteEmail,
   sendManagerNotificationEmail,
   sendPaymentReceiptEmail,
   sendWithdrawalReceiptEmail,
