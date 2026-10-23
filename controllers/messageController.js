@@ -108,6 +108,7 @@ exports.sendMessage = async (req, res) => {
             message.content,
             req.user.name,
             estateName,
+            req.estateId,
           );
 
           emitNkechiTyping(estateIdStr, false);
