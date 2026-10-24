@@ -29,6 +29,13 @@ const markOverdue = async (estateId) => {
   }
 };
 
+// Only dues paid online (Paystack) are money AreaConnect actually holds, so
+// only they count towards the withdrawable wallet. Cash / bank transfers the
+// manager records by hand were paid to the estate directly — they show as
+// paid on the resident's record but must never be withdrawable.
+const ONLINE_PAID = { status: 'paid', method: 'paystack' };
+exports.ONLINE_PAID = ONLINE_PAID;
+
 const creditManagerWallet = async (estateId, amount) => {
   const estate = await Estate.findById(estateId).select('managerId');
   if (estate?.managerId) {
@@ -146,7 +153,7 @@ exports.recordManualPayment = async (req, res) => {
     payment.recordedBy = req.user._id;
     await payment.save();
 
-    await creditManagerWallet(req.estateId, payment.amount);
+    // No wallet credit: this money was paid outside the platform.
 
     await payment.populate([
       { path: 'residentId', populate: { path: 'unitId', select: 'unitNumber block type' } },
@@ -740,10 +747,11 @@ exports.getWallet = async (req, res) => {
     // Pull the real outcome of any in-flight transfers before computing
     await exports.syncPendingWithdrawals({ userId: req.user._id }, 10);
 
-    // Dynamic balance: all paid payments for this estate minus all withdrawals
-    const [paymentsAgg, withdrawalsAgg, withdrawals] = await Promise.all([
+    // Dynamic balance: dues paid online for this estate minus all withdrawals.
+    // Offline (cash / transfer) payments are reported separately, never withdrawable.
+    const [paymentsAgg, withdrawalsAgg, withdrawals, offlineAgg] = await Promise.all([
       Payment.aggregate([
-        { $match: { estateId: req.estateId, status: 'paid' } },
+        { $match: { estateId: req.estateId, ...ONLINE_PAID } },
         { $group: { _id: null, total: { $sum: '$amount' } } },
       ]),
       Withdrawal.aggregate([
@@ -751,9 +759,14 @@ exports.getWallet = async (req, res) => {
         { $group: { _id: null, total: { $sum: '$amount' } } },
       ]),
       Withdrawal.find({ userId: req.user._id, source: { $ne: 'marketplace' } }).sort({ createdAt: -1 }).limit(20),
+      Payment.aggregate([
+        { $match: { estateId: req.estateId, status: 'paid', method: { $ne: 'paystack' } } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]),
     ]);
 
     const collected = paymentsAgg[0]?.total || 0;
+    const collectedOffline = offlineAgg[0]?.total || 0;
     const withdrawn = withdrawalsAgg[0]?.total || 0;
     const balance = Math.max(0, collected - withdrawn);
 
@@ -762,6 +775,7 @@ exports.getWallet = async (req, res) => {
       data: {
         balance,
         collected,
+        collectedOffline,
         withdrawn,
         bank: {
           code: user.bankCode,
@@ -934,7 +948,7 @@ exports.withdrawFromWallet = async (req, res) => {
     const liveBalance = async () => {
       const [paymentsAgg, withdrawalsAgg] = await Promise.all([
         Payment.aggregate([
-          { $match: { estateId: req.estateId, status: 'paid' } },
+          { $match: { estateId: req.estateId, ...ONLINE_PAID } },
           { $group: { _id: null, total: { $sum: '$amount' } } },
         ]),
         Withdrawal.aggregate([

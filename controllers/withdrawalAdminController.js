@@ -48,15 +48,16 @@ exports.listWithdrawals = async (req, res) => {
 
 // Super admin — live Paystack balance vs what's owed to managers, so admin
 // knows how much can safely be moved out to the AreaConnect bank account.
-//   walletBalances: sum of every estate's withdrawable wallet (paid levies
+//   walletBalances: sum of every estate's withdrawable wallet (online-paid levies
 //                   minus pending/success withdrawals, floored at 0 per estate)
 //   queued:         pending withdrawals with no Paystack transfer yet — still
 //                   to leave the balance (in-flight transfers already have)
 exports.getBalance = async (req, res) => {
   try {
     const [paidByEstate, withdrawnByEstate, queuedAgg] = await Promise.all([
+      // Only online (Paystack) dues sit in our balance — offline payments never did
       Payment.aggregate([
-        { $match: { status: 'paid' } },
+        { $match: { status: 'paid', method: 'paystack' } },
         { $group: { _id: '$estateId', total: { $sum: '$amount' } } },
       ]),
       Withdrawal.aggregate([
