@@ -25,6 +25,8 @@ router.post('/add', authorize('estate_manager'), [
   body('address').notEmpty(),
 ], validate, ctrl.addEstate);
 
+router.get('/geocode-preview', authorize('estate_manager', 'super_admin'), ctrl.geocodePreview);
+
 router.get('/:estateId/detail', authorize('super_admin'), ctrl.getEstateDetail);
 router.get('/:estateId', ctrl.getEstate);
 

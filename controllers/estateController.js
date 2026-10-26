@@ -177,10 +177,12 @@ exports.getEstatesOverview = async (req, res) => {
 
     // Backfill map coordinates for older estates in the background (a few per load)
     if (process.env.GOOGLE_MAPS_API_KEY) {
-      const missing = estates.filter(e => e.address && !e.location?.lat).slice(0, 8);
+      // Also redo pins that only resolved to the country centroid (pre-precision fix)
+      const missing = estates.filter(e => e.address && (!e.location?.lat || e.location.formattedAddress === 'Nigeria')).slice(0, 8);
       Promise.all(missing.map(async (e) => {
-        const geo = await geocodeAddress(e.address).catch(() => null);
+        const geo = await geocodeAddress(e.address, e).catch(() => null);
         if (geo) await Estate.updateOne({ _id: e._id }, { location: { ...geo, geocodedAt: new Date() } });
+        else if (e.location?.formattedAddress === 'Nigeria') await Estate.updateOne({ _id: e._id }, { 'location.lat': null, 'location.lng': null, 'location.formattedAddress': '' });
       })).catch(() => {});
     }
 
@@ -200,7 +202,7 @@ exports.getEstate = async (req, res) => {
     // Lazy backfill: if the estate has an address but no lat/lng yet, geocode inline
     // so existing records get map coordinates the first time anyone views them.
     if (estate.address && !estate.location?.lat && process.env.GOOGLE_MAPS_API_KEY) {
-      const geo = await geocodeAddress(estate.address);
+      const geo = await geocodeAddress(estate.address, estate);
       if (geo) {
         estate.location = { ...geo, geocodedAt: new Date() };
         estate.save().catch(err => console.warn('lazy geocode save failed:', err.message));
@@ -322,13 +324,13 @@ exports.updateEstate = async (req, res) => {
     } else if (address !== undefined) {
       update.address = address;
       // Re-geocode when address changed and no manual pin provided
-      const current = await Estate.findById(req.params.estateId).select('address').lean();
+      const current = await Estate.findById(req.params.estateId).select('address city state').lean();
       if (current && current.address !== address) {
         if (!process.env.GOOGLE_MAPS_API_KEY) {
           console.warn('[updateEstate] GOOGLE_MAPS_API_KEY missing — pin will stay stale');
           geocodeOutcome = 'not_configured';
         } else {
-          const geo = await geocodeAddress(address);
+          const geo = await geocodeAddress(address, { city: req.body.city ?? current.city, state: req.body.state ?? current.state });
           if (geo) {
             update.location = { ...geo, geocodedAt: new Date() };
             geocodeOutcome = 'success';
@@ -526,7 +528,7 @@ exports.geocodeEstate = async (req, res) => {
     if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
     if (!estate.address) return res.status(400).json({ success: false, message: 'Estate has no address to geocode' });
 
-    const geo = await geocodeAddress(estate.address);
+    const geo = await geocodeAddress(estate.address, estate);
     if (!geo) return res.status(422).json({ success: false, message: 'Address could not be geocoded' });
 
     estate.location = { ...geo, geocodedAt: new Date() };
@@ -700,6 +702,20 @@ exports.getEstateStats = async (req, res) => {
       success: true,
       data: { totalResidents, activeVisitors, todaysVisitors, openAlerts, totalUnits },
     });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// GET /api/estates/geocode-preview?address=&city=&state= — find coordinates for an address without saving
+exports.geocodePreview = async (req, res) => {
+  try {
+    const { address, city, state } = req.query;
+    if (!address) return res.status(400).json({ success: false, message: 'Address is required' });
+    if (!process.env.GOOGLE_MAPS_API_KEY) return res.status(503).json({ success: false, message: 'Maps not configured' });
+    const geo = await geocodeAddress(String(address), { city, state });
+    if (!geo) return res.status(404).json({ success: false, message: 'Address not found — try adding the area and state' });
+    return res.json({ success: true, data: geo });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
   }

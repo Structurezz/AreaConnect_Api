@@ -48,7 +48,7 @@ async function seedSubscription(estateId, { planId, planSlug, cycle = 'monthly',
 
 async function createEstateDoc(data, { source, adminId, managerId, batchId = '' }) {
   const location = {};
-  const geo = await geocodeAddress(data.address).catch(() => null);
+  const geo = await geocodeAddress(data.address, data).catch(() => null);
   if (geo) Object.assign(location, geo, { geocodedAt: new Date() });
   const doc = {
     name: String(data.name).trim(), address: String(data.address).trim(),
