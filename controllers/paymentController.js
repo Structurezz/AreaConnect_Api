@@ -745,9 +745,10 @@ exports.getWallet = async (req, res) => {
     );
 
     // Pull the real outcome of any in-flight transfers before computing
-    await exports.syncPendingWithdrawals({ userId: req.user._id }, 10);
+    await exports.syncPendingWithdrawals({ estateId: req.estateId }, 10);
 
-    // Dynamic balance: dues paid online for this estate minus all withdrawals.
+    // Dynamic balance: dues paid online for this estate minus the estate's
+    // withdrawals (by estate, not by user, so a new manager inherits the history).
     // Offline (cash / transfer) payments are reported separately, never withdrawable.
     const [paymentsAgg, withdrawalsAgg, withdrawals, offlineAgg] = await Promise.all([
       Payment.aggregate([
@@ -755,10 +756,10 @@ exports.getWallet = async (req, res) => {
         { $group: { _id: null, total: { $sum: '$amount' } } },
       ]),
       Withdrawal.aggregate([
-        { $match: { userId: req.user._id, source: { $ne: 'marketplace' }, status: { $in: ['pending', 'success'] } } },
+        { $match: { estateId: req.estateId, source: { $ne: 'marketplace' }, status: { $in: ['pending', 'success'] } } },
         { $group: { _id: null, total: { $sum: '$amount' } } },
       ]),
-      Withdrawal.find({ userId: req.user._id, source: { $ne: 'marketplace' } }).sort({ createdAt: -1 }).limit(20),
+      Withdrawal.find({ estateId: req.estateId, source: { $ne: 'marketplace' } }).sort({ createdAt: -1 }).limit(20),
       Payment.aggregate([
         { $match: { estateId: req.estateId, status: 'paid', method: { $ne: 'paystack' } } },
         { $group: { _id: null, total: { $sum: '$amount' } } },
@@ -952,7 +953,7 @@ exports.withdrawFromWallet = async (req, res) => {
           { $group: { _id: null, total: { $sum: '$amount' } } },
         ]),
         Withdrawal.aggregate([
-          { $match: { userId: req.user._id, source: { $ne: 'marketplace' }, status: { $in: ['pending', 'success'] } } },
+          { $match: { estateId: req.estateId, source: { $ne: 'marketplace' }, status: { $in: ['pending', 'success'] } } },
           { $group: { _id: null, total: { $sum: '$amount' } } },
         ]),
       ]);
