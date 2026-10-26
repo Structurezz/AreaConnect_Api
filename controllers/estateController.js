@@ -107,7 +107,7 @@ exports.getEstatesOverview = async (req, res) => {
 
     const [estates, subs, residentCounts, unitCounts, visitorsToday, visitorsWeek, openAlerts] = await Promise.all([
       Estate.find()
-        .populate('managerId', 'name email phone')
+        .populate('managerId', 'name email phone profilePhoto lastSeen')
         .sort({ createdAt: -1 })
         .lean(),
       Subscription.find()
@@ -174,6 +174,15 @@ exports.getEstatesOverview = async (req, res) => {
         },
       };
     });
+
+    // Backfill map coordinates for older estates in the background (a few per load)
+    if (process.env.GOOGLE_MAPS_API_KEY) {
+      const missing = estates.filter(e => e.address && !e.location?.lat).slice(0, 8);
+      Promise.all(missing.map(async (e) => {
+        const geo = await geocodeAddress(e.address).catch(() => null);
+        if (geo) await Estate.updateOne({ _id: e._id }, { location: { ...geo, geocodedAt: new Date() } });
+      })).catch(() => {});
+    }
 
     return res.json({ success: true, data });
   } catch (err) {
@@ -283,6 +292,12 @@ exports.updateEstate = async (req, res) => {
     const update = {};
     if (name !== undefined) update.name = name;
     if (settings !== undefined) update.settings = settings;
+    // Profile fields (managers and admins); activation is admin-only
+    for (const f of ['city', 'state', 'estateType', 'contactPhone', 'contactEmail', 'adminNotes', 'logoUrl']) {
+      if (req.body[f] !== undefined && (f !== 'adminNotes' || req.user.role === 'super_admin')) update[f] = String(req.body[f]).trim();
+    }
+    if (req.body.unitCount !== undefined) update.unitCount = Math.max(0, Number(req.body.unitCount) || 0);
+    if (req.body.isActive !== undefined && req.user.role === 'super_admin') update.isActive = !!req.body.isActive;
 
     // Tracks what happened with geocoding so the client can show the right toast.
     //   'manual'    — manager/admin dropped a pin by hand, we trust that
