@@ -99,6 +99,8 @@ const initSocket = (server) => {
         socket.join(`user:${userId}`);
         socket.data.userId = String(userId);
         socket.data.role = user.role;
+        // Platform admins get a live feed of activity across every estate
+        if (user.role === 'super_admin') socket.join('platform:admins');
         if (!user.estateId) return;
 
         const estateId = String(user.estateId);
@@ -463,6 +465,14 @@ const initSocket = (server) => {
  *   'security'       → security only
  * Legacy alerts without an audience field are treated as 'all'.
  */
+/** Mirror an estate event to platform admins (Operations live feed). Never throws. */
+const emitPlatform = (kind, estateId, data = {}) => {
+  try {
+    if (!io) return;
+    io.to('platform:admins').emit('platform:event', { kind, estateId: estateId ? String(estateId) : null, at: new Date().toISOString(), ...data });
+  } catch { /* ignore */ }
+};
+
 const emitAlert = (estateId, alert) => {
   if (!io) return;
   const audience = alert && alert.audience;
@@ -477,12 +487,17 @@ const emitAlert = (estateId, alert) => {
   let target = io.to(room);
   if (raiser) target = target.to(`user:${raiser}`);
   target.emit('new_alert', alert);
+  emitPlatform('alert', estateId, {
+    id: alert?._id, type: alert?.type, severity: alert?.severity, status: alert?.status, title: alert?.title,
+    note: alert?.note, isEmergencyBroadcast: !!alert?.isEmergencyBroadcast,
+  });
 };
 
 /** Emit visitor check-in/out event */
 const emitVisitorUpdate = (estateId, visitor) => {
   if (io) {
     io.to(`estate:${estateId}`).emit('visitor_update', visitor);
+    emitPlatform('visitor', estateId, { id: visitor?._id, name: visitor?.name, status: visitor?.status, checkedOut: !!visitor?.checkOutTime });
   }
 };
 
@@ -529,6 +544,7 @@ const emitNotification = (estateId, notification, userId = null) => {
       ...notification,
       createdAt: notification.createdAt || new Date().toISOString(),
     });
+    emitPlatform('notification', estateId, { type: notification?.type, title: notification?.title, body: notification?.body, amount: notification?.amount });
   }
 };
 
@@ -549,6 +565,6 @@ const emitGlobalNotification = (notification) => {
 module.exports = {
   initSocket, emitAlert, emitVisitorUpdate, emitEarlyArrival, emitEarlyApproved,
   emitAnnouncement, emitNkechiTyping, emitGroupMessage, emitNotification,
-  emitGlobalNotification, getIO,
+  emitGlobalNotification, getIO, emitPlatform,
   cleanupPodcastShow,
 };

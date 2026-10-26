@@ -978,6 +978,7 @@ exports.withdrawFromWallet = async (req, res) => {
       accountNumber: user.accountNumber,
       accountName: user.accountName,
     });
+    require('../services/socketService').emitPlatform('withdrawal', req.estateId, { amount, name: user.name, bankName: user.bankName });
 
     // Re-check after reserving — if two requests raced past the first check,
     // the later one sees a negative balance and backs out.

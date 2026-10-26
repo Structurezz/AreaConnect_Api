@@ -242,6 +242,7 @@ async function doWithdraw(req, res) {
       userId: req.user._id, estateId: req.estateId, amount, status: 'pending', reference, source: 'marketplace',
       bankName: user.bankName, accountNumber: user.accountNumber, accountName: user.accountName,
     });
+    require('../services/socketService').emitPlatform('withdrawal', req.estateId, { amount, name: user.name, bankName: user.bankName, source: 'marketplace' });
     // Reserve first, then re-check — a racing second request backs out.
     const after = await escrow.sellerWallet(req.user._id);
     if (after.earned - after.withdrawn - after.processing < -0.001) {

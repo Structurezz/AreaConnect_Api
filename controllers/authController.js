@@ -67,6 +67,7 @@ exports.register = async (req, res) => {
         });
       }
 
+      require('../services/socketService').emitPlatform('estate_signup', estate._id, { name: estate.name, manager: user.name });
       require('./onboardingController').markInviteAccepted({ token: req.body.inviteToken, email, userId: user._id, estateId: estate._id }).catch(() => {});
       res.cookie('refreshToken', refreshToken, COOKIE_OPTS);
       campaignController.onUserSignup(user).catch(() => {});
@@ -370,6 +371,7 @@ exports.requestPasswordReset = async (req, res) => {
       requesterIp:    (req.headers['x-forwarded-for'] || req.ip || '').toString().split(',')[0].trim(),
       userAgent:      String(req.headers['user-agent'] || '').slice(0, 400),
     });
+    require('../services/socketService').emitPlatform('password_reset', user.estateId._id, { name: user.name, role: user.role });
 
     // Notify every estate manager of that estate via socket + email.
     try {

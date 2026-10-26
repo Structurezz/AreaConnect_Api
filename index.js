@@ -113,6 +113,7 @@ app.use('/api/push', require('./routes/push'));
 app.use('/api/admin/payments',    require('./routes/adminPayments'));
 app.use('/api/admin/credits',     require('./routes/adminCredits'));
 app.use('/api/admin/onboarding',  require('./routes/adminOnboarding'));
+app.use('/api/admin/security',    require('./routes/adminSecurity'));
 app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/calls', require('./routes/calls'));
 app.use('/api/safety', require('./routes/safety'));
