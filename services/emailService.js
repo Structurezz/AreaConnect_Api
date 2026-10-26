@@ -1802,7 +1802,99 @@ const sendCreditReceiptEmail = async ({ to, name, inv, pdf }) => {
   return { sent: true };
 };
 
+// ── Admin onboarding: manager welcome (one or many estates) ───────────────────
+const MANAGER_APP = () => process.env.ESTATE_MANAGER_URL || 'https://area-connector.areaconnect.pro';
+
+const onboardShell = ({ eyebrow, title, body }) => `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:24px;">${brandMark()}</div>
+  <div style="background:#fff;">
+    <div style="background:linear-gradient(135deg,#10B981,#059669);padding:28px 32px;">
+      <p style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.75);margin:0 0 6px;">${eyebrow}</p>
+      <h1 style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.02em;margin:0;">${title}</h1>
+    </div>
+    <div style="padding:32px;">${body}</div>
+  </div>
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">
+    Not expecting this? You can ignore this email. &nbsp;&middot;&nbsp; Powered by Area Connector Technologies &middot; RC 9607864
+  </p>
+</div>
+</body></html>`;
+
+const sendManagerOnboardEmail = async ({ to, name, estates = [], tempPassword, trialDays }) => {
+  if (!process.env.RESEND_API_KEY) return { skipped: true };
+  const names = estates.map(e => e.name);
+  const list = estates.map(e => `
+        <tr><td width="22" valign="top" style="padding:0 0 10px;color:#10B981;font-weight:800;">&check;</td>
+            <td style="padding:0 0 10px;font-size:14px;color:#0F172A;"><strong>${escapeHtml(e.name)}</strong>
+              <span style="color:#64748B;"> &middot; code ${escapeHtml(e.estateCode || '')}</span></td></tr>`).join('');
+  const login = tempPassword ? `
+      <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;padding:24px;margin-bottom:28px;">
+        <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#9CA3AF;margin:0 0 4px;">Email</p>
+        <p style="font-size:15px;font-weight:600;color:#111827;margin:0 0 16px;">${escapeHtml(to)}</p>
+        <div style="border-top:1px solid #E5E7EB;padding-top:16px;">
+          <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#9CA3AF;margin:0 0 8px;">Temporary password</p>
+          <p style="font-family:'Courier New',Courier,monospace;font-size:22px;font-weight:800;letter-spacing:0.08em;color:#047857;background:#F0FDF9;border:1px solid #A7F3D0;border-radius:8px;padding:10px 14px;display:inline-block;margin:0;">${escapeHtml(tempPassword)}</p>
+        </div>
+      </div>` : `
+      <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 24px;">Sign in with your existing AreaConnect login &mdash; the new ${names.length > 1 ? 'estates are' : 'estate is'} already in your estate switcher.</p>`;
+
+  const { error } = await sendEmail({
+    from: FROM(),
+    to,
+    subject: names.length > 1
+      ? `${names.length} estates are ready for you on AreaConnect`
+      : `${names[0] || 'Your estate'} is ready on AreaConnect`,
+    html: onboardShell({
+      eyebrow: 'Estate manager &middot; AreaConnect',
+      title: names.length > 1 ? 'Your estates are set up' : 'Your estate is set up',
+      body: `
+      <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 22px;">
+        Hi <strong>${escapeHtml(name || 'there')}</strong>, the AreaConnect team has set up ${names.length > 1 ? 'these estates' : 'this estate'} for you to manage${trialDays ? ` &mdash; with a <strong>${trialDays}-day free trial</strong>` : ''}.
+      </p>
+      <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">${list}</table>
+      ${login}
+      <div style="text-align:center;margin-bottom:24px;">
+        <a href="${MANAGER_APP()}/login" style="display:inline-block;background:linear-gradient(135deg,#10B981,#059669);color:#fff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 40px;border-radius:10px;">Open your dashboard &rarr;</a>
+      </div>
+      <p style="font-size:13px;color:#64748B;line-height:1.6;margin:0;">Share each estate code with residents and guards so they can join from the AreaMates and Guard apps.</p>`,
+    }),
+  });
+  if (error) throw Object.assign(new Error(error.message), { name: error.name, statusCode: error.statusCode });
+  return { sent: true };
+};
+
+// ── Admin onboarding: invite a manager to self-onboard ────────────────────────
+const sendOnboardingInviteEmail = async ({ to, name, estateName, link, note, trialDays = 14 }) => {
+  if (!process.env.RESEND_API_KEY) return { skipped: true };
+  const { error } = await sendEmail({
+    from: FROM(),
+    to,
+    subject: `Set up ${estateName || 'your estate'} on AreaConnect`,
+    html: onboardShell({
+      eyebrow: `${escapeHtml(estateName || 'Your estate')} &middot; Invitation`,
+      title: 'You’re invited to AreaConnect',
+      body: `
+      <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 18px;">
+        Hi <strong>${escapeHtml(name || 'there')}</strong>, we&rsquo;ve reserved a place for <strong>${escapeHtml(estateName || 'your estate')}</strong> on AreaConnect &mdash; visitor passes, dues, security alerts and a resident community in one place.
+      </p>
+      ${note ? `<div style="border-left:3px solid #10B981;background:#F0FDF9;padding:12px 16px;border-radius:0 8px 8px 0;margin:0 0 22px;font-size:14px;color:#065F46;line-height:1.6;">${escapeHtml(note)}</div>` : ''}
+      <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 26px;">It takes about two minutes. Your details are filled in already &mdash; just choose a password. You get a <strong>${trialDays}-day free trial</strong>, no card needed.</p>
+      <div style="text-align:center;margin-bottom:24px;">
+        <a href="${link}" style="display:inline-block;background:linear-gradient(135deg,#10B981,#059669);color:#fff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 40px;border-radius:10px;">Set up my estate &rarr;</a>
+      </div>
+      <p style="font-size:12px;color:#94A3B8;line-height:1.6;margin:0;text-align:center;">This invitation expires in 30 days.</p>`,
+    }),
+  });
+  if (error) throw Object.assign(new Error(error.message), { name: error.name, statusCode: error.statusCode });
+  return { sent: true };
+};
+
 module.exports = {
+  sendManagerOnboardEmail,
+  sendOnboardingInviteEmail,
   sendCreditReceiptEmail,
   sendBuzzEmail,
   sendEmergencyAlertEmails,

@@ -41,13 +41,17 @@ exports.createEstate = async (req, res) => {
     const geo = await geocodeAddress(address);
     if (geo) Object.assign(location, geo, { geocodedAt: new Date() });
 
-    const estate = await Estate.create({ name, address, managerId, location });
+    const estate = await Estate.create({ name, address, managerId, location, onboarding: { source: 'wizard', byId: req.user._id } });
 
     if (managerId) {
-      await User.findByIdAndUpdate(managerId, {
-        role: 'estate_manager',
-        estateId: estate._id,
-      });
+      // Add to the manager's portfolio; only set their active estate if they have none
+      const mgr = await User.findById(managerId).select('estateId role');
+      if (mgr) {
+        const update = { $addToSet: { managedEstates: estate._id } };
+        update.$set = { role: mgr.role === 'super_admin' ? mgr.role : 'estate_manager' };
+        if (!mgr.estateId) update.$set.estateId = estate._id;
+        await User.updateOne({ _id: managerId }, update);
+      }
     }
 
     // Seed a 14-day trial subscription so the estate shows up on the admin
@@ -459,7 +463,7 @@ exports.addEstate = async (req, res) => {
     const geo = await geocodeAddress(address);
     if (geo) Object.assign(location, geo, { geocodedAt: new Date() });
 
-    const estate = await Estate.create({ name, address, managerId, location });
+    const estate = await Estate.create({ name, address, managerId, location, onboarding: { source: 'wizard', byId: req.user._id } });
 
     await User.findByIdAndUpdate(managerId, {
       $addToSet: { managedEstates: estate._id },

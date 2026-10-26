@@ -67,6 +67,7 @@ exports.register = async (req, res) => {
         });
       }
 
+      require('./onboardingController').markInviteAccepted({ token: req.body.inviteToken, email, userId: user._id, estateId: estate._id }).catch(() => {});
       res.cookie('refreshToken', refreshToken, COOKIE_OPTS);
       campaignController.onUserSignup(user).catch(() => {});
       return res.status(201).json({
