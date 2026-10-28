@@ -291,7 +291,7 @@ exports.recordEpisodePlay = async (req, res) => {
 exports.resolveGuest = async (req, res) => {
   try {
     const show = await PodcastShow.findOne({ 'guests.inviteToken': req.params.token })
-      .select('title hostName coverImage status scheduledAt startedAt guests')
+      .select('title hostName coverImage status scheduledAt startedAt guests description category durationMins segments seriesName episodeNumber')
       .lean();
     if (!show) return res.status(404).json({ success: false, message: 'Invite not found' });
     const invite = (show.guests || []).find(g => g.inviteToken === req.params.token);
@@ -304,7 +304,16 @@ exports.resolveGuest = async (req, res) => {
       status:   show.status,
       scheduledAt: show.scheduledAt,
       startedAt:   show.startedAt,
-      guest: { id: invite._id, name: invite.name, estate: invite.estate, status: invite.status },
+      description: show.description || '',
+      category:    show.category || 'community',
+      durationMins: show.durationMins || 45,
+      seriesName:  show.seriesName || '',
+      episodeNumber: show.episodeNumber || 0,
+      segments:    (show.segments || []).map(({ title, minutes, speaker, notes }) => ({ title, minutes, speaker, notes })),
+      guest: { id: invite._id, name: invite.name, estate: invite.estate, status: invite.status, role: invite.role || 'guest', title: invite.title || '', topic: invite.topic || '' },
+      // Other speakers — names and roles only (this endpoint is public)
+      speakers: (show.guests || []).filter((g) => g.status !== 'revoked' && g.inviteToken !== req.params.token)
+        .map((g) => ({ name: g.name, role: g.role || 'guest', title: g.title || '', estate: g.estate || '', joined: g.status === 'joined' })),
     }});
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
