@@ -19,13 +19,17 @@ exports.stats = async (req, res) => {
       PodcastEpisode.countDocuments(),
       PodcastEpisode.aggregate([{ $group: { _id: null, plays: { $sum: '$playCount' }, peak: { $max: '$peakListeners' }, avgPeak: { $avg: '$peakListeners' }, secs: { $sum: '$durationSec' } } }]),
       PodcastShow.findOne({ status: 'live' }).select('title hostName startedAt peakListeners coverImage').lean(),
-      PodcastShow.find({ status: 'scheduled', scheduledAt: { $gte: now } }).sort({ scheduledAt: 1 }).limit(6).select('title scheduledAt category guests seriesName coverImage audience').lean(),
+      PodcastShow.find({ status: 'scheduled' }).select('title scheduledAt category guests seriesName coverImage audience createdAt').lean(),
       PodcastEpisode.aggregate([{ $group: { _id: '$category', n: { $sum: 1 }, plays: { $sum: '$playCount' } } }]),
       PodcastEpisode.find({ isPublished: { $ne: false } }).sort({ playCount: -1 }).limit(5).select('title playCount peakListeners publishedAt durationSec coverImage category').lean(),
       PodcastShow.aggregate([{ $unwind: '$guests' }, { $group: { _id: '$guests.status', n: { $sum: 1 } } }]),
       PodcastShow.countDocuments({ status: 'ended', endedAt: { $gte: monthAgo } }),
     ]);
     const p = playsAgg[0] || {};
+    // Every show still waiting to air: dated ones by time (overdue first), undated ones last
+    upcoming.sort((a, b) => (a.scheduledAt ? new Date(a.scheduledAt) : 8.64e15) - (b.scheduledAt ? new Date(b.scheduledAt) : 8.64e15) || new Date(b.createdAt) - new Date(a.createdAt));
+    upcoming.forEach((x) => { x.overdue = !!(x.scheduledAt && new Date(x.scheduledAt) < now); });
+    upcoming.splice(8);
     return res.json({
       success: true,
       data: {
