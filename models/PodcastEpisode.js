@@ -13,6 +13,17 @@ const podcastEpisodeSchema = new mongoose.Schema({
   peakListeners:   { type: Number, default: 0 },
   playCount:       { type: Number, default: 0 },
   publishedAt:     { type: Date, default: Date.now },
+  isPublished:     { type: Boolean, default: true },
+  featured:        { type: Boolean, default: false },
+  category:        { type: String, default: 'community' },
+  tags:            [{ type: String }],
+  seriesName:      { type: String, default: '' },
+  episodeNumber:   { type: Number, default: 0 },
+  showNotes:       { type: String, default: '' },
+  audience: {
+    scope:     { type: String, enum: ['all', 'estates'], default: 'all' },
+    estateIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Estate' }],
+  },
 }, { timestamps: true });
 
 podcastEpisodeSchema.index({ publishedAt: -1 });

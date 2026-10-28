@@ -8,6 +8,13 @@ const guestInviteSchema = new mongoose.Schema({
   phone:       { type: String, default: '' },
   email:       { type: String, default: '' },
   status:      { type: String, enum: ['pending', 'joined', 'left', 'revoked'], default: 'pending' },
+  // Admin hub additions
+  userId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }, // platform user (e.g. estate manager)
+  role:        { type: String, enum: ['guest', 'co_host', 'estate_leader', 'expert'], default: 'guest' },
+  title:       { type: String, default: '' },   // e.g. "Chairman, Residents' Association"
+  topic:       { type: String, default: '' },   // what they will speak about
+  emailedAt:   { type: Date },
+  emailCount:  { type: Number, default: 0 },
   joinedAt:    { type: Date },
   leftAt:      { type: Date },
   createdAt:   { type: Date, default: Date.now },
@@ -24,6 +31,26 @@ const podcastShowSchema = new mongoose.Schema({
   startedAt:    { type: Date },
   endedAt:      { type: Date },
   isRecurring:  { type: Boolean, default: false }, // e.g. Friday Talk Show
+  // Admin hub additions
+  category:     { type: String, default: 'community' }, // community, security, finance, lifestyle, news, interview, events
+  tags:         [{ type: String }],
+  language:     { type: String, default: 'English' },
+  seriesName:   { type: String, default: '' },
+  episodeNumber:{ type: Number, default: 0 },
+  durationMins: { type: Number, default: 45 },
+  audience: {
+    scope:     { type: String, enum: ['all', 'estates'], default: 'all' },
+    estateIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Estate' }],
+  },
+  segments: [{
+    title:   { type: String, required: true },
+    minutes: { type: Number, default: 5 },
+    notes:   { type: String, default: '' },
+    speaker: { type: String, default: '' },
+  }],
+  notes:        { type: String, default: '' },     // private producer notes
+  remindedAt:   { type: Date },
+  remindCount:  { type: Number, default: 0 },
   recurrence:   { type: String, default: '' },     // human label
   guests:       [guestInviteSchema],
   peakListeners:{ type: Number, default: 0 },

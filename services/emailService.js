@@ -1892,7 +1892,39 @@ const sendOnboardingInviteEmail = async ({ to, name, estateName, link, note, tri
   return { sent: true };
 };
 
+// ── AreaConnect FM: invite a guest / estate leader onto a show ────────────────
+const ROLE_LABEL = { guest: 'Guest', co_host: 'Co-host', estate_leader: 'Estate leader', expert: 'Expert guest' };
+const sendPodcastInviteEmail = async ({ to, name, role, showTitle, hostName, when, topic, link }) => {
+  if (!process.env.RESEND_API_KEY) return { skipped: true };
+  const r = ROLE_LABEL[role] || 'Guest';
+  const { error } = await sendEmail({
+    from: FROM(),
+    to,
+    subject: `You're invited on AreaConnect FM — "${showTitle}"`,
+    html: onboardShell({
+      eyebrow: `AreaConnect FM &middot; ${escapeHtml(r)}`,
+      title: 'You’re invited to speak',
+      body: `
+      <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 18px;">
+        Hi <strong>${escapeHtml(name || 'there')}</strong>, ${escapeHtml(hostName || 'AreaConnect FM')} would love to have you as <strong>${escapeHtml(r.toLowerCase())}</strong> on <strong>&ldquo;${escapeHtml(showTitle)}&rdquo;</strong>, streamed live to residents across AreaConnect estates.
+      </p>
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 22px;border:1px solid #E5E7EB;border-radius:12px;">
+        ${when ? `<tr><td style="padding:12px 16px;font-size:12px;color:#6B7280;width:110px;">When</td><td style="padding:12px 16px;font-size:14px;color:#111827;font-weight:600;">${escapeHtml(when)}</td></tr>` : ''}
+        ${topic ? `<tr><td style="padding:12px 16px;font-size:12px;color:#6B7280;border-top:1px solid #F3F4F6;">Your topic</td><td style="padding:12px 16px;font-size:14px;color:#111827;border-top:1px solid #F3F4F6;">${escapeHtml(topic)}</td></tr>` : ''}
+        <tr><td style="padding:12px 16px;font-size:12px;color:#6B7280;border-top:1px solid #F3F4F6;">You need</td><td style="padding:12px 16px;font-size:14px;color:#111827;border-top:1px solid #F3F4F6;">A phone or laptop with a microphone &mdash; no app to install</td></tr>
+      </table>
+      <div style="text-align:center;margin-bottom:22px;">
+        <a href="${link}" style="display:inline-block;background:linear-gradient(135deg,#10B981,#059669);color:#fff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 40px;border-radius:10px;">Join the show &rarr;</a>
+      </div>
+      <p style="font-size:12.5px;color:#64748B;line-height:1.6;margin:0;text-align:center;">Open the link a few minutes before the show starts. The host will bring you on air.</p>`,
+    }),
+  });
+  if (error) throw Object.assign(new Error(error.message), { name: error.name, statusCode: error.statusCode });
+  return { sent: true };
+};
+
 module.exports = {
+  sendPodcastInviteEmail,
   sendManagerOnboardEmail,
   sendOnboardingInviteEmail,
   sendCreditReceiptEmail,
