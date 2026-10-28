@@ -9,7 +9,7 @@ const MIME = /^(?:image\/(?:jpeg|png|webp)|audio\/(?:mpeg|mp3|wav|x-wav|webm|ogg
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 120 * 1024 * 1024, files: 1 }, // ~2h of 128kbps mp3
-  fileFilter: (req, file, cb) => (MIME.test(file.mimetype || '') ? cb(null, true) : cb(new Error('Use a JPG/PNG/WebP image or an MP3/M4A/WAV/WebM/OGG audio file'))),
+  fileFilter: (req, file, cb) => (MIME.test(String(file.mimetype || '').split(';')[0].trim()) ? cb(null, true) : cb(new Error('Use a JPG/PNG/WebP image or an MP3/M4A/WAV/WebM/OGG audio file'))),
 }).single('file');
 
 async function persist(req, res, next) {
