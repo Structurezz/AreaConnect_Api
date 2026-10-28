@@ -1524,8 +1524,8 @@ const sendWithdrawalRejectedEmail = async ({ to, managerName, estateName, amount
 const sendCampaignEmail = async ({ to, name, subject, preheader, htmlBody, ctaUrl, ctaText, theme, brand }) => {
   if (!process.env.RESEND_API_KEY) return { skipped: true };
 
-  const primary   = theme?.primaryColor    || '#EC4899';
-  const accent    = theme?.accentColor     || '#F472B6';
+  const primary   = theme?.primaryColor    || '#059669';
+  const accent    = theme?.accentColor     || '#34D399';
   const brandName = brand?.name            || 'AreaConnect';
   const logoUrl   = brand?.logoUrl         || '';
   const social    = brand?.social || {

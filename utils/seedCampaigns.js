@@ -25,8 +25,8 @@ const WELCOME_NEW_MEMBERS = {
     ctaText: 'Complete My Profile',
     ctaUrl: '/profile',
     theme: {
-      primaryColor: '#EC4899',
-      accentColor: '#F472B6',
+      primaryColor: '#059669',
+      accentColor: '#34D399',
       textColor: '#FFFFFF',
       backgroundColor: '#0F172A',
     },
@@ -40,19 +40,19 @@ const WELCOME_NEW_MEMBERS = {
       <p style="font-size:15px;color:#475569;line-height:1.65;margin-bottom:20px;">
         You've just joined a smarter way to live in your estate. Here's what you can do right now:
       </p>
-      <div style="border-left:3px solid #EC4899;padding:4px 0 4px 16px;margin-bottom:14px;">
+      <div style="border-left:3px solid #059669;padding:4px 0 4px 16px;margin-bottom:14px;">
         <p style="font-size:14px;color:#0F172A;font-weight:700;margin-bottom:2px;">📱 Book a visitor in seconds</p>
         <p style="font-size:13px;color:#64748B;line-height:1.55;">Generate a one-time code and share it on WhatsApp — no more phoning the gate.</p>
       </div>
-      <div style="border-left:3px solid #EC4899;padding:4px 0 4px 16px;margin-bottom:14px;">
+      <div style="border-left:3px solid #059669;padding:4px 0 4px 16px;margin-bottom:14px;">
         <p style="font-size:14px;color:#0F172A;font-weight:700;margin-bottom:2px;">💳 Pay dues without the paperwork</p>
         <p style="font-size:13px;color:#64748B;line-height:1.55;">Card, transfer, wallet — pick your poison. Receipts drop into your history automatically.</p>
       </div>
-      <div style="border-left:3px solid #EC4899;padding:4px 0 4px 16px;margin-bottom:14px;">
+      <div style="border-left:3px solid #059669;padding:4px 0 4px 16px;margin-bottom:14px;">
         <p style="font-size:14px;color:#0F172A;font-weight:700;margin-bottom:2px;">💬 Meet your neighbours in the Lounge</p>
         <p style="font-size:13px;color:#64748B;line-height:1.55;">The estate's social feed — polls, marketplace, events, chatter. Say hi.</p>
       </div>
-      <div style="border-left:3px solid #EC4899;padding:4px 0 4px 16px;margin-bottom:14px;">
+      <div style="border-left:3px solid #059669;padding:4px 0 4px 16px;margin-bottom:14px;">
         <p style="font-size:14px;color:#0F172A;font-weight:700;margin-bottom:2px;">🚨 Get alerts the moment they matter</p>
         <p style="font-size:13px;color:#64748B;line-height:1.55;">A siren rings when your estate posts an alert. Silence it once, we won't be dramatic.</p>
       </div>
