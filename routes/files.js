@@ -30,6 +30,11 @@ router.get('/:id', async (req, res) => {
       const meta = found[0];
 
       res.setHeader('Content-Type',   meta.contentType || 'application/octet-stream');
+      // ?download=1 saves with the original file name (chat attachments)
+      if (req.query.download) {
+        const safe = String(meta.filename || 'file').replace(/[^\w.\- ]+/g, '_').slice(0, 120);
+        res.setHeader('Content-Disposition', `attachment; filename="${safe}"`);
+      }
       res.setHeader('Content-Length', meta.length);
       // Objects are content-addressed by GridFS id, so long cache is safe.
       res.setHeader('Cache-Control',  'public, max-age=31536000, immutable');

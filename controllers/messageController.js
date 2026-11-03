@@ -59,16 +59,30 @@ exports.getDMMessages = async (req, res) => {
 exports.sendMessage = async (req, res) => {
   try {
     // Accept both `receiverId` (API) and `to` (Marketplace ChatPanel)
-    const { receiverId, to, content, isGroupMessage } = req.body;
+    const { receiverId, to, isGroupMessage } = req.body;
     const recipient = receiverId || to;
+    // Multipart bodies send booleans as strings
+    const isGroup = isGroupMessage === true || isGroupMessage === 'true';
+    const content = String(req.body.content || '').slice(0, 4000);
+    const sticker = /^[a-z0-9_-]{1,40}$/i.test(req.body.sticker || '') ? req.body.sticker : '';
+    const file = req.chatFile || null;
+    const legacyImage = req.chatImage || req.file || null;
 
+    if (!content.trim() && !file && !legacyImage && !sticker) {
+      return res.status(400).json({ success: false, message: 'Message is empty' });
+    }
+
+    const isImageFile = file && /^image\//i.test(file.mimetype);
     const message = await Message.create({
       estateId: req.estateId,
       senderId: req.user._id,
-      receiverId: isGroupMessage ? null : recipient,
+      receiverId: isGroup ? null : recipient,
       content,
-      isGroupMessage: Boolean(isGroupMessage),
-      imageUrl: req.file ? req.file.url : '',
+      isGroupMessage: isGroup,
+      // imageUrl keeps older apps showing photos sent as attachments
+      imageUrl: legacyImage ? legacyImage.url : isImageFile ? file.url : '',
+      attachment: file ? { url: file.url, name: file.originalname || 'file', type: file.mimetype || '', size: file.size || 0 } : undefined,
+      sticker,
       readBy: [req.user._id],
     });
 
@@ -103,9 +117,14 @@ exports.sendMessage = async (req, res) => {
           await new Promise((r) => setTimeout(r, 800 + Math.random() * 1200));
           emitNkechiTyping(estateIdStr, true);
 
+          // Give Nkechi something to react to when the message is a sticker or file
+          const said = message.content
+            || (message.sticker ? `[sent a "${message.sticker.replace(/[-_]/g, ' ')}" sticker]` : '')
+            || (message.attachment?.url ? `[shared a file: ${message.attachment.name}]` : '')
+            || (message.imageUrl ? '[shared a photo]' : '');
           const nkechiText = await getNkechiResponse(
             recentMessages,
-            message.content,
+            said,
             req.user.name,
             estateName,
             req.estateId,

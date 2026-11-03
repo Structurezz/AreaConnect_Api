@@ -7,6 +7,13 @@ const messageSchema = new mongoose.Schema({
   receiverId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   content: { type: String, default: '' },
   imageUrl: { type: String, default: '' },
+  attachment: {
+    url:  { type: String, default: '' },
+    name: { type: String, default: '' },
+    type: { type: String, default: '' }, // MIME type
+    size: { type: Number, default: 0 },
+  },
+  sticker: { type: String, default: '' }, // sticker id from the client sticker packs
   isGroupMessage: { type: Boolean, default: false },
   readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   isDeleted: { type: Boolean, default: false },

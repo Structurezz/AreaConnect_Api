@@ -76,4 +76,5 @@ module.exports = {
       persistToGridFS(req, res, next);
     });
   },
+  persistToGridFS,
 };
