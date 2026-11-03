@@ -7,6 +7,7 @@ const validate = require('../middleware/validate');
 router.use(authenticate, scopeToEstate, requireActiveSubscription);
 
 router.get('/', ctrl.getUnits);
+router.get('/:id/payments', authorize('estate_manager', 'super_admin'), ctrl.getUnitPayments);
 
 router.post('/', authorize('estate_manager', 'super_admin'), [
   body('unitNumber').notEmpty(),

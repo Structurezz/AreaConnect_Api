@@ -1,5 +1,6 @@
 const Unit = require('../models/Unit');
 const User = require('../models/User');
+const Payment = require('../models/Payment');
 const { withUnitDues } = require('../utils/unitDues');
 
 exports.getUnits = async (req, res) => {
@@ -53,6 +54,62 @@ exports.deleteUnit = async (req, res) => {
     if (!unit) return res.status(404).json({ success: false, message: 'Unit not found' });
     return res.json({ success: true, message: 'Unit deleted' });
   } catch (err) {
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// Payment records for each resident currently in a unit, so the manager can
+// see exactly who is owing. Same overdue rule as utils/unitDues.
+exports.getUnitPayments = async (req, res) => {
+  try {
+    const unit = await Unit.findOne({ _id: req.params.id, estateId: req.estateId })
+      .populate('residentIds', 'name email phone profilePhoto');
+    if (!unit) return res.status(404).json({ success: false, message: 'Unit not found' });
+
+    const residents = (unit.residentIds || []).filter((r) => r?._id);
+    const payments = residents.length
+      ? await Payment.find({ estateId: req.estateId, residentId: { $in: residents.map((r) => r._id) } })
+          .select('residentId amount status method paidAt scheduleId createdAt')
+          .populate('scheduleId', 'title type dueDate frequency')
+          .sort({ createdAt: -1 })
+          .lean()
+      : [];
+
+    const now = new Date();
+    const data = residents.map((r) => {
+      const bills = payments
+        .filter((p) => String(p.residentId) === String(r._id))
+        .map((p) => {
+          const dueDate = p.scheduleId?.dueDate || null;
+          const unpaid = p.status === 'pending' || p.status === 'overdue';
+          const overdue = unpaid && (p.status === 'overdue' || (dueDate && new Date(dueDate) < now));
+          return {
+            _id: p._id,
+            title: p.scheduleId?.title || 'Bill',
+            type: p.scheduleId?.type || null,
+            amount: p.amount,
+            status: overdue ? 'overdue' : p.status,
+            method: p.method,
+            dueDate,
+            paidAt: p.paidAt,
+          };
+        });
+      const sum = (fn) => bills.filter(fn).reduce((t, b) => t + b.amount, 0);
+      return {
+        resident: { _id: r._id, name: r.name, email: r.email, phone: r.phone, profilePhoto: r.profilePhoto },
+        outstanding: sum((b) => b.status === 'pending' || b.status === 'overdue'),
+        overdueAmount: sum((b) => b.status === 'overdue'),
+        overdueCount: bills.filter((b) => b.status === 'overdue').length,
+        paidTotal: sum((b) => b.status === 'paid'),
+        bills,
+      };
+    });
+
+    // Biggest debtors first
+    data.sort((a, b) => b.overdueAmount - a.overdueAmount || b.outstanding - a.outstanding);
+    return res.json({ success: true, data });
+  } catch (err) {
+    console.error('[getUnitPayments]', err);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };

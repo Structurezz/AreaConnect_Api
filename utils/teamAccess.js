@@ -61,6 +61,9 @@ function requiredAreas(req) {
   // Reviewing residents' password-reset requests is a Settings job
   if (base === '/api/auth') return path.startsWith('/password-resets') ? ['settings'] : null;
 
+  // A unit's residents' payment records are finance data
+  if (base === '/api/units' && /^\/[^/]+\/payments$/.test(path)) return ['finance'];
+
   return AREA_BY_ROUTE[base] || null;
 }
 
