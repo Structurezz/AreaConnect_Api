@@ -161,6 +161,8 @@ exports.getVisitors = async (req, res) => {
     }
     // Residents see only their own visitors
     if (req.user.role === 'resident') base.hostResidentId = oid(req.user._id);
+    // Staff can narrow to one resident's visitors (resident profile page)
+    else if (req.query.host && mongoose.isValidObjectId(req.query.host)) base.hostResidentId = oid(req.query.host);
     if (search) {
       const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
       base.$or = [{ visitorName: re }, { visitorPhone: re }, { visitorCode: re }, { purpose: re }];

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Alert = require('../models/Alert');
 const User = require('../models/User');
 const Estate = require('../models/Estate');
@@ -129,6 +130,8 @@ exports.getAlerts = async (req, res) => {
     // 'active' = still needs attention (open or acknowledged).
     if (status === 'active') filter.status = { $in: ['open', 'acknowledged'] };
     else if (status) filter.status = status;
+    // Staff can narrow to one resident's alerts (resident profile page)
+    if (req.query.resident && req.user.role !== 'resident' && mongoose.isValidObjectId(req.query.resident)) filter.residentId = req.query.resident;
 
     const role = req.user.role;
     if (role === 'resident') {
