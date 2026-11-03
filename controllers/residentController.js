@@ -21,8 +21,10 @@ const residentsLoginUrl = () =>
 
 exports.getResidents = async (req, res) => {
   try {
-    const { page = 1, limit = 20, search } = req.query;
+    const { page = 1, limit = 20, search, filter: view } = req.query;
     const filter = { estateId: req.estateId, role: 'resident' };
+    // Residents with no unit can't sign in — managers need to find them fast
+    if (view === 'no_unit') filter.unitId = null;
 
     if (search) {
       filter.$or = [
@@ -41,10 +43,12 @@ exports.getResidents = async (req, res) => {
         .limit(parseInt(limit)),
       User.countDocuments(filter),
     ]);
+    const noUnitCount = await User.countDocuments({ estateId: req.estateId, role: 'resident', unitId: null });
 
     return res.json({
       success: true,
       data: residents,
+      noUnitCount,
       pagination: { total, page: parseInt(page), pages: Math.ceil(total / limit) },
     });
   } catch (err) {
@@ -79,12 +83,12 @@ exports.inviteResident = async (req, res) => {
       return res.status(409).json({ success: false, message: 'Email already registered' });
     }
 
-    // Validate unit capacity before creating the account
-    if (unitId) {
-      const unit = await Unit.findOne({ _id: unitId, estateId: req.estateId });
-      if (unit && unit.residentIds.length >= (unit.maxOccupants || 7)) {
-        return res.status(400).json({ success: false, message: `Apartment is full (max ${unit.maxOccupants || 7} occupants)` });
-      }
+    // Residents must belong to a unit — they can't sign in without one
+    if (!unitId) return res.status(400).json({ success: false, message: 'Choose the unit this resident lives in' });
+    const unit = await Unit.findOne({ _id: unitId, estateId: req.estateId });
+    if (!unit) return res.status(404).json({ success: false, message: 'Unit not found' });
+    if (unit.residentIds.length >= (unit.maxOccupants || 7)) {
+      return res.status(400).json({ success: false, message: `Apartment is full (max ${unit.maxOccupants || 7} occupants)` });
     }
 
     const tempPassword = genTempPassword();
@@ -171,18 +175,16 @@ exports.bulkInviteResidents = async (req, res) => {
         const existing = await User.findOne({ email });
         if (existing) { results.skipped.push({ email, reason: 'Already registered' }); continue; }
 
-        // Resolve unit
-        let resolvedUnit = null;
-        if (unitNumber) {
-          resolvedUnit = unitByNumber[unitNumber];
-          if (!resolvedUnit) {
-            results.skipped.push({ email, reason: `Apartment "${unitNumber}" not found` });
-            continue;
-          }
-          if (resolvedUnit.residentIds.length >= (resolvedUnit.maxOccupants || 7)) {
-            results.skipped.push({ email, reason: `Apartment "${unitNumber}" is full` });
-            continue;
-          }
+        // Resolve unit — required, residents can't sign in without one
+        if (!unitNumber) { results.skipped.push({ email, reason: 'No unit given' }); continue; }
+        const resolvedUnit = unitByNumber[unitNumber];
+        if (!resolvedUnit) {
+          results.skipped.push({ email, reason: `Apartment "${unitNumber}" not found` });
+          continue;
+        }
+        if (resolvedUnit.residentIds.length >= (resolvedUnit.maxOccupants || 7)) {
+          results.skipped.push({ email, reason: `Apartment "${unitNumber}" is full` });
+          continue;
         }
 
         const tempPassword = genTempPassword();
@@ -233,27 +235,26 @@ exports.addResident = async (req, res) => {
     const exists = await User.findOne({ email });
     if (exists) return res.status(409).json({ success: false, message: 'Email already exists' });
 
+    // Residents must belong to a unit — they can't sign in without one
+    if (!unitId) return res.status(400).json({ success: false, message: 'Choose the unit this resident lives in' });
+    const unit = await Unit.findOne({ _id: unitId, estateId: req.estateId });
+    if (!unit) return res.status(404).json({ success: false, message: 'Unit not found' });
+    if (unit.residentIds.length >= (unit.maxOccupants || 7)) {
+      return res.status(400).json({ success: false, message: `Unit is full (max ${unit.maxOccupants || 7} occupants)` });
+    }
+
     const passwordHash = await bcrypt.hash(password || 'Estate@123', 12);
     const resident = await User.create({
       name, email, phone,
       passwordHash,
       role: 'resident',
       estateId: req.estateId,
-      unitId: unitId || null,
+      unitId,
     });
-
-    if (unitId) {
-      const unit = await Unit.findOne({ _id: unitId, estateId: req.estateId });
-      if (unit) {
-        if (unit.residentIds.length >= (unit.maxOccupants || 7)) {
-          return res.status(400).json({ success: false, message: `Unit is full (max ${unit.maxOccupants || 7} occupants)` });
-        }
-        await Unit.findByIdAndUpdate(unitId, {
-          $addToSet: { residentIds: resident._id },
-          status: 'occupied',
-        });
-      }
-    }
+    await Unit.findByIdAndUpdate(unitId, {
+      $addToSet: { residentIds: resident._id },
+      status: 'occupied',
+    });
 
     return res.status(201).json({ success: true, message: 'Resident added', data: resident.toSafeObject() });
   } catch (err) {

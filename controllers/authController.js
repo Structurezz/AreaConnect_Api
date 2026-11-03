@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const User = require('../models/User');
+const { isUnassignedResident, NO_UNIT_MESSAGE } = require('../middleware/auth');
 const Estate = require('../models/Estate');
 const Unit = require('../models/Unit');
 const Plan = require('../models/Plan');
@@ -17,6 +18,23 @@ const COOKIE_OPTS = {
   sameSite: 'strict',
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };
+
+async function notifyManagersOfWaitingResident(user, estate) {
+  const { sendToUser } = require('../services/pushService');
+  const { sendManagerNotificationEmail } = require('../services/emailService');
+  const managers = await User.find({ estateId: user.estateId, role: 'estate_manager', isActive: true }).select('name email');
+  const esc = (v) => String(v || '').replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+  managers.forEach((m) => {
+    sendToUser(m._id, { title: 'New resident waiting for a unit', body: `${user.name} joined with the estate code — assign them to their unit so they can sign in.`, url: '/residents?filter=no_unit', tag: `no-unit-${user._id}` }).catch(() => {});
+    if (m.email) {
+      sendManagerNotificationEmail({
+        to: m.email, managerName: m.name, estateName: estate?.name || 'Your estate', type: 'new_resident',
+        title: `${esc(user.name)} is waiting for a unit`,
+        body: `${esc(user.name)} (${esc(user.email)}) joined with your estate code. They can't sign in until you assign them to their unit on the Residents page.`,
+      }).catch((e) => console.error('[waiting resident email]', e.message));
+    }
+  });
+}
 
 exports.register = async (req, res) => {
   try {
@@ -99,6 +117,19 @@ exports.register = async (req, res) => {
       estateId,
     });
 
+    // Residents who join with the estate code have no unit yet, so they can't
+    // sign in until a manager assigns one. Tell the managers they're waiting.
+    if (isUnassignedResident(user)) {
+      notifyManagersOfWaitingResident(user, estateData).catch((e) => console.error('[waiting resident]', e.message));
+      campaignController.onUserSignup(user).catch(() => {});
+      return res.status(201).json({
+        success: true,
+        pendingUnit: true,
+        message: `Account created. ${estateData?.name || 'Your estate'}'s manager needs to add you to your unit before you can sign in — we've let them know.`,
+        data: { user: user.toSafeObject(), estate: estateData },
+      });
+    }
+
     const accessToken = generateAccessToken(user._id, user.role, user.estateId);
     const refreshToken = generateRefreshToken(user._id);
     user.refreshToken = refreshToken;
@@ -129,6 +160,9 @@ exports.login = async (req, res) => {
     const valid = await user.comparePassword(password);
     if (!valid) {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+    if (isUnassignedResident(user)) {
+      return res.status(403).json({ success: false, code: 'NO_UNIT', message: NO_UNIT_MESSAGE });
     }
 
     const accessToken = generateAccessToken(user._id, user.role, user.estateId);
@@ -172,6 +206,9 @@ exports.refresh = async (req, res) => {
 
     if (!user || user.refreshToken !== token) {
       return res.status(401).json({ success: false, message: 'Invalid refresh token' });
+    }
+    if (isUnassignedResident(user)) {
+      return res.status(403).json({ success: false, code: 'NO_UNIT', message: NO_UNIT_MESSAGE });
     }
 
     const accessToken = generateAccessToken(user._id, user.role, user.estateId);

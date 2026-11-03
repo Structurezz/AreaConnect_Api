@@ -3,6 +3,11 @@ const User = require('../models/User');
 const Subscription = require('../models/Subscription');
 const { canAccess, requiredAreas } = require('../utils/teamAccess');
 
+// A resident account with no unit can't use the estate apps until a manager
+// assigns one (login, refresh and every API call are refused).
+const NO_UNIT_MESSAGE = "Your account isn't assigned to a unit in this estate yet. Ask your estate manager to add you to your unit, then sign in again.";
+const isUnassignedResident = (user) => user?.role === 'resident' && !user.unitId;
+
 const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -27,6 +32,10 @@ const authenticate = async (req, res, next) => {
         areas: requiredAreas(req),
         message: "You don't have access to this part of the estate. Ask your estate manager for access.",
       });
+    }
+    // Residents only get into the estate once they're assigned to a unit
+    if (isUnassignedResident(user)) {
+      return res.status(403).json({ success: false, code: 'NO_UNIT', message: NO_UNIT_MESSAGE });
     }
     next();
   } catch (err) {
@@ -87,4 +96,4 @@ const requireActiveSubscription = async (req, res, next) => {
   }
 };
 
-module.exports = { authenticate, authorize, scopeToEstate, requireEstate, requireActiveSubscription };
+module.exports = { authenticate, authorize, scopeToEstate, requireEstate, requireActiveSubscription, isUnassignedResident, NO_UNIT_MESSAGE };

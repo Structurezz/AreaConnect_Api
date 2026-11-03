@@ -52,6 +52,8 @@ exports.deleteUnit = async (req, res) => {
   try {
     const unit = await Unit.findOneAndDelete({ _id: req.params.id, estateId: req.estateId });
     if (!unit) return res.status(404).json({ success: false, message: 'Unit not found' });
+    // Don't leave residents pointing at a unit that no longer exists
+    await User.updateMany({ unitId: unit._id }, { $set: { unitId: null } });
     return res.json({ success: true, message: 'Unit deleted' });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
