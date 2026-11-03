@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
 const ctrl = require('../controllers/paymentController');
+const dues = require('../controllers/duesEnforcementController');
 const { authenticate, authorize, scopeToEstate, requireEstate, requireActiveSubscription } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 
@@ -44,6 +45,20 @@ router.post('/schedules', authorize('estate_manager', 'super_admin'), [
 
 router.get('/schedules/:scheduleId/payments', authorize('estate_manager', 'super_admin'), ctrl.getSchedulePayments);
 router.delete('/schedules/:scheduleId', authorize('estate_manager', 'super_admin'), ctrl.deleteSchedule);
+
+// ── Dues enforcement (manager) — see utils/duesEnforcement ───────
+const mgr = authorize('estate_manager', 'super_admin');
+router.get('/enforcement/settings', mgr, dues.getSettings);
+router.put('/enforcement/settings', mgr, dues.updateSettings);
+router.get('/enforcement', mgr, dues.getOverview);
+router.get('/enforcement/residents/:id', mgr, dues.getResident);
+router.post('/enforcement/residents/:id/notice', mgr, dues.sendNotice);
+router.post('/enforcement/residents/:id/apply', mgr, dues.applyRestriction);
+router.post('/enforcement/residents/:id/lift', mgr, dues.liftRestriction);
+
+// ── Dues enforcement (resident) ─────────────────────────────────
+router.get('/restriction/mine', authorize('resident'), dues.getMine);
+router.post('/restriction/mine/dispute', authorize('resident'), dues.disputeMine);
 
 // ── Individual payment actions ──────────────────────────────────
 router.get('/:paymentId/invoice', ctrl.getInvoice);

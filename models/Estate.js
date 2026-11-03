@@ -15,6 +15,21 @@ const estateSchema = new mongoose.Schema({
     requireVisitorApproval: { type: Boolean, default: false },
     marketplaceApproval: { type: Boolean, default: false },
     allowGuestChat: { type: Boolean, default: true },
+    // Restricting services for unpaid dues — off until the manager confirms the
+    // estate constitution allows it (utils/duesEnforcement).
+    duesEnforcement: {
+      enabled:            { type: Boolean, default: false },
+      // What gives the estate the right to do this — not only the constitution.
+      // constitutionClause holds the reference text for whichever basis is picked.
+      basisType:          { type: String, enum: ['constitution', 'agm_resolution', 'agreement', 'estate_rules', 'other'], default: 'constitution' },
+      constitutionClause: { type: String, default: '' },
+      noticeDays:         { type: Number, default: 14, min: 7, max: 60 },
+      minOverdueDays:     { type: Number, default: 30, min: 0, max: 365 },
+      minAmount:          { type: Number, default: 0, min: 0 },
+      services:           { type: [String], default: ['visitor_passes', 'community', 'events', 'marketplace'] },
+      confirmedAt:        { type: Date, default: null },
+      confirmedBy:        { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    },
   },
   location: {
     lat: { type: Number, default: null },

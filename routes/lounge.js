@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const { authenticate, authorize, scopeToEstate, requireActiveSubscription } = require('../middleware/auth');
 const ctrl = require('../controllers/loungeController');
+const { requireUnrestricted } = require('../utils/duesEnforcement');
 
 // ── Admin: default-track CRUD (super_admin only, no estate scope) ────────────
 // Mounted BEFORE scopeToEstate so these admin endpoints don't need an
@@ -16,8 +17,8 @@ router.use(authenticate, scopeToEstate, requireActiveSubscription);
 
 router.get('/',                              ctrl.getSession);
 router.patch('/mood',                        ctrl.updateMood);
-router.post('/suggest',                      ctrl.suggestVideo);
-router.post('/suggest/:suggestionId/vote',   ctrl.voteVideo);
+router.post('/suggest',                      requireUnrestricted('community'), ctrl.suggestVideo);
+router.post('/suggest/:suggestionId/vote',   requireUnrestricted('community'), ctrl.voteVideo);
 router.delete('/suggest/:suggestionId',      ctrl.removeSuggestion);
 router.post('/reset-defaults',               ctrl.resetDefaults);
 

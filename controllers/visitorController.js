@@ -6,6 +6,7 @@ const { generateQRCode, generateVisitorCode } = require('../services/qrService')
 const { sendVisitorPass } = require('../services/emailService');
 const { sendVisitorCodeSMS } = require('../services/smsService');
 const { emitVisitorUpdate, emitEarlyArrival, emitEarlyApproved } = require('../services/socketService');
+const { isRestricted, EXEMPT_PURPOSES } = require('../utils/duesEnforcement');
 
 const EARLY_GRACE_MIN = 30; // minutes allowed before expectedDate without host approval
 
@@ -28,6 +29,10 @@ exports.preRegisterVisitor = async (req, res) => {
     const estateId = req.estateId;
     const resident = req.user;
 
+    // Dues enforcement: a restricted host's passes wait for manager approval.
+    // Medical / emergency visitors always go straight through.
+    const held = !EXEMPT_PURPOSES.test(String(purpose || '')) && await isRestricted(resident, 'visitor_passes');
+
     const visitorCode = await makeUniqueCode();
     const qrCodeUrl = await generateQRCode(visitorCode);
 
@@ -46,36 +51,23 @@ exports.preRegisterVisitor = async (req, res) => {
       visitorCode,
       qrCodeUrl,
       notes,
-      status: 'active',
+      status: held ? 'pending' : 'active',
+      awaitingApproval: held,
     });
 
-    const populated = await visitor.populate('hostResidentId', 'name unitId');
+    await visitor.populate('hostResidentId', 'name unitId');
 
-    // Send visitor pass via email/SMS (non-blocking)
-    const estate = await require('../models/Estate').findById(estateId).select('name');
-    const estateName = estate?.name || 'Estate';
-
-    if (visitorEmail) {
-      sendVisitorPass({
-        to: visitorEmail,
-        visitorName,
-        hostName: resident.name,
-        code: visitorCode,
-        qrCodeUrl,
-        expectedDate,
-        estateName,
-      }).catch(console.error);
+    if (held) {
+      notifyManagersOfHeldPass(visitor, resident).catch((e) => console.error('[held pass notify]', e.message));
+      return res.status(201).json({
+        success: true,
+        held: true,
+        message: 'Pass created and sent to estate management for approval because of overdue estate bills. Your visitor gets their code once it is approved.',
+        data: visitor,
+      });
     }
 
-    if (visitorPhone) {
-      sendVisitorCodeSMS({
-        to: visitorPhone,
-        visitorName,
-        code: visitorCode,
-        estateName,
-        expectedDate,
-      }).catch(console.error);
-    }
+    await sendPassToVisitor(visitor, resident.name);
 
     return res.status(201).json({
       success: true,
@@ -84,6 +76,68 @@ exports.preRegisterVisitor = async (req, res) => {
     });
   } catch (err) {
     console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// Email / SMS the code to the visitor (non-blocking)
+async function sendPassToVisitor(visitor, hostName) {
+  const { visitorName, visitorPhone, visitorEmail, visitorCode, qrCodeUrl, expectedDate } = visitor;
+  const estate = await require('../models/Estate').findById(visitor.estateId).select('name');
+  const estateName = estate?.name || 'Estate';
+
+  if (visitorEmail) {
+    sendVisitorPass({ to: visitorEmail, visitorName, hostName, code: visitorCode, qrCodeUrl, expectedDate, estateName })
+      .catch(console.error);
+  }
+  if (visitorPhone) {
+    sendVisitorCodeSMS({ to: visitorPhone, visitorName, code: visitorCode, estateName, expectedDate })
+      .catch(console.error);
+  }
+}
+
+async function notifyManagersOfHeldPass(visitor, host) {
+  const { sendToUser } = require('../services/pushService');
+  const { sendManagerNotificationEmail } = require('../services/emailService');
+  const [estate, managers] = await Promise.all([
+    require('../models/Estate').findById(visitor.estateId).select('name'),
+    User.find({ estateId: visitor.estateId, role: 'estate_manager', isActive: true }).select('name email'),
+  ]);
+  const when = new Date(visitor.expectedDate).toLocaleString('en-NG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  emitVisitorUpdate(String(visitor.estateId), visitor);
+  managers.forEach((m) => {
+    sendToUser(m._id, { title: 'Visitor pass needs approval', body: `${host.name} invited ${visitor.visitorName} (${when})`, url: '/visitors?status=pending', tag: `pass-${visitor._id}` }).catch(() => {});
+    if (m.email) {
+      sendManagerNotificationEmail({
+        to: m.email, managerName: m.name, estateName: estate?.name || 'Your estate', type: 'visitor_approval',
+        title: `${host.name} invited ${visitor.visitorName}`,
+        body: `Expected ${when}. ${host.name}'s visitor passes need approval because of overdue estate bills. Approve or decline it on the Visitors page.`.replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c])),
+      }).catch((e) => console.error('[held pass email]', e.message));
+    }
+  });
+}
+
+// POST /visitors/:id/approve-pass — manager releases a pass held for dues
+exports.approvePass = async (req, res) => {
+  try {
+    const visitor = await Visitor.findOne({ _id: req.params.id, estateId: req.estateId }).populate('hostResidentId', 'name');
+    if (!visitor) return res.status(404).json({ success: false, message: 'Visitor not found' });
+    if (visitor.status !== 'pending' || !visitor.awaitingApproval) {
+      return res.status(409).json({ success: false, message: 'This pass is not waiting for approval' });
+    }
+    visitor.status = 'active';
+    visitor.awaitingApproval = false;
+    visitor.approvedBy = req.user._id;
+    visitor.approvedAt = new Date();
+    await visitor.save();
+    sendPassToVisitor(visitor, visitor.hostResidentId?.name || 'Your host').catch(console.error);
+    emitVisitorUpdate(String(visitor.estateId), visitor);
+    require('../services/pushService').sendToUser(visitor.hostResidentId?._id, {
+      title: 'Visitor pass approved', body: `${visitor.visitorName}'s pass is approved and has been sent to them.`, url: `/visitors/${visitor._id}`, tag: `pass-${visitor._id}`,
+    }).catch(() => {});
+    return res.json({ success: true, message: 'Pass approved and sent to the visitor', data: visitor });
+  } catch (err) {
+    console.error('[approvePass]', err);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
@@ -174,6 +228,12 @@ exports.verifyVisitorCode = async (req, res) => {
       return res.status(410).json({ success: false, code: 'PASS_CANCELLED', message: 'This pass was cancelled by the host', data: visitor });
     }
 
+    // Held for estate-management approval — the guard is not told why.
+    if (visitor.status === 'pending' && visitor.awaitingApproval) {
+      // 423, not 403: older gate apps treat 403 as "blacklisted"
+      return res.status(423).json({ success: false, code: 'PASS_AWAITING_APPROVAL', message: 'This pass is awaiting estate management approval. Please contact the estate office.', data: visitor });
+    }
+
     // Detect early arrival (> 30 min before expectedDate, not yet checked in).
     // We ping the host so they can grant early entry without the guard having
     // to call them. If approval already granted, fall through to normal flow.
@@ -222,10 +282,17 @@ exports.cancelPass = async (req, res) => {
     if (!isHost && !isManager) return res.status(403).json({ success: false, message: 'Only the host can cancel this pass' });
     if (visitor.status === 'checked-in') return res.status(409).json({ success: false, message: 'Your visitor is already inside. Ask security to check them out instead.' });
     if (!['active', 'pending'].includes(visitor.status)) return res.status(409).json({ success: false, message: `This pass is already ${visitor.status.replace('-', ' ')}` });
+    const declinedHeld = isManager && !isHost && visitor.awaitingApproval;
     visitor.status = 'cancelled';
+    visitor.awaitingApproval = false;
     visitor.cancelledAt = new Date();
     visitor.cancelledBy = req.user._id;
     await visitor.save();
+    if (declinedHeld) {
+      require('../services/pushService').sendToUser(visitor.hostResidentId, {
+        title: 'Visitor pass not approved', body: `Estate management did not approve ${visitor.visitorName}'s pass.`, url: `/visitors/${visitor._id}`, tag: `pass-${visitor._id}`,
+      }).catch(() => {});
+    }
     emitVisitorUpdate(visitor.estateId.toString(), visitor);
     return res.json({ success: true, message: 'Pass cancelled', data: visitor });
   } catch (err) {
@@ -275,6 +342,9 @@ exports.checkIn = async (req, res) => {
     if (!visitor) return res.status(404).json({ success: false, message: 'Visitor not found' });
     if (visitor.status === 'checked-in') {
       return res.status(409).json({ success: false, message: 'Already checked in' });
+    }
+    if (visitor.status === 'pending' && visitor.awaitingApproval) {
+      return res.status(409).json({ success: false, code: 'PASS_AWAITING_APPROVAL', message: 'This pass is awaiting estate management approval. Please contact the estate office.' });
     }
     if (['cancelled', 'blacklisted', 'checked-out'].includes(visitor.status)) {
       const msg = { cancelled: 'This pass was cancelled by the host', blacklisted: 'This visitor is blacklisted', 'checked-out': 'This pass was already used' }[visitor.status];

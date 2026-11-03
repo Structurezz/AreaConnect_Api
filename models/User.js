@@ -38,6 +38,20 @@ const userSchema = new mongoose.Schema({
   // reset). Login still works, but the client should force a change-password
   // step before anything else.
   mustChangePassword: { type: Boolean, default: false },
+
+  // Dues enforcement (utils/duesEnforcement). 'notice' = warned, nothing
+  // restricted yet; 'active' = the listed services are paused until the
+  // resident clears their overdue bills (lifted automatically on payment).
+  duesRestriction: {
+    status:      { type: String, enum: ['none', 'notice', 'active'], default: 'none' },
+    services:    { type: [String], default: [] },
+    amountOwed:  { type: Number, default: 0 },
+    noticeAt:    { type: Date, default: null },
+    effectiveAt: { type: Date, default: null },
+    appliedAt:   { type: Date, default: null },
+    note:        { type: String, default: '' },
+    dispute:     { message: { type: String, default: '' }, at: { type: Date, default: null } },
+  },
 }, { timestamps: true });
 
 userSchema.methods.comparePassword = async function (password) {

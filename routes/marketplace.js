@@ -6,6 +6,7 @@ const payments = require('../controllers/paymentController');
 const { authenticate, authorize, scopeToEstate, requireEstate, requireActiveSubscription } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const upload = require('../middleware/upload');
+const { requireUnrestricted } = require('../utils/duesEnforcement');
 
 const CATEGORIES = ['food', 'services', 'skills', 'items_for_sale', 'rentals'];
 
@@ -49,7 +50,7 @@ router.get('/saved', ctrl.getSaved);
 router.get('/', ctrl.getListings);
 router.get('/:id', ctrl.viewListing);
 
-router.post('/', upload.array('images', 5), [
+router.post('/', requireUnrestricted('marketplace'), upload.array('images', 5), [
   body('title').trim().notEmpty().isLength({ max: 120 }),
   body('description').trim().notEmpty().isLength({ max: 2000 }),
   body('price').isFloat({ min: 0 }),
@@ -57,7 +58,7 @@ router.post('/', upload.array('images', 5), [
 ], validate, ctrl.createListing);
 
 router.post('/:id/save', ctrl.toggleSave);
-router.post('/:id/buy', orders.buy);
+router.post('/:id/buy', requireUnrestricted('marketplace'), orders.buy);
 router.post('/:id/report', [
   body('reason').isIn(['scam', 'overpriced', 'misleading', 'unsafe', 'not_delivered', 'other']),
 ], validate, ctrl.reportListing);

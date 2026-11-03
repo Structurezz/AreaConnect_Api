@@ -5,6 +5,9 @@ const User = require('../models/User');
 const Estate = require('../models/Estate');
 const Withdrawal = require('../models/Withdrawal');
 const { emitNotification } = require('../services/socketService');
+const { syncRestriction } = require('../utils/duesEnforcement');
+// Paying (or a waiver) can clear a dues restriction — restore services straight away
+const restoreIfCleared = (residentId) => syncRestriction(residentId).catch((e) => console.error('[dues sync]', e.message));
 const { sendManagerNotificationEmail, sendPaymentReceiptEmail, sendWithdrawalReceiptEmail } = require('../services/emailService');
 
 const PAYSTACK_BASE = 'https://api.paystack.co';
@@ -152,6 +155,7 @@ exports.recordManualPayment = async (req, res) => {
     payment.paidAt = paidAt ? new Date(paidAt) : new Date();
     payment.recordedBy = req.user._id;
     await payment.save();
+    restoreIfCleared(payment.residentId);
 
     // No wallet credit: this money was paid outside the platform.
 
@@ -336,6 +340,7 @@ exports.waivePayment = async (req, res) => {
     ).populate('residentId', 'name email');
 
     if (!payment) return res.status(404).json({ success: false, message: 'Payment not found' });
+    restoreIfCleared(payment.residentId?._id || payment.residentId);
     return res.json({ success: true, data: payment });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
@@ -470,6 +475,7 @@ async function settlePaymentByReference(reference) {
   }
 
   await creditManagerWallet(payment.estateId, payment.amount);
+  restoreIfCleared(payment.residentId);
 
   try {
     await payment.populate([

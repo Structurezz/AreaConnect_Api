@@ -31,6 +31,12 @@ const visitorSchema = new mongoose.Schema({
   earlyEntryApproved: { type: Boolean, default: false },
   earlyEntryApprovedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   earlyEntryApprovedAt: { type: Date, default: null },
+  // Pass held for estate-management approval (status 'pending') — set when the
+  // host's visitor passes are restricted for unpaid dues. Gate staff are only
+  // ever told it is awaiting approval, never why.
+  awaitingApproval: { type: Boolean, default: false },
+  approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  approvedAt: { type: Date, default: null },
 }, { timestamps: true });
 
 visitorSchema.index({ estateId: 1, status: 1 });

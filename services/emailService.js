@@ -213,6 +213,8 @@ const TYPE_META = {
   visitor_checkin:  { label: 'Visitor Check-In',   color: '#0EA5E9', icon: '🚪' },
   visitor_checkout: { label: 'Visitor Check-Out',  color: '#F59E0B', icon: '🚪' },
   new_alert:        { label: 'Security Alert',     color: '#EF4444', icon: '🚨' },
+  dues_dispute:     { label: 'Dues Dispute',       color: '#D97706', icon: '⚖️' },
+  visitor_approval: { label: 'Visitor Pass Needs Approval', color: '#6366F1', icon: '🪪' },
 };
 
 const sendManagerNotificationEmail = async ({ to, managerName, estateName, type, title, body }) => {
@@ -1923,7 +1925,54 @@ const sendPodcastInviteEmail = async ({ to, name, role, showTitle, hostName, whe
   return { sent: true };
 };
 
+
+// ── Dues enforcement (notice / restricted / restored) ────────────────────────
+// `lines` are plain-text paragraphs; `items` an optional bullet list. All text
+// is escaped here, so callers can pass manager-written notes safely.
+const DUES_EMAIL_TONE = {
+  notice:   { color: '#D97706', label: 'Notice of unpaid dues' },
+  applied:  { color: '#DC2626', label: 'Some services paused' },
+  restored: { color: '#10B981', label: 'Services restored' },
+};
+const sendDuesEnforcementEmail = async ({ to, name, estateName, kind, subject, lines = [], items = [] }) => {
+  if (!process.env.RESEND_API_KEY) return { skipped: true };
+  const tone = DUES_EMAIL_TONE[kind] || DUES_EMAIL_TONE.notice;
+  const paras = lines.map((l) => `<p style="font-size:14px;color:#374151;line-height:1.65;margin-bottom:14px;">${escapeHtml(l)}</p>`).join('');
+  const list = items.length
+    ? `<ul style="margin:0 0 18px 18px;padding:0;">${items.map((i) => `<li style="font-size:14px;color:#374151;line-height:1.6;margin-bottom:4px;">${escapeHtml(i)}</li>`).join('')}</ul>`
+    : '';
+  await sendEmail({
+    from: FROM(),
+    to,
+    subject: `[${estateName}] ${subject}`,
+    html: `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>*{box-sizing:border-box;margin:0;padding:0}</style></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:24px;">${brandMark()}</div>
+  <div style="background:#fff;">
+    <div style="background:linear-gradient(135deg,${tone.color},${tone.color}cc);padding:28px 32px;">
+      <p style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.75);margin-bottom:6px;">${escapeHtml(estateName)}</p>
+      <h1 style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.02em;">${tone.label}</h1>
+    </div>
+    <div style="padding:32px;">
+      <p style="font-size:15px;color:#374151;line-height:1.6;margin-bottom:18px;">Hi <strong>${escapeHtml(name || 'there')}</strong>,</p>
+      ${paras}
+      ${list}
+      <a href="${RESIDENTS_APP_URL}/payments" style="display:inline-block;background:#10B981;color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 22px;border-radius:10px;margin-top:6px;">View my bills</a>
+      <p style="font-size:12px;color:#6B7280;line-height:1.6;margin-top:22px;">Your own entry to your home, emergency alerts and medical or emergency visitors are never affected. If you believe this is a mistake, you can dispute it from the Payments page in the app.</p>
+    </div>
+  </div>
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by Area Connector Technologies &nbsp;&middot;&nbsp; RC 9607864</p>
+</div>
+</body></html>`,
+  });
+  return { sent: true };
+};
+
 module.exports = {
+  sendDuesEnforcementEmail,
   sendPodcastInviteEmail,
   sendManagerOnboardEmail,
   sendOnboardingInviteEmail,
