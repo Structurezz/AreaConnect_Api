@@ -8,6 +8,7 @@ const { sendVisitorCodeSMS } = require('../services/smsService');
 const { emitVisitorUpdate, emitEarlyArrival, emitEarlyApproved } = require('../services/socketService');
 const { isRestricted, EXEMPT_PURPOSES } = require('../utils/duesEnforcement');
 
+const { passExpiresAt, isPastExpiry, expireOverdue } = require('../utils/passExpiry');
 const EARLY_GRACE_MIN = 30; // minutes allowed before expectedDate without host approval
 
 /** Generate a unique visitor code (retry on collision) */
@@ -151,6 +152,8 @@ exports.getVisitors = async (req, res) => {
 
     // Base = everything this user may see (+ search); status narrows the list
     // but not the per-status counts, so filter chips can show their totals.
+    // Passes whose window has closed are expired before the list is read
+    await expireOverdue({ estateId: oid(estateId) }).catch(() => {});
     const base = { estateId: oid(estateId) };
     if (unit && mongoose.isValidObjectId(unit)) base.hostUnitId = oid(unit);
     if (date) {
@@ -218,8 +221,21 @@ exports.verifyVisitorCode = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Visitor is blacklisted', data: visitor });
     }
 
+    // Unused pass whose time window has closed: expire it now so the gate
+    // never reads it as valid, even if the sweeper hasn't reached it yet.
+    if (isPastExpiry(visitor)) {
+      visitor.status = 'expired';
+      visitor.awaitingApproval = false;
+      await visitor.save();
+      emitVisitorUpdate(String(visitor.estateId?._id || visitor.estateId), visitor);
+    }
+
     if (visitor.status === 'expired') {
-      return res.status(410).json({ success: false, message: 'Visitor pass has expired', data: visitor });
+      return res.status(410).json({
+        success: false, code: 'PASS_EXPIRED',
+        message: 'This visitor pass has expired. Do not admit — the host must create a new pass.',
+        expiresAt: passExpiresAt(visitor), data: visitor,
+      });
     }
 
     if (visitor.status === 'checked-out') {

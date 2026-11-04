@@ -188,6 +188,8 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/estate_ma
     if (process.env.NODE_ENV !== 'test' && process.env.TRIAL_CHECKIN !== 'off') require('./services/trialCheckin').startTrialCheckin();
     // Marketplace escrow: auto-release delivered orders, expire unpaid checkouts.
     if (process.env.NODE_ENV !== 'test') require('./services/marketplaceEscrow').startEscrowSweeper();
+    // Visitor passes: expire unused passes once their time window closes.
+    if (process.env.NODE_ENV !== 'test') require('./utils/passExpiry').startPassExpirySweeper();
     // Landing-site blog: Gemini writes and publishes one article a day.
     // Opt-out with BLOG_AUTOPUBLISH=off.
     if (process.env.NODE_ENV !== 'test') require('./services/blogWriter').startBlogWriter();
