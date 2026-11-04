@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Subscription = require('../models/Subscription');
 const { canAccess, requiredAreas } = require('../utils/teamAccess');
+const household = require('../utils/householdAccess');
 
 // A resident account with no unit can't use the estate apps until a manager
 // assigns one (login, refresh and every API call are refused).
@@ -31,6 +32,23 @@ const authenticate = async (req, res, next) => {
         code: 'TEAM_NO_ACCESS',
         areas: requiredAreas(req),
         message: "You don't have access to this part of the estate. Ask your estate manager for access.",
+      });
+    }
+    // Family members are locked out while their household head is suspended
+    if (user.role === 'resident' && user.householdRole === 'member') {
+      const head = await User.findById(user.householdHead).select('isActive').lean();
+      if (!head || !head.isActive) {
+        return res.status(401).json({ success: false, code: 'HOUSEHOLD_INACTIVE', message: 'Your household account is paused. Ask the head of your household to contact the estate manager.' });
+      }
+    }
+    // Family members only reach the features their household head gave them
+    if (!household.canAccess(user, req)) {
+      const permission = household.requiredPermission(req);
+      return res.status(403).json({
+        success: false,
+        code: 'HOUSEHOLD_NO_ACCESS',
+        permission,
+        message: `Your household hasn't given you access to ${household.PERMISSIONS[permission]?.label.toLowerCase() || 'this feature'}. Ask the head of your household to turn it on.`,
       });
     }
     // Residents only get into the estate once they're assigned to a unit

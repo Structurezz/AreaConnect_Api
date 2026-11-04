@@ -181,6 +181,7 @@ exports.login = async (req, res) => {
 
     const populatedUser = await User.findById(user._id)
       .populate('unitId', 'unitNumber block type')
+      .populate('householdHead', 'name profilePhoto')
       .populate('estateId', 'name estateCode logoUrl');
 
     return res.json({
@@ -236,7 +237,8 @@ exports.getMe = async (req, res) => {
     const user = await User.findById(req.user._id)
       .populate('estateId', 'name estateCode logoUrl settings')
       .populate('managedEstates', 'name estateCode logoUrl isActive')
-      .populate('unitId', 'unitNumber block type');
+      .populate('unitId', 'unitNumber block type')
+      .populate('householdHead', 'name profilePhoto');
     return res.json({ success: true, data: user.toSafeObject() });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
@@ -270,7 +272,8 @@ exports.updateProfile = async (req, res) => {
     const user = await User.findByIdAndUpdate(req.user._id, update, { new: true })
       .populate('estateId', 'name estateCode logoUrl settings')
       .populate('managedEstates', 'name estateCode logoUrl isActive')
-      .populate('unitId', 'unitNumber block type');
+      .populate('unitId', 'unitNumber block type')
+      .populate('householdHead', 'name profilePhoto');
 
     return res.json({ success: true, data: user.toSafeObject() });
   } catch (err) {

@@ -206,6 +206,67 @@ const sendTeamInviteEmail = async ({ to, name, estateName, inviterName, permissi
   return { sent: true };
 };
 
+// ── Household invite (a resident adds a family member) ───────────────────────
+const sendHouseholdInviteEmail = async ({ to, name, estateName, headName, relationship, unitLabel, permissions = [], loginUrl, tempPassword }) => {
+  if (!process.env.RESEND_API_KEY) return { skipped: true };
+  const estate = escapeHtml(estateName || 'your estate');
+  const head   = escapeHtml(headName || 'A resident');
+  const basics = ['Estate announcements', 'Security alerts & personal safety', 'Your own profile'];
+  const row = (label, on) => `
+          <tr><td width="22" valign="top" style="padding:0 0 8px;color:${on ? '#6366F1' : '#CBD5E1'};font-weight:800;">${on ? '&check;' : '&ndash;'}</td>
+              <td style="padding:0 0 8px;font-size:14px;color:${on ? '#0F172A' : '#94A3B8'};">${escapeHtml(label)}</td></tr>`;
+  const rows = basics.map(b => row(b, true)).join('') + permissions.map(p => row(p, true)).join('');
+
+  const { error } = await sendEmail({
+    from: FROM(),
+    to,
+    subject: `${headName || 'Your household'} added you to your home at ${estateName || 'the estate'} on AreaMates`,
+    html: `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:24px;">${brandMark()}</div>
+  <div style="background:#fff;">
+    <div style="background:linear-gradient(135deg,#6366F1,#4F46E5);padding:28px 32px;">
+      <p style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.75);margin:0 0 6px;">${estate}${unitLabel ? ` &middot; ${escapeHtml(unitLabel)}` : ''}</p>
+      <h1 style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.02em;margin:0;">Welcome to the household</h1>
+    </div>
+    <div style="padding:32px;">
+      <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 22px;">
+        Hi <strong>${escapeHtml(name || 'there')}</strong>, ${head} has added you${relationship ? ` as their <strong>${escapeHtml(relationship.toLowerCase())}</strong>` : ''} to your home at <strong>${estate}</strong> on AreaMates, the resident app for your estate.
+      </p>
+
+      <p style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9CA3AF;margin:0 0 10px;">What you can use</p>
+      <table cellpadding="0" cellspacing="0" style="margin:0 0 26px;">${rows}</table>
+
+      <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;padding:24px;margin-bottom:28px;">
+        <p style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9CA3AF;margin:0 0 16px;">Your login</p>
+        <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#9CA3AF;margin:0 0 4px;">Email</p>
+        <p style="font-size:15px;font-weight:600;color:#111827;margin:0 0 16px;">${escapeHtml(to)}</p>
+        <div style="border-top:1px solid #E5E7EB;padding-top:16px;">
+          <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#9CA3AF;margin:0 0 8px;">Temporary password</p>
+          <p style="font-family:'Courier New',Courier,monospace;font-size:22px;font-weight:800;letter-spacing:0.08em;color:#4338CA;background:#EEF2FF;border:1px solid #C7D2FE;border-radius:8px;padding:10px 14px;display:inline-block;margin:0;">${escapeHtml(tempPassword)}</p>
+        </div>
+      </div>
+
+      <div style="text-align:center;margin-bottom:24px;">
+        <a href="${loginUrl}" style="display:inline-block;background:linear-gradient(135deg,#6366F1,#4F46E5);color:#fff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 40px;border-radius:10px;">Sign in to AreaMates &rarr;</a>
+      </div>
+      <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:14px 16px;">
+        <p style="font-size:13px;color:#92400E;line-height:1.5;margin:0;">You'll set your own password the first time you sign in. ${head} can change what you have access to at any time.</p>
+      </div>
+    </div>
+  </div>
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">
+    Not expecting this? You can ignore this email. &nbsp;&middot;&nbsp; Powered by Area Connector Technologies &middot; RC 9607864
+  </p>
+</div>
+</body></html>`,
+  });
+  if (error) throw Object.assign(new Error(error.message), { name: error.name, statusCode: error.statusCode });
+  return { sent: true };
+};
+
 // ── Manager notification email ────────────────────────────────────────────────
 const TYPE_META = {
   payment_received: { label: 'Payment Received',  color: '#10B981', icon: '💰' },
@@ -1982,6 +2043,7 @@ module.exports = {
   sendVisitorPass,
   sendInviteEmail,
   sendTeamInviteEmail,
+  sendHouseholdInviteEmail,
   sendManagerNotificationEmail,
   sendPaymentReceiptEmail,
   sendWithdrawalReceiptEmail,

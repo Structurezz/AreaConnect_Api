@@ -19,6 +19,15 @@ const userSchema = new mongoose.Schema({
   permissions: { type: [String], default: [] },
   invitedBy:   { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   unitId: { type: mongoose.Schema.Types.ObjectId, ref: 'Unit' },
+
+  // Households: the resident the estate manager onboards is the household head
+  // ('primary'). They can add family members ('member'), who share the head's
+  // unit, are never billed, follow the head's dues status, and only reach the
+  // features in `householdPermissions` (utils/householdAccess PERMISSIONS).
+  householdRole:        { type: String, enum: ['primary', 'member'], default: 'primary' },
+  householdHead:        { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+  relationship:         { type: String, default: '' },
+  householdPermissions: { type: [String], default: [] },
   profilePhoto: { type: String, default: '' },
   isActive: { type: Boolean, default: true },
   isDiscoverable: { type: Boolean, default: true },

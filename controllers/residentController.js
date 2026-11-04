@@ -37,6 +37,7 @@ exports.getResidents = async (req, res) => {
     const [residents, total] = await Promise.all([
       User.find(filter)
         .populate('unitId', 'unitNumber block type')
+        .populate('householdHead', 'name')
         .select('-passwordHash -refreshToken')
         .sort({ name: 1 })
         .skip(skip)
@@ -62,9 +63,16 @@ exports.getResident = async (req, res) => {
   try {
     const resident = await User.findOne({ _id: req.params.id, estateId: req.estateId, role: 'resident' })
       .populate('unitId', 'unitNumber block type')
+      .populate('householdHead', 'name email phone profilePhoto')
       .select('-passwordHash -refreshToken');
     if (!resident) return res.status(404).json({ success: false, message: 'Resident not found' });
-    return res.json({ success: true, data: resident });
+    // The family this resident heads (or belongs to)
+    const headId = resident.householdRole === 'member' ? resident.householdHead?._id : resident._id;
+    const household = headId
+      ? await User.find({ householdHead: headId, householdRole: 'member', role: 'resident', estateId: req.estateId })
+          .select('name email phone profilePhoto relationship householdPermissions isActive lastSeen createdAt').sort({ createdAt: 1 }).lean()
+      : [];
+    return res.json({ success: true, data: { ...resident.toObject(), household } });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
@@ -294,6 +302,27 @@ exports.activateResident = async (req, res) => {
 
 // ── Assign unit ───────────────────────────────────────────────────────────────
 
+// A household head's family members live wherever the head lives.
+async function moveFamily(head, unitId) {
+  if (head.householdRole === 'member') return;
+  const members = await User.find({ householdHead: head._id, householdRole: 'member', estateId: head.estateId }).select('_id unitId');
+  if (!members.length) return;
+  const ids = members.map(m => m._id);
+  const oldUnits = [...new Set(members.map(m => String(m.unitId || '')).filter(Boolean))];
+  if (oldUnits.length) await Unit.updateMany({ _id: { $in: oldUnits } }, { $pull: { residentIds: { $in: ids } } });
+  if (unitId) {
+    await User.updateMany({ _id: { $in: ids } }, { unitId });
+    await Unit.updateOne({ _id: unitId }, { $addToSet: { residentIds: { $each: ids } }, status: 'occupied' });
+  } else {
+    await User.updateMany({ _id: { $in: ids } }, { $unset: { unitId: '' } });
+  }
+  for (const id of oldUnits) {
+    const u = await Unit.findById(id).select('residentIds');
+    if (u && !u.residentIds.length) await Unit.updateOne({ _id: id }, { status: 'vacant' });
+  }
+}
+
+
 exports.assignUnit = async (req, res) => {
   try {
     const { unitId } = req.body;
@@ -318,14 +347,20 @@ exports.assignUnit = async (req, res) => {
         { $unset: { unitId: '' } },
         { new: true }
       );
+      await moveFamily(resident, null);
       return res.json({ success: true, data: updated.toSafeObject() });
     }
 
     // Assign path
     const unit = await Unit.findOne({ _id: unitId, estateId: req.estateId });
     if (!unit) return res.status(404).json({ success: false, message: 'Unit not found' });
-    if (unit.residentIds.length >= (unit.maxOccupants || 7)) {
-      return res.status(400).json({ success: false, message: `Unit is full (max ${unit.maxOccupants || 7} occupants)` });
+    // The head brings their family members along, so they need room too
+    const family = resident.householdRole === 'member' ? 0
+      : await User.countDocuments({ householdHead: resident._id, householdRole: 'member', estateId: req.estateId });
+    const arriving = [resident._id, ...(family ? await User.find({ householdHead: resident._id, householdRole: 'member' }).distinct('_id') : [])]
+      .filter(id => !unit.residentIds.some(r => r.equals(id))).length;
+    if (unit.residentIds.length + arriving > (unit.maxOccupants || 7)) {
+      return res.status(400).json({ success: false, message: `Unit is full (max ${unit.maxOccupants || 7} occupants${family ? `; this resident's household has ${family + 1} people` : ''})` });
     }
 
     if (resident.unitId && !resident.unitId.equals(unitId)) {
@@ -344,6 +379,7 @@ exports.assignUnit = async (req, res) => {
       $addToSet: { residentIds: resident._id },
       status: 'occupied',
     });
+    await moveFamily(resident, unitId);
 
     return res.json({ success: true, data: updated.toSafeObject() });
   } catch (err) {

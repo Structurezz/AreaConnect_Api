@@ -131,6 +131,11 @@ async function syncRestriction(userOrId) {
 // true when `service` is currently paused for this user
 async function isRestricted(user, service) {
   if (user?.role !== 'resident') return false;
+  // Family members follow their household head (they have no bills of their own)
+  if (user.householdRole === 'member' && user.householdHead) {
+    const head = await User.findById(user.householdHead).select('role duesRestriction estateId');
+    return head && String(head._id) !== String(user._id) ? isRestricted(head, service) : false;
+  }
   const r = user.duesRestriction;
   if (r?.status !== 'active' || !(r.services || []).includes(service)) return false;
   const fresh = await syncRestriction(user);

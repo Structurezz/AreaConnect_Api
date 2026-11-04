@@ -59,10 +59,12 @@ exports.createSchedule = async (req, res) => {
       dueDate: new Date(dueDate),
     });
 
+    // Family members added by a household head are never billed
     const residents = await User.find({
       estateId: req.estateId,
       role: 'resident',
       isActive: true,
+      householdRole: { $ne: 'member' },
     }).select('_id');
 
     if (residents.length) {

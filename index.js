@@ -101,6 +101,7 @@ app.use('/api/podcast', require('./routes/podcast'));
 app.use('/api/posts', require('./routes/posts'));
 app.use('/api/guards', require('./routes/guards'));
 app.use('/api/team',   require('./routes/team'));
+app.use('/api/household', require('./routes/household'));
 app.use('/api/pitch',  require('./routes/pitch'));
 app.use('/api/contact', require('./routes/contact'));
 app.use('/api/demo', require('./routes/demo'));
