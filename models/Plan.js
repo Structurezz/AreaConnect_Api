@@ -18,6 +18,9 @@ const planSchema = new mongoose.Schema({
     maxResidents:        { type: Number, default: 20 },
     maxUnits:            { type: Number, default: 10 },
     maxVisitorsPerMonth: { type: Number, default: 50 },
+    // People per unit (residents + family); no default so older plan docs fall
+    // back by slug in utils/unitCapacity. -1 = unlimited.
+    maxOccupantsPerUnit: { type: Number },
 
     // Core
     visitorManagement:   { type: Boolean, default: true },

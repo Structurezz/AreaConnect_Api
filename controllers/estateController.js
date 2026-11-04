@@ -266,7 +266,8 @@ exports.getEstateDetail = async (req, res) => {
     if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
 
     const { withUnitDues } = require('../utils/unitDues');
-    const unitsWithDues = await withUnitDues(units, estate._id);
+    const { unitCapacity, withCapacity } = require('../utils/unitCapacity');
+    const unitsWithDues = withCapacity(await withUnitDues(units, estate._id), await unitCapacity(estate._id));
 
     return res.json({
       success: true,

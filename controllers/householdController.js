@@ -15,6 +15,7 @@ const { PERMISSIONS, RELATIONSHIPS, PRESETS, cleanPermissions } = require('../ut
 const { sendHouseholdInviteEmail } = require('../services/emailService');
 const { emitNotification, getIO } = require('../services/socketService');
 const { sendToUser } = require('../services/pushService');
+const { unitCapacity } = require('../utils/unitCapacity');
 
 const MAX_MEMBERS = 10;
 
@@ -81,7 +82,7 @@ async function roomCheck(head, extra = 1, byManager = false) {
     User.countDocuments({ householdHead: head._id, householdRole: 'member', householdStatus: 'pending' }),
   ]);
   if (members + pending + extra > MAX_MEMBERS) return { error: `A household can have up to ${MAX_MEMBERS} family members` };
-  const max = unit.maxOccupants || 7;
+  const max = await unitCapacity(head.estateId || unit.estateId);
   if (unit.residentIds.length + pending + extra > max) {
     return { error: `This home is full (max ${max} occupants${pending ? `, including ${pending} awaiting approval` : ''}). ${byManager ? 'Raise the unit\'s occupant limit in Units to add more.' : 'Your estate manager can raise the limit.'}` };
   }
@@ -183,7 +184,7 @@ exports.list = async (req, res) => {
         isHead: !isMember,
         head: head ? { _id: head._id, name: head.name, email: head.email, phone: head.phone, profilePhoto: head.profilePhoto } : null,
         members: members.map(publicMember),
-        unit: unit ? { _id: unit._id, label: unitLabel(unit), occupants: unit.residentIds?.length || 0, maxOccupants: unit.maxOccupants || 7 } : null,
+        unit: unit ? { _id: unit._id, label: unitLabel(unit), occupants: unit.residentIds?.length || 0, maxOccupants: await unitCapacity(req.estateId) } : null,
         myPermissions: isMember ? (req.user.householdPermissions || []) : Object.keys(PERMISSIONS),
       },
     });
@@ -356,8 +357,9 @@ exports.setHome = async (req, res) => {
     const family = await User.find({ householdHead: me._id, householdRole: 'member', estateId: req.estateId }).select('_id unitId');
     const ids = [me._id, ...family.map(f => f._id)];
     const arriving = ids.filter(id => !unit.residentIds.some(r => r.equals(id))).length;
-    if (unit.residentIds.length + arriving > (unit.maxOccupants || 7)) {
-      return res.status(400).json({ success: false, message: `That unit is full (max ${unit.maxOccupants || 7} occupants)` });
+    const cap = await unitCapacity(req.estateId);
+    if (unit.residentIds.length + arriving > cap) {
+      return res.status(400).json({ success: false, message: `That unit is full (max ${cap} occupants)` });
     }
     const oldUnits = [...new Set([me.unitId, ...family.map(f => f.unitId)].filter(Boolean).map(String))];
     if (oldUnits.length) await Unit.updateMany({ _id: { $in: oldUnits } }, { $pull: { residentIds: { $in: ids } } });
@@ -382,13 +384,14 @@ exports.listRequests = async (req, res) => {
     const requests = await User.find({ householdStatus: 'pending', requestedEstateId: req.estateId, role: 'resident' })
       .populate({ path: 'householdHead', select: 'name email phone profilePhoto unitId', populate: { path: 'unitId', select: 'unitNumber block maxOccupants residentIds' } })
       .sort({ createdAt: 1 }).lean();
+    const cap = await unitCapacity(req.estateId);
     return res.json({
       success: true,
       data: requests.map(m => ({
         ...publicMember(m),
         head: m.householdHead ? {
           _id: m.householdHead._id, name: m.householdHead.name, email: m.householdHead.email, profilePhoto: m.householdHead.profilePhoto,
-          unit: m.householdHead.unitId ? { _id: m.householdHead.unitId._id, label: unitLabel(m.householdHead.unitId), occupants: m.householdHead.unitId.residentIds?.length || 0, maxOccupants: m.householdHead.unitId.maxOccupants || 7 } : null,
+          unit: m.householdHead.unitId ? { _id: m.householdHead.unitId._id, label: unitLabel(m.householdHead.unitId), occupants: m.householdHead.unitId.residentIds?.length || 0, maxOccupants: cap } : null,
         } : null,
       })),
     });

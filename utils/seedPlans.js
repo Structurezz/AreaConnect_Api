@@ -16,6 +16,7 @@ const PLANS = [
     isDefault: true,
     features: {
       maxResidents: 50,
+      maxOccupantsPerUnit: 7,
       maxUnits: 30,
       maxVisitorsPerMonth: 200,
       visitorManagement: true,
@@ -50,6 +51,7 @@ const PLANS = [
     sortOrder: 1,
     features: {
       maxResidents: 200,
+      maxOccupantsPerUnit: 50,
       maxUnits: 120,
       maxVisitorsPerMonth: -1,
       visitorManagement: true,
@@ -84,6 +86,7 @@ const PLANS = [
     sortOrder: 2,
     features: {
       maxResidents: 500,
+      maxOccupantsPerUnit: 1000,
       maxUnits: 300,
       maxVisitorsPerMonth: -1,
       visitorManagement: true,
@@ -118,6 +121,7 @@ const PLANS = [
     sortOrder: 3,
     features: {
       maxResidents: -1,
+      maxOccupantsPerUnit: -1,
       maxUnits: -1,
       maxVisitorsPerMonth: -1,
       visitorManagement: true,

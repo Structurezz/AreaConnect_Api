@@ -2,6 +2,7 @@ const Unit = require('../models/Unit');
 const User = require('../models/User');
 const Payment = require('../models/Payment');
 const { withUnitDues } = require('../utils/unitDues');
+const { unitCapacity, withCapacity } = require('../utils/unitCapacity');
 
 exports.getUnits = async (req, res) => {
   try {
@@ -14,7 +15,8 @@ exports.getUnits = async (req, res) => {
       .sort({ block: 1, unitNumber: 1 });
 
     // Each unit carries its real dues position (see utils/unitDues).
-    return res.json({ success: true, data: await withUnitDues(units, req.estateId) });
+    const [withDues, cap] = await Promise.all([withUnitDues(units, req.estateId), unitCapacity(req.estateId)]);
+    return res.json({ success: true, data: withCapacity(withDues, cap), occupantsPerUnit: cap });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
   }

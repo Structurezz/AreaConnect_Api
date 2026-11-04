@@ -4,6 +4,10 @@ const Estate  = require('../models/Estate');
 const bcrypt  = require('bcryptjs');
 const { sendInviteEmail } = require('../services/emailService');
 const { emitNotification } = require('../services/socketService');
+const { unitCapacity } = require('../utils/unitCapacity');
+
+// People allowed per unit come from the estate's plan (utils/unitCapacity)
+const capFor = (req) => (req._unitCap ??= unitCapacity(req.estateId));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -103,8 +107,8 @@ exports.inviteResident = async (req, res) => {
     if (!unitId) return res.status(400).json({ success: false, message: 'Choose the unit this resident lives in' });
     const unit = await Unit.findOne({ _id: unitId, estateId: req.estateId });
     if (!unit) return res.status(404).json({ success: false, message: 'Unit not found' });
-    if (unit.residentIds.length >= (unit.maxOccupants || 7)) {
-      return res.status(400).json({ success: false, message: `Apartment is full (max ${unit.maxOccupants || 7} occupants)` });
+    if (unit.residentIds.length >= (await capFor(req))) {
+      return res.status(400).json({ success: false, message: `Apartment is full (max ${await capFor(req)} occupants)` });
     }
 
     const tempPassword = genTempPassword();
@@ -198,7 +202,7 @@ exports.bulkInviteResidents = async (req, res) => {
           results.skipped.push({ email, reason: `Apartment "${unitNumber}" not found` });
           continue;
         }
-        if (resolvedUnit.residentIds.length >= (resolvedUnit.maxOccupants || 7)) {
+        if (resolvedUnit.residentIds.length >= (await capFor(req))) {
           results.skipped.push({ email, reason: `Apartment "${unitNumber}" is full` });
           continue;
         }
@@ -255,8 +259,8 @@ exports.addResident = async (req, res) => {
     if (!unitId) return res.status(400).json({ success: false, message: 'Choose the unit this resident lives in' });
     const unit = await Unit.findOne({ _id: unitId, estateId: req.estateId });
     if (!unit) return res.status(404).json({ success: false, message: 'Unit not found' });
-    if (unit.residentIds.length >= (unit.maxOccupants || 7)) {
-      return res.status(400).json({ success: false, message: `Unit is full (max ${unit.maxOccupants || 7} occupants)` });
+    if (unit.residentIds.length >= (await capFor(req))) {
+      return res.status(400).json({ success: false, message: `Unit is full (max ${await capFor(req)} occupants)` });
     }
 
     const passwordHash = await bcrypt.hash(password || 'Estate@123', 12);
@@ -367,8 +371,8 @@ exports.assignUnit = async (req, res) => {
       : await User.countDocuments({ householdHead: resident._id, householdRole: 'member', estateId: req.estateId });
     const arriving = [resident._id, ...(family ? await User.find({ householdHead: resident._id, householdRole: 'member' }).distinct('_id') : [])]
       .filter(id => !unit.residentIds.some(r => r.equals(id))).length;
-    if (unit.residentIds.length + arriving > (unit.maxOccupants || 7)) {
-      return res.status(400).json({ success: false, message: `Unit is full (max ${unit.maxOccupants || 7} occupants${family ? `; this resident's household has ${family + 1} people` : ''})` });
+    if (unit.residentIds.length + arriving > (await capFor(req))) {
+      return res.status(400).json({ success: false, message: `Unit is full (max ${await capFor(req)} occupants${family ? `; this resident's household has ${family + 1} people` : ''})` });
     }
 
     if (resident.unitId && !resident.unitId.equals(unitId)) {
