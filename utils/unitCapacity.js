@@ -11,10 +11,23 @@ const BY_SLUG = { starter: 7, growth: 50, premium: 1000, enterprise: -1 };
 const FALLBACK = 7;
 const UNLIMITED = 10000; // what "unlimited" means in practice for one unit
 
+// Plans without an explicit maxOccupantsPerUnit: match the tier by slug/name
+// ("premium-annual", "Premium Plus"…), then by monthly price.
+function tierCap(plan) {
+  const key = `${plan.slug || ''} ${plan.name || ''}`.toLowerCase();
+  for (const tier of ['enterprise', 'premium', 'growth', 'starter']) {
+    if (key.includes(tier)) return BY_SLUG[tier];
+  }
+  const monthly = Number(plan.price?.monthly) || 0;
+  if (monthly >= 80000) return BY_SLUG.premium;
+  if (monthly >= 47000) return BY_SLUG.growth;
+  return FALLBACK;
+}
+
 const capOfPlan = (plan) => {
   if (!plan) return FALLBACK;
   const v = plan.features?.maxOccupantsPerUnit;
-  const n = typeof v === 'number' ? v : BY_SLUG[plan.slug];
+  const n = typeof v === 'number' ? v : tierCap(plan);
   if (n === -1) return UNLIMITED;
   return n > 0 ? n : FALLBACK;
 };
@@ -23,8 +36,8 @@ async function unitCapacity(estateId) {
   if (!estateId) return FALLBACK;
   const sub = await Subscription.findOne({ estateId })
     .select('planId comp')
-    .populate('planId', 'slug features.maxOccupantsPerUnit')
-    .populate('comp.planId', 'slug features.maxOccupantsPerUnit')
+    .populate('planId', 'slug name price.monthly features.maxOccupantsPerUnit')
+    .populate('comp.planId', 'slug name price.monthly features.maxOccupantsPerUnit')
     .lean();
   if (!sub) return FALLBACK;
   const compLive = sub.comp?.isActive && sub.comp?.planId && (!sub.comp.expiresAt || new Date(sub.comp.expiresAt) > new Date());
