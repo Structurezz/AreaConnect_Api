@@ -15,6 +15,9 @@ const estateSchema = new mongoose.Schema({
     requireVisitorApproval: { type: Boolean, default: false },
     marketplaceApproval: { type: Boolean, default: false },
     allowGuestChat: { type: Boolean, default: true },
+    // Family members added by residents wait for a manager to approve them
+    // before their invite goes out (otherwise invites are sent straight away).
+    householdApproval: { type: Boolean, default: false },
     // Restricting services for unpaid dues — off until the manager confirms the
     // estate constitution allows it (utils/duesEnforcement).
     duesEnforcement: {

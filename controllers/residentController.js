@@ -21,8 +21,10 @@ const residentsLoginUrl = () =>
 
 exports.getResidents = async (req, res) => {
   try {
-    const { page = 1, limit = 20, search, filter: view } = req.query;
-    const filter = { estateId: req.estateId, role: 'resident' };
+    const { page = 1, limit = 20, search, filter: view, type } = req.query;
+    // Family members (added by a household head) are listed separately from
+    // the residents the manager onboarded: ?type=family for them.
+    const filter = { estateId: req.estateId, role: 'resident', householdRole: type === 'family' ? 'member' : { $ne: 'member' } };
     // Residents with no unit can't sign in — managers need to find them fast
     if (view === 'no_unit') filter.unitId = null;
 
@@ -44,12 +46,18 @@ exports.getResidents = async (req, res) => {
         .limit(parseInt(limit)),
       User.countDocuments(filter),
     ]);
-    const noUnitCount = await User.countDocuments({ estateId: req.estateId, role: 'resident', unitId: null });
+    const [noUnitCount, familyCount, residentCount] = await Promise.all([
+      User.countDocuments({ estateId: req.estateId, role: 'resident', unitId: null, householdRole: { $ne: 'member' } }),
+      User.countDocuments({ estateId: req.estateId, role: 'resident', householdRole: 'member' }),
+      User.countDocuments({ estateId: req.estateId, role: 'resident', householdRole: { $ne: 'member' } }),
+    ]);
 
     return res.json({
       success: true,
       data: residents,
       noUnitCount,
+      familyCount,
+      residentCount,
       pagination: { total, page: parseInt(page), pages: Math.ceil(total / limit) },
     });
   } catch (err) {

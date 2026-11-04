@@ -28,6 +28,11 @@ const userSchema = new mongoose.Schema({
   householdHead:        { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
   relationship:         { type: String, default: '' },
   householdPermissions: { type: [String], default: [] },
+  // 'pending' = the head asked to add this person and the estate requires
+  // manager approval (estate.settings.householdApproval). Pending accounts have
+  // no estate/unit and can't sign in until approved; 'rejected' = declined.
+  householdStatus:      { type: String, enum: ['active', 'pending', 'rejected'], default: 'active' },
+  requestedEstateId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Estate', default: null },
   profilePhoto: { type: String, default: '' },
   isActive: { type: Boolean, default: true },
   isDiscoverable: { type: Boolean, default: true },

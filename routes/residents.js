@@ -1,13 +1,22 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
 const ctrl = require('../controllers/residentController');
+const household = require('../controllers/householdController');
 const { authenticate, authorize, scopeToEstate, requireActiveSubscription } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 
 router.use(authenticate, scopeToEstate, requireActiveSubscription);
 
 router.get('/', authorize('estate_manager', 'super_admin', 'security'), ctrl.getResidents);
+// Family members residents asked to add (estate.settings.householdApproval)
+router.get('/family-requests',               authorize('estate_manager', 'super_admin'), household.listRequests);
+router.post('/family-requests/:id/approve',  authorize('estate_manager', 'super_admin'), household.approveRequest);
+router.post('/family-requests/:id/reject',   authorize('estate_manager', 'super_admin'), household.rejectRequest);
+
 router.get('/:id', authorize('estate_manager', 'super_admin'), ctrl.getResident);
+// Manager adds a family member to a resident's household / resends their invite
+router.post('/:id/family',                   authorize('estate_manager', 'super_admin'), household.managerAdd);
+router.post('/:id/family/resend-invite',     authorize('estate_manager', 'super_admin'), household.managerResend);
 
 // Single invite — creates account + sends credentials via Resend
 router.post('/invite', authorize('estate_manager', 'super_admin'), [
