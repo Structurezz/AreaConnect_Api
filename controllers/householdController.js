@@ -202,7 +202,8 @@ exports.invite = async (req, res) => {
     if (room.error) return res.status(400).json({ success: false, message: room.error });
 
     const estate = await Estate.findById(req.estateId).select('name settings.householdApproval').lean();
-    const needsApproval = !!estate?.settings?.householdApproval;
+    // A manager adding their own family doesn't need to approve themselves
+    const needsApproval = !!estate?.settings?.householdApproval && req.user.role === 'resident';
 
     const member = await User.create({
       name: form.name, email: form.email, phone: form.phone,
@@ -336,6 +337,39 @@ exports.remove = async (req, res) => {
     return res.json({ success: true, message: wasPending ? `Request for ${member.name} cancelled` : `${member.name} was removed from your household` });
   } catch (err) {
     console.error('[household remove]', err.message);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// Estate managers who live in the estate head their own household: this sets
+// (or changes) the unit they live in, so their family can be added to it.
+exports.setHome = async (req, res) => {
+  try {
+    if (req.user.role !== 'estate_manager') {
+      return res.status(403).json({ success: false, message: 'Residents\' units are set by the estate manager' });
+    }
+    const unit = await Unit.findOne({ _id: req.body.unitId, estateId: req.estateId });
+    if (!unit) return res.status(404).json({ success: false, message: 'Unit not found' });
+    const me = await User.findById(req.user._id);
+    if (String(me.unitId || '') === String(unit._id)) return res.json({ success: true, message: 'That is already your home' });
+
+    const family = await User.find({ householdHead: me._id, householdRole: 'member', estateId: req.estateId }).select('_id unitId');
+    const ids = [me._id, ...family.map(f => f._id)];
+    const arriving = ids.filter(id => !unit.residentIds.some(r => r.equals(id))).length;
+    if (unit.residentIds.length + arriving > (unit.maxOccupants || 7)) {
+      return res.status(400).json({ success: false, message: `That unit is full (max ${unit.maxOccupants || 7} occupants)` });
+    }
+    const oldUnits = [...new Set([me.unitId, ...family.map(f => f.unitId)].filter(Boolean).map(String))];
+    if (oldUnits.length) await Unit.updateMany({ _id: { $in: oldUnits } }, { $pull: { residentIds: { $in: ids } } });
+    await User.updateMany({ _id: { $in: ids } }, { unitId: unit._id });
+    await Unit.updateOne({ _id: unit._id }, { $addToSet: { residentIds: { $each: ids } }, status: 'occupied' });
+    for (const id of oldUnits) {
+      const u = await Unit.findById(id).select('residentIds');
+      if (u && !u.residentIds.length) await Unit.updateOne({ _id: id }, { status: 'vacant' });
+    }
+    return res.json({ success: true, message: `Your home is now ${unitLabel(unit)}` });
+  } catch (err) {
+    console.error('[household set home]', err.message);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
