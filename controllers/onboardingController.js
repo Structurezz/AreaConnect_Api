@@ -58,6 +58,7 @@ async function createEstateDoc(data, { source, adminId, managerId, batchId = '' 
   };
   for (const f of PROFILE_FIELDS) if (data[f] != null) doc[f] = String(data[f]).trim();
   if (data.settings) doc.settings = data.settings;
+  if (data.siteType) doc.site = { type: require('../utils/siteTypes').normType(data.siteType) };
   return Estate.create(doc);
 }
 
