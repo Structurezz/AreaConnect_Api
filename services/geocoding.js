@@ -46,4 +46,16 @@ async function geocodeAddress(address, hint = {}) {
   }
 }
 
-module.exports = { geocodeAddress };
+// Location for a new estate: the exact pin when the client picked a Google
+// address suggestion ({ lat, lng, formattedAddress?, placeId? }), otherwise
+// geocode the typed address. Returns {} when neither works.
+async function locationFor(address, picked, hint = {}) {
+  const lat = Number(picked?.lat), lng = Number(picked?.lng);
+  if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+    return { lat, lng, formattedAddress: String(picked.formattedAddress || address || ''), placeId: String(picked.placeId || ''), geocodedAt: new Date() };
+  }
+  const geo = await geocodeAddress(address, hint).catch(() => null);
+  return geo ? { ...geo, geocodedAt: new Date() } : {};
+}
+
+module.exports = { geocodeAddress, locationFor };

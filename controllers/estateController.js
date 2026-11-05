@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { normType, invalidate: invalidateSite } = require('../utils/siteTypes');
 const { GridFSBucket, ObjectId } = require('mongodb');
 const pdfParse = require('pdf-parse');
-const { geocodeAddress } = require('../services/geocoding');
+const { geocodeAddress, locationFor } = require('../services/geocoding');
 const Estate = require('../models/Estate');
 const User = require('../models/User');
 const Unit = require('../models/Unit');
@@ -38,9 +38,7 @@ exports.createEstate = async (req, res) => {
   try {
     const { name, address, managerId } = req.body;
 
-    const location = {};
-    const geo = await geocodeAddress(address);
-    if (geo) Object.assign(location, geo, { geocodedAt: new Date() });
+    const location = await locationFor(address, req.body.location);
 
     const estate = await Estate.create({ name, address, managerId, location, site: { type: normType(req.body.siteType) }, onboarding: { source: 'wizard', byId: req.user._id } });
 
@@ -480,9 +478,7 @@ exports.addEstate = async (req, res) => {
     }
 
     const managerId = req.user._id;
-    const location = {};
-    const geo = await geocodeAddress(address);
-    if (geo) Object.assign(location, geo, { geocodedAt: new Date() });
+    const location = await locationFor(address, req.body.location);
 
     const estate = await Estate.create({ name, address, managerId, location, site: { type: normType(req.body.siteType) }, onboarding: { source: 'wizard', byId: req.user._id } });
 

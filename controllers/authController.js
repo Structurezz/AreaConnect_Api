@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const { stayBlock } = require('../utils/stays');
 const { normType } = require('../utils/siteTypes');
+const { locationFor } = require('../services/geocoding');
 const crypto = require('crypto');
 const User = require('../models/User');
 const { isUnassignedResident, NO_UNIT_MESSAGE } = require('../middleware/auth');
@@ -59,7 +60,8 @@ exports.register = async (req, res) => {
       const user = await User.create({ name, email, phone, passwordHash, role: 'estate_manager' });
 
       // Create estate and link manager
-      const estate = await Estate.create({ name: estateName, address: estateAddress, managerId: user._id, site: { type: normType(req.body.siteType) } });
+      const location = await locationFor(estateAddress, req.body.estateLocation);
+      const estate = await Estate.create({ name: estateName, address: estateAddress, managerId: user._id, location, site: { type: normType(req.body.siteType) } });
       user.estateId = estate._id;
       user.managedEstates = [estate._id];
       const accessToken = generateAccessToken(user._id, user.role, estate._id);
