@@ -22,8 +22,10 @@ const { unitCapacity } = require('../utils/unitCapacity');
 
 const MAX_MEMBERS = 10;
 
-const residentsLoginUrl = () =>
-  `${process.env.RESIDENTS_URL || process.env.CLIENT_URL || 'https://area-mates.areaconnect.pro'}/login`;
+// ?site= lets the sign-in page use the site's words before login
+const residentsLoginUrl = (type) =>
+  `${process.env.RESIDENTS_URL || process.env.CLIENT_URL || 'https://area-mates.areaconnect.pro'}/login${type && type !== 'estate' ? `?site=${type}` : ''}`;
+const loginUrlFor = async (estateId) => residentsLoginUrl((await siteTypes.siteFor(estateId).catch(() => null))?.site?.type);
 
 const genTempPassword = () => {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -123,7 +125,7 @@ async function activateMember(member, head, unit, estateName) {
     await sendHouseholdInviteEmail({
       to: member.email, name: member.name, estateName, headName: head.name, relationship: member.relationship,
       unitLabel: unitLabel(unit), permissions: member.householdPermissions.map(p => PERMISSIONS[p]?.label).filter(Boolean),
-      loginUrl: residentsLoginUrl(), tempPassword,
+      loginUrl: await loginUrlFor(member.estateId), tempPassword,
     });
     return true;
   } catch (e) {
@@ -303,7 +305,7 @@ async function resend(member, head, res) {
     to: member.email, name: member.name, estateName: estate?.name, headName: head?.name,
     relationship: member.relationship, unitLabel: unitLabel(unit),
     permissions: member.householdPermissions.map(p => PERMISSIONS[p]?.label).filter(Boolean),
-    loginUrl: residentsLoginUrl(), tempPassword,
+    loginUrl: await loginUrlFor(member.estateId || member.requestedEstateId), tempPassword,
   });
   return res.json({ success: true, message: `New login details sent to ${member.email}` });
 }

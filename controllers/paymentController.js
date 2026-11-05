@@ -269,7 +269,7 @@ exports.getInvoice = async (req, res) => {
       .populate('residentId', 'name email phone unitId')
       .populate({ path: 'residentId', populate: { path: 'unitId', select: 'unitNumber block type' } })
       .populate('recordedBy', 'name')
-      .populate('estateId', 'name address estateCode logoUrl');
+      .populate('estateId', 'name address estateCode logoUrl site');
 
     if (!payment) return res.status(404).json({ success: false, message: 'Payment not found' });
 
@@ -287,6 +287,8 @@ exports.getInvoice = async (req, res) => {
       levy:          'Estate Levy',
       contribution:  'Community Contribution',
       other:         'Payment',
+      // Schools, hotels, hospitals… use their own bill names (utils/siteTypes)
+      ...(require('../utils/siteTypes').BILL_TYPE_LABELS[estate?.site?.type] || {}),
     };
 
     return res.json({

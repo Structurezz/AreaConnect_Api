@@ -53,7 +53,7 @@ const TERMS = {
   },
   hospital: {
     site: 'Hospital', sites: 'Hospitals',
-    member: 'Patient / staff', members: 'Patients & staff',
+    member: 'Patient or staff member', members: 'Patients & staff',
     unit: 'Ward', units: 'Wards',
     family: 'Next of kin', familyPlural: 'Next of kin', household: 'Next of kin',
     manager: 'Administrator', dues: 'Bills',
@@ -111,6 +111,16 @@ const RELATIONSHIPS = {
   hotel:      ['Spouse', 'Child', 'Friend', 'Colleague', 'Relative', 'Other'],
   industrial: ['Spouse', 'Child', 'Relative', 'Other'],
   hospital:   ['Spouse', 'Parent', 'Child', 'Sibling', 'Relative', 'Caregiver', 'Other'],
+};
+
+// Invoice names for PaymentSchedule.type on non-estate sites (clients have
+// their own copy for on-screen labels).
+const BILL_TYPE_LABELS = {
+  school:     { security_dues: 'Security Fee', maintenance: 'Maintenance Fee', levy: 'School Levy', contribution: 'PTA Contribution' },
+  university: { security_dues: 'Security Fee', maintenance: 'Hostel Maintenance', levy: 'Departmental Levy', contribution: 'Contribution' },
+  hotel:      { security_dues: 'Security Fee', maintenance: 'Maintenance Fee', levy: 'Service Charge', contribution: 'Contribution' },
+  industrial: { security_dues: 'Security Fee', maintenance: 'Maintenance Fee', levy: 'Site Levy', contribution: 'Contribution' },
+  hospital:   { security_dues: 'Security Fee', maintenance: 'Maintenance Fee', levy: 'Hospital Levy', contribution: 'Contribution' },
 };
 
 const normType = (t) => (TYPES.includes(t) ? t : 'estate');
@@ -188,6 +198,6 @@ async function siteFor(estateId) {
 const invalidate = (estateId) => cache.delete(String(estateId));
 
 module.exports = {
-  TYPES, TERMS, MODULES, DEFAULT_MODULES, CATEGORY_INFO, PASS_CATEGORIES, RELATIONSHIPS,
+  TYPES, TERMS, MODULES, DEFAULT_MODULES, CATEGORY_INFO, PASS_CATEGORIES, RELATIONSHIPS, BILL_TYPE_LABELS,
   normType, modulesFor, siteConfig, requiredModule, siteFor, invalidate,
 };

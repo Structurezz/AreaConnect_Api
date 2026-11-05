@@ -19,8 +19,9 @@ const genTempPassword = () => {
   return s;
 };
 
-const residentsLoginUrl = () =>
-  `${process.env.RESIDENTS_URL || process.env.CLIENT_URL || 'http://localhost:5180'}/login`;
+// ?site= lets the sign-in page use the site's words (ward, room…) before login
+const residentsLoginUrl = (type) =>
+  `${process.env.RESIDENTS_URL || process.env.CLIENT_URL || 'http://localhost:5180'}/login${type && type !== 'estate' ? `?site=${type}` : ''}`;
 
 // ── List ──────────────────────────────────────────────────────────────────────
 
@@ -140,7 +141,7 @@ exports.inviteResident = async (req, res) => {
       to: email.toLowerCase(),
       name,
       estateName: estate.name,
-      loginUrl: residentsLoginUrl(),
+      loginUrl: residentsLoginUrl(estate?.site?.type),
       tempPassword,
     });
 
@@ -179,7 +180,7 @@ exports.bulkInviteResidents = async (req, res) => {
     }
 
     const estate = await Estate.findById(req.estateId);
-    const loginUrl = residentsLoginUrl();
+    const loginUrl = residentsLoginUrl(estate?.site?.type);
 
     // Pre-load all units for this estate to avoid N+1 lookups
     const allUnits = await Unit.find({ estateId: req.estateId });
