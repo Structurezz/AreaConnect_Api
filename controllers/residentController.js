@@ -111,7 +111,7 @@ exports.inviteResident = async (req, res) => {
     const unit = await Unit.findOne({ _id: unitId, estateId: req.estateId });
     if (!unit) return res.status(404).json({ success: false, message: 'Unit not found' });
     if (unit.residentIds.length >= (await capFor(req))) {
-      return res.status(400).json({ success: false, message: `Apartment is full (max ${await capFor(req)} occupants)` });
+      return res.status(400).json({ success: false, message: `This unit is full (max ${await capFor(req)} occupants)` });
     }
 
     const tempPassword = genTempPassword();

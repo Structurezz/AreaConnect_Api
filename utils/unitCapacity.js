@@ -32,8 +32,14 @@ const capOfPlan = (plan) => {
   return n > 0 ? n : FALLBACK;
 };
 
+// Site types whose "units" are groups — a school class, a factory
+// department, a hospital ward — have no per-unit limit (utils/siteTypes).
+const GROUP_TYPES = ['school', 'industrial', 'hospital'];
+
 async function unitCapacity(estateId) {
   if (!estateId) return FALLBACK;
+  const estate = await require('../models/Estate').findById(estateId).select('site.type').lean();
+  if (GROUP_TYPES.includes(estate?.site?.type)) return UNLIMITED;
   const sub = await Subscription.findOne({ estateId })
     .select('planId comp')
     .populate('planId', 'slug name price.monthly features.maxOccupantsPerUnit')
@@ -47,4 +53,4 @@ async function unitCapacity(estateId) {
 // Units as plain objects with maxOccupants = the plan's capacity
 const withCapacity = (units, cap) => units.map((u) => ({ ...(typeof u.toObject === 'function' ? u.toObject() : u), maxOccupants: cap }));
 
-module.exports = { unitCapacity, withCapacity, capOfPlan, BY_SLUG, UNLIMITED };
+module.exports = { unitCapacity, withCapacity, capOfPlan, BY_SLUG, UNLIMITED, GROUP_TYPES };
