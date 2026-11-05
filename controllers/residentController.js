@@ -76,9 +76,17 @@ exports.getResidents = async (req, res) => {
       User.countDocuments({ estateId: req.estateId, role: 'resident', householdRole: { $ne: 'member' } }),
     ]);
 
+    // How many family members / next of kin each listed head has
+    const kinAgg = residents.length && type !== 'family' ? await User.aggregate([
+      { $match: { householdHead: { $in: residents.map(r => r._id) }, householdRole: 'member', householdStatus: { $ne: 'rejected' } } },
+      { $group: { _id: '$householdHead', n: { $sum: 1 } } },
+    ]) : [];
+    const kinBy = Object.fromEntries(kinAgg.map(k => [String(k._id), k.n]));
+    const data = residents.map(r => ({ ...r.toObject(), kinCount: kinBy[String(r._id)] || 0 }));
+
     return res.json({
       success: true,
-      data: residents,
+      data,
       noUnitCount,
       familyCount,
       residentCount,
@@ -179,6 +187,7 @@ exports.inviteResident = async (req, res) => {
     return res.json({
       success: true,
       message: `Invitation sent to ${email}`,
+      data: { _id: resident._id, name: resident.name, email: resident.email },
     });
   } catch (err) {
     console.error('[inviteResident]', err);
@@ -193,6 +202,7 @@ exports.inviteResident = async (req, res) => {
 exports.bulkInviteResidents = async (req, res) => {
   try {
     const { residents: list } = req.body;
+    const bulkType = (await siteFor(req.estateId))?.site?.type || 'estate';
     if (!Array.isArray(list) || list.length === 0) {
       return res.status(400).json({ success: false, message: 'Provide a residents array' });
     }
@@ -245,6 +255,9 @@ exports.bulkInviteResidents = async (req, res) => {
           estateId: req.estateId,
           isActive: true,
           unitId: resolvedUnit ? resolvedUnit._id : null,
+          // Non-estate sites: the row's role (doctor, nurse…) and ID number
+          ...(bulkType !== 'estate' && rolesFor(bulkType).some(r => r.key === item.siteRole) && { siteRole: item.siteRole }),
+          ...(typeof (item.memberProfile?.idNumber ?? item.idNumber) === 'string' && { memberProfile: { idNumber: String(item.memberProfile?.idNumber ?? item.idNumber).trim().slice(0, 80) } }),
         });
 
         if (resolvedUnit) {
