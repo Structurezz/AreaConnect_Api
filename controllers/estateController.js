@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { normType, invalidate: invalidateSite } = require('../utils/siteTypes');
 const { GridFSBucket, ObjectId } = require('mongodb');
 const pdfParse = require('pdf-parse');
 const { geocodeAddress } = require('../services/geocoding');
@@ -41,7 +42,7 @@ exports.createEstate = async (req, res) => {
     const geo = await geocodeAddress(address);
     if (geo) Object.assign(location, geo, { geocodedAt: new Date() });
 
-    const estate = await Estate.create({ name, address, managerId, location, onboarding: { source: 'wizard', byId: req.user._id } });
+    const estate = await Estate.create({ name, address, managerId, location, site: { type: normType(req.body.siteType) }, onboarding: { source: 'wizard', byId: req.user._id } });
 
     if (managerId) {
       // Add to the manager's portfolio; only set their active estate if they have none
@@ -299,6 +300,7 @@ exports.updateEstate = async (req, res) => {
     for (const f of ['city', 'state', 'estateType', 'contactPhone', 'contactEmail', 'adminNotes', 'logoUrl']) {
       if (req.body[f] !== undefined && (f !== 'adminNotes' || req.user.role === 'super_admin')) update[f] = String(req.body[f]).trim();
     }
+    if (req.body.siteType !== undefined) update['site.type'] = normType(req.body.siteType);
     if (req.body.unitCount !== undefined) update.unitCount = Math.max(0, Number(req.body.unitCount) || 0);
     if (req.body.isActive !== undefined && req.user.role === 'super_admin') update.isActive = !!req.body.isActive;
 
@@ -350,6 +352,7 @@ exports.updateEstate = async (req, res) => {
       { new: true, runValidators: true }
     );
     if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
+    invalidateSite(estate._id);
     return res.json({ success: true, data: estate, geocode: geocodeOutcome });
   } catch (err) {
     console.error('updateEstate error:', err);
@@ -481,7 +484,7 @@ exports.addEstate = async (req, res) => {
     const geo = await geocodeAddress(address);
     if (geo) Object.assign(location, geo, { geocodedAt: new Date() });
 
-    const estate = await Estate.create({ name, address, managerId, location, onboarding: { source: 'wizard', byId: req.user._id } });
+    const estate = await Estate.create({ name, address, managerId, location, site: { type: normType(req.body.siteType) }, onboarding: { source: 'wizard', byId: req.user._id } });
 
     await User.findByIdAndUpdate(managerId, {
       $addToSet: { managedEstates: estate._id },

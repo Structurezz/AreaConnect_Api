@@ -63,6 +63,20 @@ const estateSchema = new mongoose.Schema({
     byId:    { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     batchId: { type: String, default: '' },
   },
+  // Site type (utils/siteTypes): estate, school, hotel, industrial, hospital.
+  // Drives the wording in the apps, which modules start on (modules holds the
+  // manager's overrides), pass categories, visiting hours and the induction
+  // text contractors accept at the gate.
+  site: {
+    type:          { type: String, enum: ['estate', 'school', 'hotel', 'industrial', 'hospital'], default: 'estate' },
+    modules:       { type: mongoose.Schema.Types.Mixed, default: {} },
+    inductionText: { type: String, default: '' },
+    visitingHours: {
+      start:         { type: String, default: '10:00' }, // HH:MM, site local time
+      end:           { type: String, default: '20:00' },
+      maxPerPatient: { type: Number, default: 0 },       // 0 = no limit
+    },
+  },
   isActive: { type: Boolean, default: true },
 }, { timestamps: true });
 

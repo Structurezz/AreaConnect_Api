@@ -9,6 +9,48 @@ const { emitVisitorUpdate, emitEarlyArrival, emitEarlyApproved } = require('../s
 const { isRestricted, EXEMPT_PURPOSES } = require('../utils/duesEnforcement');
 
 const { passExpiresAt, isPastExpiry, expireOverdue } = require('../utils/passExpiry');
+const siteTypes = require('../utils/siteTypes');
+const { withinVisitingHours } = require('../utils/siteClock');
+
+const DETAIL_KEYS = ['studentName', 'studentClass', 'company', 'job', 'goods', 'vehiclePlate', 'patientName', 'ward'];
+
+// Pass category + details from the request, checked against the site type.
+async function readCategory(req, estate) {
+  const cfg = siteTypes.siteConfig(estate);
+  const allowed = cfg.passCategories.map(c => c.key);
+  const category = allowed.includes(req.body.category) ? req.body.category : 'guest';
+  const raw = req.body.details && typeof req.body.details === 'object' ? req.body.details : {};
+  const details = {};
+  for (const k of DETAIL_KEYS) if (typeof raw[k] === 'string' && raw[k].trim()) details[k] = raw[k].trim().slice(0, 120);
+  if (details.vehiclePlate) details.vehiclePlate = details.vehiclePlate.toUpperCase();
+
+  if (category === 'pickup' && !details.studentName) {
+    // A parent (family member) collecting the student they're linked to
+    const me = req.user;
+    const student = me.householdRole === 'member' && me.householdHead
+      ? await User.findById(me.householdHead).select('name unitId memberProfile').populate('unitId', 'unitNumber').lean()
+      : null;
+    if (!student) { const e = new Error('Name the student being collected'); e.status = 400; throw e; }
+    details.studentName = student.name;
+    details.studentClass = details.studentClass || student.memberProfile?.className || student.unitId?.unitNumber || '';
+  }
+  if (category === 'patient_visit' && !details.patientName) { const e = new Error('Name the patient being visited'); e.status = 400; throw e; }
+  if (['contractor', 'supplier'].includes(category) && !details.company) { const e = new Error('Add the company name'); e.status = 400; throw e; }
+  return { category, details };
+}
+
+// What the gate needs to know about this pass beyond valid / not valid.
+function gateInfo(visitor, estate, now = new Date()) {
+  const cfg = siteTypes.siteConfig(estate);
+  const info = {};
+  if (['contractor', 'supplier'].includes(visitor.category) && cfg.inductionText) {
+    info.induction = { required: !visitor.inductionAcceptedAt, text: cfg.inductionText, acceptedAt: visitor.inductionAcceptedAt };
+  }
+  if (cfg.modules.visiting && ['guest', 'patient_visit'].includes(visitor.category || 'guest')) {
+    info.visiting = { ...cfg.visitingHours, outside: !withinVisitingHours(cfg.visitingHours, now) };
+  }
+  return info;
+}
 const EARLY_GRACE_MIN = 30; // minutes allowed before expectedDate without host approval
 
 /** Generate a unique visitor code (retry on collision) */
@@ -24,6 +66,9 @@ const makeUniqueCode = async () => {
 exports.preRegisterVisitor = async (req, res) => {
   try {
     const { visitorName, visitorPhone, visitorEmail, purpose, expectedDuration, notes } = req.body;
+    const estateDoc = await siteTypes.siteFor(req.estateId);
+    let cat;
+    try { cat = await readCategory(req, estateDoc); } catch (e) { return res.status(e.status || 400).json({ success: false, message: e.message }); }
     // Instant pass: the guest is at (or on the way to) the gate — valid from now.
     const instant = req.body.instant === true || req.body.instant === 'true';
     const expectedDate = instant ? new Date() : req.body.expectedDate;
@@ -52,6 +97,8 @@ exports.preRegisterVisitor = async (req, res) => {
       visitorCode,
       qrCodeUrl,
       notes,
+      category: cat.category,
+      details: cat.details,
       status: held ? 'pending' : 'active',
       awaitingApproval: held,
     });
@@ -280,10 +327,11 @@ exports.verifyVisitorCode = async (req, res) => {
         state: 'early_arrival',
         data: visitor,
         minsEarly,
+        gate: gateInfo(visitor, await siteTypes.siteFor(visitor.estateId?._id || visitor.estateId)),
       });
     }
 
-    return res.json({ success: true, data: visitor });
+    return res.json({ success: true, data: visitor, gate: gateInfo(visitor, await siteTypes.siteFor(visitor.estateId?._id || visitor.estateId)) });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
@@ -399,6 +447,33 @@ exports.checkIn = async (req, res) => {
         code: 'PASS_EXPIRED',
         message: 'This visitor pass has expired.',
       });
+    }
+
+    // Site rules: contractor induction and hospital visiting hours
+    const estateDoc = await siteTypes.siteFor(visitor.estateId);
+    const gate = gateInfo(visitor, estateDoc, now);
+    const overrideReason = typeof req.body?.overrideReason === 'string' ? req.body.overrideReason.trim() : '';
+    if (gate.induction?.required) {
+      if (req.body?.inductionAccepted !== true) {
+        return res.status(428).json({ success: false, code: 'INDUCTION_REQUIRED', message: 'The visitor must read and accept the safety induction before entry.', gate });
+      }
+      visitor.inductionAcceptedAt = now;
+    }
+    if (gate.visiting) {
+      const cfg = siteTypes.siteConfig(estateDoc);
+      let problem = null;
+      if (gate.visiting.outside) problem = { code: 'OUTSIDE_VISITING_HOURS', message: `Outside visiting hours (${cfg.visitingHours.start}–${cfg.visitingHours.end}).` };
+      else if (cfg.visitingHours.maxPerPatient && visitor.details?.patientName) {
+        const inside = await Visitor.countDocuments({
+          estateId: visitor.estateId, status: 'checked-in', _id: { $ne: visitor._id },
+          'details.patientName': new RegExp(`^${visitor.details.patientName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+        });
+        if (inside >= cfg.visitingHours.maxPerPatient) problem = { code: 'PATIENT_VISITOR_LIMIT', message: `${visitor.details.patientName} already has ${inside} visitor${inside === 1 ? '' : 's'} (limit ${cfg.visitingHours.maxPerPatient}).` };
+      }
+      if (problem) {
+        if (!overrideReason) return res.status(409).json({ success: false, ...problem, overridable: true, gate });
+        visitor.outsideHoursOverride = { reason: overrideReason.slice(0, 300), by: req.user._id, at: now };
+      }
     }
 
     visitor.status = 'checked-in';

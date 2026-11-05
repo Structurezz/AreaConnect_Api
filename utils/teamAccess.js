@@ -42,6 +42,7 @@ const AREA_BY_ROUTE = {
   '/api/marketplace':   ['community'],
   '/api/court':         ['community'],
   '/api/team':          ['settings'],
+  '/api/gatelog':       ['security'],
 };
 
 const isTeamMember = (user) => user?.role === 'estate_manager' && user.teamRole === 'member';
@@ -55,6 +56,13 @@ function requiredAreas(req) {
   // Everyone on the team can see basic estate info, dashboard counts and the
   // plan (the app gates features on it); changing the estate is Settings.
   if (base === '/api/estates') return read ? null : ['settings'];
+  // Site config: everyone reads it; changing it is Settings; the room board,
+  // stays and shifts are member records; the staff check is a gate job.
+  if (base === '/api/site') {
+    if (path === '/' || path === '') return read ? null : ['settings'];
+    if (path.startsWith('/staff-check')) return ['security', 'residents'];
+    return ['residents'];
+  }
   if (base === '/api/plans' && read && path === '/my-subscription') return null;
   // Anyone on the team can tune in to live estate broadcasts and podcasts
   if (read && (base === '/api/dj' || base === '/api/podcast')) return null;

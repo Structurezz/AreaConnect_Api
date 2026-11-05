@@ -5,6 +5,7 @@ const bcrypt  = require('bcryptjs');
 const { sendInviteEmail } = require('../services/emailService');
 const { emitNotification } = require('../services/socketService');
 const { unitCapacity } = require('../utils/unitCapacity');
+const { sectorFields } = require('../utils/memberFields');
 
 // People allowed per unit come from the estate's plan (utils/unitCapacity)
 const capFor = (req) => (req._unitCap ??= unitCapacity(req.estateId));
@@ -97,6 +98,8 @@ exports.inviteResident = async (req, res) => {
   try {
     const { email, name, phone, unitId } = req.body;
     const estate = await Estate.findById(req.estateId);
+    let extra;
+    try { extra = sectorFields(req.body); } catch (e) { return res.status(400).json({ success: false, message: e.message }); }
 
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) {
@@ -124,6 +127,7 @@ exports.inviteResident = async (req, res) => {
       isActive: true,
       unitId: unitId || null,
     });
+    if (Object.keys(extra).length) await User.updateOne({ _id: resident._id }, { $set: extra });
 
     if (unitId) {
       await Unit.findByIdAndUpdate(unitId, {
@@ -251,6 +255,8 @@ exports.bulkInviteResidents = async (req, res) => {
 exports.addResident = async (req, res) => {
   try {
     const { name, email, phone, password, unitId } = req.body;
+    let extra;
+    try { extra = sectorFields(req.body); } catch (e) { return res.status(400).json({ success: false, message: e.message }); }
 
     const exists = await User.findOne({ email });
     if (exists) return res.status(409).json({ success: false, message: 'Email already exists' });
@@ -271,6 +277,7 @@ exports.addResident = async (req, res) => {
       estateId: req.estateId,
       unitId,
     });
+    if (Object.keys(extra).length) await User.updateOne({ _id: resident._id }, { $set: extra });
     await Unit.findByIdAndUpdate(unitId, {
       $addToSet: { residentIds: resident._id },
       status: 'occupied',

@@ -12,6 +12,9 @@ const User   = require('../models/User');
 const Unit   = require('../models/Unit');
 const Estate = require('../models/Estate');
 const { PERMISSIONS, RELATIONSHIPS, PRESETS, cleanPermissions } = require('../utils/householdAccess');
+const siteTypes = require('../utils/siteTypes');
+// Schools, hotels etc. have their own relationship lists (utils/siteTypes)
+const ALL_RELATIONSHIPS = [...new Set([...RELATIONSHIPS, ...Object.values(siteTypes.RELATIONSHIPS).flat()])];
 const { sendHouseholdInviteEmail } = require('../services/emailService');
 const { emitNotification, getIO } = require('../services/socketService');
 const { sendToUser } = require('../services/pushService');
@@ -50,7 +53,7 @@ const unitLabel = (unit) => unit ? [unit.block && `Block ${unit.block}`, unit.un
 
 const cleanRelationship = (r) => {
   const v = String(r || '').trim();
-  return RELATIONSHIPS.includes(v) ? v : (v ? 'Other' : '');
+  return ALL_RELATIONSHIPS.includes(v) ? v : (v ? 'Other' : '');
 };
 
 const isEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
@@ -151,11 +154,12 @@ const findMember = async (req, res) => {
 };
 
 exports.getOptions = async (req, res) => {
-  const estate = await Estate.findById(req.estateId).select('settings.householdApproval').lean().catch(() => null);
+  const estate = await Estate.findById(req.estateId).select('settings.householdApproval site').lean().catch(() => null);
+  const site = siteTypes.siteConfig(estate);
   return res.json({
     success: true,
     data: {
-      permissions: PERMISSIONS, relationships: RELATIONSHIPS, presets: PRESETS, maxMembers: MAX_MEMBERS,
+      permissions: PERMISSIONS, relationships: site.relationships || RELATIONSHIPS, siteType: site.type, terms: site.terms, presets: PRESETS, maxMembers: MAX_MEMBERS,
       requiresApproval: !!estate?.settings?.householdApproval,
     },
   });

@@ -37,6 +37,26 @@ const visitorSchema = new mongoose.Schema({
   awaitingApproval: { type: Boolean, default: false },
   approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   approvedAt: { type: Date, default: null },
+  // Pass category (utils/siteTypes CATEGORY_INFO) and its extra details.
+  category: { type: String, enum: ['guest', 'pickup', 'contractor', 'supplier', 'delivery', 'patient_visit'], default: 'guest' },
+  details: {
+    studentName:  { type: String, default: '' },
+    studentClass: { type: String, default: '' },
+    company:      { type: String, default: '' },
+    job:          { type: String, default: '' },
+    goods:        { type: String, default: '' },
+    vehiclePlate: { type: String, default: '' },
+    patientName:  { type: String, default: '' },
+    ward:         { type: String, default: '' },
+  },
+  // Contractors/suppliers accept the site's safety induction at the gate.
+  inductionAcceptedAt: { type: Date, default: null },
+  // Hospitals: guard let a visitor in outside visiting hours.
+  outsideHoursOverride: {
+    reason: { type: String, default: '' },
+    by:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    at:     { type: Date, default: null },
+  },
 }, { timestamps: true });
 
 visitorSchema.index({ estateId: 1, status: 1 });

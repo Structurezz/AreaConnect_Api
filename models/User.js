@@ -33,6 +33,27 @@ const userSchema = new mongoose.Schema({
   // no estate/unit and can't sign in until approved; 'rejected' = declined.
   householdStatus:      { type: String, enum: ['active', 'pending', 'rejected'], default: 'active' },
   requestedEstateId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Estate', default: null },
+  // Hotels (site module 'stays'): a guest can sign in from checkIn until
+  // checkOut; at check-out their access ends and the room is freed.
+  stay: {
+    checkIn:  { type: Date, default: null },
+    checkOut: { type: Date, default: null },
+    status:   { type: String, enum: ['none', 'upcoming', 'in_house', 'checked_out'], default: 'none' },
+    roomId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Unit', default: null }, // kept after check-out
+  },
+  // Schools / industry / hospitals (site module 'shifts'): working hours the
+  // gate can check. days: 0 = Sunday … 6 = Saturday.
+  shift: {
+    start: { type: String, default: '' }, // HH:MM
+    end:   { type: String, default: '' },
+    days:  { type: [Number], default: [] },
+  },
+  // Free-text profile bits per sector: staff ID, job title, a student's class.
+  memberProfile: {
+    idNumber: { type: String, default: '' },
+    title:    { type: String, default: '' },
+    className:{ type: String, default: '' },
+  },
   profilePhoto: { type: String, default: '' },
   isActive: { type: Boolean, default: true },
   isDiscoverable: { type: Boolean, default: true },

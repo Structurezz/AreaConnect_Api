@@ -1,4 +1,6 @@
 const bcrypt = require('bcryptjs');
+const { stayBlock } = require('../utils/stays');
+const { normType } = require('../utils/siteTypes');
 const crypto = require('crypto');
 const User = require('../models/User');
 const { isUnassignedResident, NO_UNIT_MESSAGE } = require('../middleware/auth');
@@ -57,7 +59,7 @@ exports.register = async (req, res) => {
       const user = await User.create({ name, email, phone, passwordHash, role: 'estate_manager' });
 
       // Create estate and link manager
-      const estate = await Estate.create({ name: estateName, address: estateAddress, managerId: user._id });
+      const estate = await Estate.create({ name: estateName, address: estateAddress, managerId: user._id, site: { type: normType(req.body.siteType) } });
       user.estateId = estate._id;
       user.managedEstates = [estate._id];
       const accessToken = generateAccessToken(user._id, user.role, estate._id);
@@ -153,12 +155,18 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
-    if (!user || !user.isActive) {
+    if (!user) {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
     const valid = await user.comparePassword(password);
     if (!valid) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+    // Hotel guests outside their stay get told why (after the password check)
+    const stay = user.role === 'resident' && stayBlock(user);
+    if (stay) return res.status(stay.status === 401 ? 403 : stay.status).json({ success: false, code: stay.code, message: stay.message });
+    if (!user.isActive) {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
     if (isUnassignedResident(user)) {
@@ -176,13 +184,13 @@ exports.login = async (req, res) => {
 
     let estateData = null;
     if (user.estateId) {
-      estateData = await Estate.findById(user.estateId).select('name estateCode logoUrl');
+      estateData = await Estate.findById(user.estateId).select('name estateCode logoUrl site');
     }
 
     const populatedUser = await User.findById(user._id)
       .populate('unitId', 'unitNumber block type')
       .populate('householdHead', 'name profilePhoto')
-      .populate('estateId', 'name estateCode logoUrl');
+      .populate('estateId', 'name estateCode logoUrl site');
 
     return res.json({
       success: true,
@@ -208,6 +216,8 @@ exports.refresh = async (req, res) => {
     if (!user || user.refreshToken !== token) {
       return res.status(401).json({ success: false, message: 'Invalid refresh token' });
     }
+    const stay = user.role === 'resident' && stayBlock(user);
+    if (stay) return res.status(401).json({ success: false, code: stay.code, message: stay.message });
     if (isUnassignedResident(user)) {
       return res.status(403).json({ success: false, code: 'NO_UNIT', message: NO_UNIT_MESSAGE });
     }
@@ -235,7 +245,7 @@ exports.logout = async (req, res) => {
 exports.getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
-      .populate('estateId', 'name estateCode logoUrl settings')
+      .populate('estateId', 'name estateCode logoUrl settings site')
       .populate('managedEstates', 'name estateCode logoUrl isActive')
       .populate('unitId', 'unitNumber block type')
       .populate('householdHead', 'name profilePhoto');

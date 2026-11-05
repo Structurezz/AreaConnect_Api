@@ -3,6 +3,8 @@ const User = require('../models/User');
 const Subscription = require('../models/Subscription');
 const { canAccess, requiredAreas } = require('../utils/teamAccess');
 const household = require('../utils/householdAccess');
+const siteTypes = require('../utils/siteTypes');
+const { stayBlock } = require('../utils/stays');
 
 // A resident account with no unit can't use the estate apps until a manager
 // assigns one (login, refresh and every API call are refused).
@@ -20,6 +22,12 @@ const authenticate = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     const user = await User.findById(decoded.userId).select('-passwordHash -refreshToken');
+    // Hotel guests: before check-in / after check-out (checked-out guests are
+    // inactive, so this comes first to give them the right message).
+    if (user?.role === 'resident') {
+      const block = stayBlock(user);
+      if (block) return res.status(block.status).json({ success: false, code: block.code, message: block.message });
+    }
     if (!user || !user.isActive) {
       return res.status(401).json({ success: false, message: 'User not found or inactive' });
     }
@@ -50,6 +58,16 @@ const authenticate = async (req, res, next) => {
         permission,
         message: `Your household hasn't given you access to ${household.PERMISSIONS[permission]?.label.toLowerCase() || 'this feature'}. Ask the head of your household to turn it on.`,
       });
+    }
+    // Modules the site has switched off (utils/siteTypes) — member accounts only
+    if (user.role === 'resident' && user.estateId) {
+      const mod = siteTypes.requiredModule(req);
+      if (mod) {
+        const estate = await siteTypes.siteFor(user.estateId);
+        if (!siteTypes.modulesFor(estate)[mod]) {
+          return res.status(403).json({ success: false, code: 'MODULE_OFF', module: mod, message: `${siteTypes.MODULES[mod].label} isn't available here.` });
+        }
+      }
     }
     // Residents only get into the estate once they're assigned to a unit
     if (isUnassignedResident(user)) {
