@@ -106,23 +106,29 @@ const ASSIGN_LABEL = {
 };
 
 // Requests members can send, per type, and which roles receive them.
+// `managers: true` goes to the site's managers. A member's own assigned
+// staff with a matching role (their doctor, their supervisor) get it first.
 const REQUEST_KINDS = {
   estate: [],
   hospital: [
-    { key: 'call_nurse', label: 'Call a nurse',        roles: ['nurse'],  urgent: true },
-    { key: 'assistance', label: 'Help with something', roles: ['nurse'] },
-    { key: 'meal',       label: 'Food & drink',        roles: ['staff'] },
-    { key: 'other',      label: 'Something else',      roles: ['staff', 'nurse'] },
+    { key: 'call_nurse',  label: 'Call a nurse',        roles: ['nurse'],  urgent: true },
+    { key: 'call_doctor', label: 'Call a doctor',       roles: ['doctor'], urgent: true },
+    { key: 'assistance',  label: 'Help with something', roles: ['nurse'] },
+    { key: 'meal',        label: 'Food & drink',        roles: ['staff'] },
+    { key: 'management',  label: 'Hospital management', roles: [], managers: true },
+    { key: 'other',       label: 'Something else',      roles: ['staff', 'nurse'] },
   ],
   university: [
     { key: 'hostel_repair', label: 'Hostel repair',      roles: ['warden'] },
     { key: 'clinic',        label: 'See the clinic',     roles: ['clinic'] },
     { key: 'other',         label: 'Ask the hall office', roles: ['warden'] },
+    { key: 'management',    label: 'Student affairs',     roles: [], managers: true },
   ],
   school: [
     { key: 'sick_bay', label: 'Sick bay',             roles: ['nurse'], urgent: true },
     { key: 'teacher',  label: 'Message the teacher',  roles: ['teacher'] },
     { key: 'other',    label: 'School office',        roles: ['staff'] },
+    { key: 'management', label: 'School management',  roles: [], managers: true },
   ],
   hotel: [
     { key: 'housekeeping', label: 'Housekeeping',  roles: ['housekeeping'] },
@@ -130,11 +136,13 @@ const REQUEST_KINDS = {
     { key: 'room_service', label: 'Room service',  roles: ['front_desk'] },
     { key: 'concierge',    label: 'Concierge',     roles: ['front_desk'] },
     { key: 'other',        label: 'Something else', roles: ['front_desk', 'duty_manager'] },
+    { key: 'management',   label: 'Hotel management', roles: [], managers: true },
   ],
   industrial: [
     { key: 'incident',  label: 'Report an injury or incident', roles: ['supervisor', 'safety_officer', 'first_aider'], urgent: true },
     { key: 'hazard',    label: 'Report a hazard',               roles: ['safety_officer', 'supervisor'] },
     { key: 'equipment', label: 'Equipment fault',               roles: ['supervisor'] },
+    { key: 'management', label: 'Site management',              roles: [], managers: true },
   ],
 };
 

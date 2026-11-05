@@ -7,5 +7,6 @@ router.use(authenticate, scopeToEstate, requireEstate, requireActiveSubscription
 router.get('/', ctrl.list);
 router.post('/', ctrl.create);
 router.patch('/:id', ctrl.update);
+router.post('/:id/messages', ctrl.addMessage);
 
 module.exports = router;

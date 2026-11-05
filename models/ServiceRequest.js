@@ -17,6 +17,18 @@ const serviceRequestSchema = new mongoose.Schema({
   acceptedAt:  { type: Date, default: null },
   doneAt:      { type: Date, default: null },
   reply:       { type: String, default: '', trim: true, maxlength: 500 },
+  // Conversation on the request between the requester, the care workers it
+  // went to and the managers.
+  messages: [{
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    name:   String,
+    role:   String,  // label: Patient, Nurse, Doctor, Administrator…
+    text:   { type: String, trim: true, maxlength: 1000 },
+    at:     { type: Date, default: Date.now },
+  }],
+  // A manager-created task for staff (not from a member)
+  fromManager: { type: Boolean, default: false },
+  subjectId:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }, // e.g. the patient it's about
 }, { timestamps: true });
 
 serviceRequestSchema.index({ estateId: 1, status: 1, createdAt: -1 });
