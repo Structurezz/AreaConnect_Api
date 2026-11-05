@@ -10,6 +10,7 @@ const { isRestricted, EXEMPT_PURPOSES } = require('../utils/duesEnforcement');
 
 const { passExpiresAt, isPastExpiry, expireOverdue } = require('../utils/passExpiry');
 const siteTypes = require('../utils/siteTypes');
+const { placeForUnit, publicPlace } = require('../utils/places');
 const { withinVisitingHours } = require('../utils/siteClock');
 
 const DETAIL_KEYS = ['studentName', 'studentClass', 'company', 'job', 'goods', 'vehiclePlate', 'patientName', 'ward'];
@@ -40,9 +41,10 @@ async function readCategory(req, estate) {
 }
 
 // What the gate needs to know about this pass beyond valid / not valid.
-function gateInfo(visitor, estate, now = new Date()) {
+function gateInfo(visitor, estate, now = new Date(), place = null) {
   const cfg = siteTypes.siteConfig(estate);
   const info = {};
+  if (place) info.place = place;
   if (['contractor', 'supplier'].includes(visitor.category) && cfg.inductionText) {
     info.induction = { required: !visitor.inductionAcceptedAt, text: cfg.inductionText, acceptedAt: visitor.inductionAcceptedAt };
   }
@@ -133,13 +135,14 @@ async function sendPassToVisitor(visitor, hostName) {
   const { visitorName, visitorPhone, visitorEmail, visitorCode, qrCodeUrl, expectedDate } = visitor;
   const estate = await require('../models/Estate').findById(visitor.estateId).select('name');
   const estateName = estate?.name || 'Estate';
+  const place = publicPlace(await placeForUnit(visitor.hostUnitId?._id || visitor.hostUnitId).catch(() => null));
 
   if (visitorEmail) {
-    sendVisitorPass({ to: visitorEmail, visitorName, hostName, code: visitorCode, qrCodeUrl, expectedDate, estateName })
+    sendVisitorPass({ to: visitorEmail, visitorName, hostName, code: visitorCode, qrCodeUrl, expectedDate, estateName, place })
       .catch(console.error);
   }
   if (visitorPhone) {
-    sendVisitorCodeSMS({ to: visitorPhone, visitorName, code: visitorCode, estateName, expectedDate })
+    sendVisitorCodeSMS({ to: visitorPhone, visitorName, code: visitorCode, estateName, expectedDate, place })
       .catch(console.error);
   }
 }
@@ -327,11 +330,11 @@ exports.verifyVisitorCode = async (req, res) => {
         state: 'early_arrival',
         data: visitor,
         minsEarly,
-        gate: gateInfo(visitor, await siteTypes.siteFor(visitor.estateId?._id || visitor.estateId)),
+        gate: gateInfo(visitor, await siteTypes.siteFor(visitor.estateId?._id || visitor.estateId), new Date(), publicPlace(await placeForUnit(visitor.hostUnitId?._id || visitor.hostUnitId).catch(() => null))),
       });
     }
 
-    return res.json({ success: true, data: visitor, gate: gateInfo(visitor, await siteTypes.siteFor(visitor.estateId?._id || visitor.estateId)) });
+    return res.json({ success: true, data: visitor, gate: gateInfo(visitor, await siteTypes.siteFor(visitor.estateId?._id || visitor.estateId), new Date(), publicPlace(await placeForUnit(visitor.hostUnitId?._id || visitor.hostUnitId).catch(() => null))) });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
@@ -543,7 +546,9 @@ exports.getVisitorById = async (req, res) => {
       .populate('hostUnitId', 'unitNumber block')
       .populate('verifiedBySecurityId', 'name');
     if (!visitor) return res.status(404).json({ success: false, message: 'Not found' });
-    return res.json({ success: true, data: visitor });
+    // Where the visitor is going (for the shareable pass / directions)
+    const place = publicPlace(await placeForUnit(visitor.hostUnitId?._id || visitor.hostUnitId).catch(() => null));
+    return res.json({ success: true, data: visitor, place });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
   }

@@ -22,6 +22,8 @@ const unitSchema = new mongoose.Schema({
     default: 'paid',
   },
   amountOwed: { type: Number, default: 0 },
+  // Where this unit is on the map (hall / building) — models/SitePlace
+  placeId: { type: mongoose.Schema.Types.ObjectId, ref: 'SitePlace', default: null },
 }, { timestamps: true });
 
 unitSchema.index({ estateId: 1, unitNumber: 1 }, { unique: true });

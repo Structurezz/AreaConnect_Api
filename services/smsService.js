@@ -8,12 +8,12 @@ const getClient = () => {
   return twilioClient;
 };
 
-const sendVisitorCodeSMS = async ({ to, visitorName, code, estateName, expectedDate }) => {
+const sendVisitorCodeSMS = async ({ to, visitorName, code, estateName, expectedDate, place }) => {
   const client = getClient();
   if (!client || !process.env.TWILIO_PHONE_NUMBER) return { skipped: true };
 
   const dateStr = new Date(expectedDate).toLocaleDateString();
-  const message = `${estateName} Estate: Hi ${visitorName}, your visitor code is ${code} for ${dateStr}. Show this at the gate.`;
+  const message = `${estateName} Estate: Hi ${visitorName}, your visitor code is ${code} for ${dateStr}. Show this at the gate.${place?.directionsUrl ? ` Directions to ${place.name}: ${place.directionsUrl}` : ''}`;
 
   try {
     await client.messages.create({

@@ -9,7 +9,7 @@ const sendEmail = (payload) => getResend().emails.send(withLogo(payload));
 const FROM      = () => process.env.RESEND_FROM || 'Orizu <noreply@areaconnect.pro>';
 
 // ── Visitor pass ─────────────────────────────────────────────────────────────
-const sendVisitorPass = async ({ to, visitorName, hostName, code, expectedDate, estateName }) => {
+const sendVisitorPass = async ({ to, visitorName, hostName, code, expectedDate, estateName, place }) => {
   if (!process.env.RESEND_API_KEY) return { skipped: true };
 
   const dateStr = new Date(expectedDate).toLocaleDateString('en-NG', {
@@ -54,6 +54,12 @@ const sendVisitorPass = async ({ to, visitorName, hostName, code, expectedDate, 
         <p style="font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#059669;margin-bottom:10px;">Access Code</p>
         <p style="font-family:'Courier New',Courier,monospace;font-size:40px;font-weight:800;color:#047857;letter-spacing:0.3em;">${code}</p>
       </div>
+${place?.directionsUrl ? `
+      <div style="border:1px solid #E5E7EB;border-radius:12px;padding:16px 18px;margin-bottom:20px;">
+        <p style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#6B7280;margin:0 0 4px;">Where you're going</p>
+        <p style="font-size:15px;font-weight:700;color:#111827;margin:0 0 10px;">${place.name}</p>
+        <a href="${place.directionsUrl}" style="display:inline-block;background:#059669;color:#fff;text-decoration:none;font-size:13px;font-weight:700;padding:9px 16px;border-radius:8px;">Get directions on Google Maps</a>
+      </div>` : ''}
 
       <p style="font-size:13px;color:#6B7280;line-height:1.6;">
         Valid for 24 hours after your expected arrival date. If you have any issues, contact your host directly.

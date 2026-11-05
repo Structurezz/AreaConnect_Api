@@ -1,11 +1,11 @@
-// Site types — AreaConnect runs estates, schools, hotels, industrial sites /
+// Site types — AreaConnect runs estates, schools, universities, hotels, industrial sites /
 // offices and hospitals on the same platform. The type picks the words the
 // apps use (TERMS), which modules start switched on (DEFAULT_MODULES, which
 // the manager can override per site) and the pass categories residents can
 // create (PASS_CATEGORIES). Clients fetch the resolved config from
 // GET /api/site; keep the client copies of TERMS in step with this file.
 
-const TYPES = ['estate', 'school', 'hotel', 'industrial', 'hospital'];
+const TYPES = ['estate', 'school', 'university', 'hotel', 'industrial', 'hospital'];
 
 const TERMS = {
   estate: {
@@ -14,6 +14,7 @@ const TERMS = {
     unit: 'Unit', units: 'Units',
     family: 'Family member', familyPlural: 'Family members', household: 'Household',
     manager: 'Estate manager', dues: 'Estate bills',
+    idLabel: 'ID number', classLabel: 'Group', idCheck: 'Staff check',
   },
   school: {
     site: 'Campus', sites: 'Campuses',
@@ -21,6 +22,18 @@ const TERMS = {
     unit: 'Class', units: 'Classes',
     family: 'Parent / guardian', familyPlural: 'Parents & guardians', household: 'Family',
     manager: 'Administrator', dues: 'School fees',
+    idLabel: 'Admission / staff no.', classLabel: 'Class', idCheck: 'Staff check',
+  },
+  // Universities, polytechnics and colleges: adult students use the apps
+  // themselves; units are hostel rooms (block = hall / hostel).
+  university: {
+    site: 'Campus', sites: 'Campuses',
+    member: 'Student', members: 'Students & staff',
+    unit: 'Room', units: 'Hostel rooms',
+    family: 'Parent / guardian', familyPlural: 'Parents & guardians', household: 'Family',
+    manager: 'Administrator', dues: 'Hostel & fees',
+    idLabel: 'Matric / staff no.', classLabel: 'Department & level', idCheck: 'ID check',
+    block: 'Hall',
   },
   hotel: {
     site: 'Property', sites: 'Properties',
@@ -28,6 +41,7 @@ const TERMS = {
     unit: 'Room', units: 'Rooms',
     family: 'Companion', familyPlural: 'Companions', household: 'Party',
     manager: 'Front desk', dues: 'Bills',
+    idLabel: 'Staff ID', classLabel: 'Team', idCheck: 'Staff check',
   },
   industrial: {
     site: 'Site', sites: 'Sites',
@@ -35,6 +49,7 @@ const TERMS = {
     unit: 'Department', units: 'Departments',
     family: 'Dependant', familyPlural: 'Dependants', household: 'Team',
     manager: 'Facility manager', dues: 'Charges',
+    idLabel: 'Staff ID', classLabel: 'Team', idCheck: 'Staff check',
   },
   hospital: {
     site: 'Hospital', sites: 'Hospitals',
@@ -42,6 +57,7 @@ const TERMS = {
     unit: 'Ward', units: 'Wards',
     family: 'Next of kin', familyPlural: 'Next of kin', household: 'Next of kin',
     manager: 'Administrator', dues: 'Bills',
+    idLabel: 'Staff / patient no.', classLabel: 'Department', idCheck: 'Staff check',
   },
 };
 
@@ -64,6 +80,7 @@ const ALL_ON = { payments: true, marketplace: true, community: true, events: tru
 const DEFAULT_MODULES = {
   estate:     { ...ALL_ON, gatelog: false, shifts: false, stays: false, visiting: false },
   school:     { ...ALL_ON, marketplace: false, neighbours: false, gatelog: true, shifts: true, stays: false, visiting: false },
+  university: { ...ALL_ON, household: false, gatelog: true, shifts: true, stays: false, visiting: true },
   hotel:      { ...ALL_ON, payments: false, marketplace: false, community: false, neighbours: false, gatelog: true, shifts: true, stays: true, visiting: false },
   industrial: { ...ALL_ON, payments: false, marketplace: false, household: false, gatelog: true, shifts: true, stays: false, visiting: false },
   hospital:   { ...ALL_ON, payments: false, marketplace: false, community: false, events: false, neighbours: false, gatelog: true, shifts: true, stays: false, visiting: true },
@@ -81,6 +98,7 @@ const CATEGORY_INFO = {
 const PASS_CATEGORIES = {
   estate:     ['guest', 'delivery', 'contractor'],
   school:     ['guest', 'pickup', 'contractor', 'supplier'],
+  university: ['guest', 'delivery', 'contractor', 'supplier'],
   hotel:      ['guest', 'delivery'],
   industrial: ['guest', 'contractor', 'supplier', 'delivery'],
   hospital:   ['guest', 'patient_visit', 'contractor', 'supplier', 'delivery'],
@@ -89,6 +107,7 @@ const PASS_CATEGORIES = {
 // Household relationships per type (utils/householdAccess falls back to estate).
 const RELATIONSHIPS = {
   school:     ['Parent', 'Guardian', 'Sibling', 'Driver', 'Nanny', 'Relative', 'Other'],
+  university: ['Parent', 'Guardian', 'Sibling', 'Sponsor', 'Relative', 'Other'],
   hotel:      ['Spouse', 'Child', 'Friend', 'Colleague', 'Relative', 'Other'],
   industrial: ['Spouse', 'Child', 'Relative', 'Other'],
   hospital:   ['Spouse', 'Parent', 'Child', 'Sibling', 'Relative', 'Caregiver', 'Other'],
