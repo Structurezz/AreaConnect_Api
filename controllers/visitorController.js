@@ -81,6 +81,17 @@ exports.preRegisterVisitor = async (req, res) => {
     // Medical / emergency visitors always go straight through.
     const held = !EXEMPT_PURPOSES.test(String(purpose || '')) && await isRestricted(resident, 'visitor_passes');
 
+    // Restricted unit (e.g. ICU ward): the host's care team approves visitors
+    let careTeam = [];
+    if (!held && resident.unitId && estateDoc?.site?.type && estateDoc.site.type !== 'estate') {
+      const hostUnit = await require('../models/Unit').findById(resident.unitId).select('restricted').lean();
+      const { roleDef } = require('../utils/siteRoles');
+      if (hostUnit?.restricted && !roleDef(estateDoc.site.type, resident.siteRole).staff) {
+        careTeam = await require('../utils/careTeam').careTeamFor(estateId, estateDoc.site.type, resident._id);
+      }
+    }
+    const wardHold = careTeam.length > 0;
+
     const visitorCode = await makeUniqueCode();
     const qrCodeUrl = await generateQRCode(visitorCode);
 
@@ -101,8 +112,10 @@ exports.preRegisterVisitor = async (req, res) => {
       notes,
       category: cat.category,
       details: cat.details,
-      status: held ? 'pending' : 'active',
-      awaitingApproval: held,
+      status: held || wardHold ? 'pending' : 'active',
+      awaitingApproval: held || wardHold,
+      approvalBy: wardHold ? 'care_team' : 'management',
+      approverIds: wardHold ? careTeam : [],
     });
 
     await visitor.populate('hostResidentId', 'name unitId');
@@ -113,6 +126,19 @@ exports.preRegisterVisitor = async (req, res) => {
         success: true,
         held: true,
         message: 'Pass created and sent to estate management for approval because of overdue estate bills. Your visitor gets their code once it is approved.',
+        data: visitor,
+      });
+    }
+
+    if (wardHold) {
+      const push = require('../services/pushService');
+      careTeam.forEach(id => push.sendToUser(id, {
+        title: 'Visitor needs your approval', body: `${resident.name} invited ${visitor.visitorName} to a restricted ward.`,
+        url: `/visitors/${visitor._id}`, tag: `pass-${visitor._id}`,
+      }).catch(() => {}));
+      return res.status(201).json({
+        success: true, held: true, approvalBy: 'care_team',
+        message: 'This is a restricted ward, so the pass has gone to the care team for approval. Your visitor gets their code once it is approved.',
         data: visitor,
       });
     }
@@ -176,6 +202,13 @@ exports.approvePass = async (req, res) => {
     if (visitor.status !== 'pending' || !visitor.awaitingApproval) {
       return res.status(409).json({ success: false, message: 'This pass is not waiting for approval' });
     }
+    // Site staff (doctor, nurse…) approve passes held for the care team only
+    if (req.user.role === 'resident') {
+      const estateDoc = await siteTypes.siteFor(req.estateId);
+      const team = visitor.approvalBy === 'care_team'
+        ? await require('../utils/careTeam').careTeamFor(req.estateId, estateDoc?.site?.type, visitor.hostResidentId?._id || visitor.hostResidentId) : [];
+      if (!team.includes(String(req.user._id))) return res.status(403).json({ success: false, message: "Only the patient's care team can approve this pass" });
+    }
     visitor.status = 'active';
     visitor.awaitingApproval = false;
     visitor.approvedBy = req.user._id;
@@ -212,8 +245,11 @@ exports.getVisitors = async (req, res) => {
       next.setDate(next.getDate() + 1);
       base.expectedDate = { $gte: d, $lt: next };
     }
-    // Residents see only their own visitors
-    if (req.user.role === 'resident') base.hostResidentId = oid(req.user._id);
+    // Residents see only their own visitors; care-team staff can list the
+    // passes waiting for their approval (?approvals=1)
+    if (req.user.role === 'resident' && req.query.approvals === '1') {
+      Object.assign(base, { approverIds: oid(req.user._id), approvalBy: 'care_team', status: 'pending', awaitingApproval: true });
+    } else if (req.user.role === 'resident') base.hostResidentId = oid(req.user._id);
     // Staff can narrow to one resident's visitors (resident profile page)
     else if (req.query.host && mongoose.isValidObjectId(req.query.host)) base.hostResidentId = oid(req.query.host);
     if (search) {
@@ -347,7 +383,9 @@ exports.cancelPass = async (req, res) => {
     const visitor = await Visitor.findOne({ _id: req.params.id, estateId: req.estateId });
     if (!visitor) return res.status(404).json({ success: false, message: 'Visitor not found' });
     const isHost = String(visitor.hostResidentId) === String(req.user._id);
-    const isManager = ['estate_manager', 'super_admin'].includes(req.user.role);
+    // The care team can decline a pass held for their approval
+    const isManager = ['estate_manager', 'super_admin'].includes(req.user.role)
+      || (visitor.approvalBy === 'care_team' && visitor.awaitingApproval && (visitor.approverIds || []).some(id => String(id) === String(req.user._id)));
     if (!isHost && !isManager) return res.status(403).json({ success: false, message: 'Only the host can cancel this pass' });
     if (visitor.status === 'checked-in') return res.status(409).json({ success: false, message: 'Your visitor is already inside. Ask security to check them out instead.' });
     if (!['active', 'pending'].includes(visitor.status)) return res.status(409).json({ success: false, message: `This pass is already ${visitor.status.replace('-', ' ')}` });

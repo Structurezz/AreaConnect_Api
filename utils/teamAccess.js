@@ -43,6 +43,7 @@ const AREA_BY_ROUTE = {
   '/api/court':         ['community'],
   '/api/team':          ['settings'],
   '/api/gatelog':       ['security'],
+  '/api/requests':      ['residents', 'security'],
 };
 
 const isTeamMember = (user) => user?.role === 'estate_manager' && user.teamRole === 'member';
@@ -62,6 +63,8 @@ function requiredAreas(req) {
     if (path === '/' || path === '') return read ? null : ['settings'];
     if (path.startsWith('/staff-check')) return ['security', 'residents'];
     if (path.startsWith('/places')) return read ? null : ['settings', 'residents'];
+    if (path.startsWith('/rollcall')) return null;
+    if (path.startsWith('/staff')) return read ? null : ['residents'];
     return ['residents'];
   }
   if (base === '/api/plans' && read && path === '/my-subscription') return null;

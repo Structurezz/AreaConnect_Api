@@ -38,9 +38,12 @@ exports.createUnit = async (req, res) => {
 exports.updateUnit = async (req, res) => {
   try {
     const { unitNumber, block, type, duesStatus, amountOwed } = req.body;
+    const update = { unitNumber, block, type, duesStatus, amountOwed };
+    // Restricted unit (ICU ward…): visitors need the care team's approval
+    if (typeof req.body.restricted === 'boolean') update.restricted = req.body.restricted;
     const unit = await Unit.findOneAndUpdate(
       { _id: req.params.id, estateId: req.estateId },
-      { unitNumber, block, type, duesStatus, amountOwed },
+      update,
       { new: true, runValidators: true }
     );
     if (!unit) return res.status(404).json({ success: false, message: 'Unit not found' });

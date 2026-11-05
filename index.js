@@ -104,6 +104,7 @@ app.use('/api/team',   require('./routes/team'));
 app.use('/api/household', require('./routes/household'));
 app.use('/api/site', require('./routes/site'));
 app.use('/api/gatelog', require('./routes/gatelog'));
+app.use('/api/requests', require('./routes/requests'));
 app.use('/api/pitch',  require('./routes/pitch'));
 app.use('/api/contact', require('./routes/contact'));
 app.use('/api/demo', require('./routes/demo'));
@@ -193,6 +194,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/estate_ma
     // Visitor passes: expire unused passes once their time window closes.
     if (process.env.NODE_ENV !== 'test') require('./utils/passExpiry').startPassExpirySweeper();
     if (process.env.NODE_ENV !== 'test') require('./utils/stays').startStaySweeper();
+    if (process.env.NODE_ENV !== 'test') require('./services/alertRouting').startEscalationSweeper();
     // Landing-site blog: Gemini writes and publishes one article a day.
     // Opt-out with BLOG_AUTOPUBLISH=off.
     if (process.env.NODE_ENV !== 'test') require('./services/blogWriter').startBlogWriter();

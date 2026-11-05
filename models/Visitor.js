@@ -35,6 +35,10 @@ const visitorSchema = new mongoose.Schema({
   // host's visitor passes are restricted for unpaid dues. Gate staff are only
   // ever told it is awaiting approval, never why.
   awaitingApproval: { type: Boolean, default: false },
+  // Who must approve a held pass: estate management (dues) or the host's
+  // care team (a restricted unit such as an ICU ward).
+  approvalBy: { type: String, enum: ['management', 'care_team'], default: 'management' },
+  approverIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // the care team at the time
   approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   approvedAt: { type: Date, default: null },
   // Pass category (utils/siteTypes CATEGORY_INFO) and its extra details.

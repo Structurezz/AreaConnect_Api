@@ -14,7 +14,7 @@ const TERMS = {
     unit: 'Unit', units: 'Units',
     family: 'Family member', familyPlural: 'Family members', household: 'Household',
     manager: 'Estate manager', dues: 'Estate bills',
-    idLabel: 'ID number', classLabel: 'Group', idCheck: 'Staff check',
+    idLabel: 'ID number', classLabel: 'Group', idCheck: 'Staff check', stayIn: 'Move-in', stayOut: 'Move-out',
   },
   school: {
     site: 'Campus', sites: 'Campuses',
@@ -22,7 +22,7 @@ const TERMS = {
     unit: 'Class', units: 'Classes',
     family: 'Parent / guardian', familyPlural: 'Parents & guardians', household: 'Family',
     manager: 'Administrator', dues: 'School fees',
-    idLabel: 'Admission / staff no.', classLabel: 'Class', idCheck: 'Staff check',
+    idLabel: 'Admission / staff no.', classLabel: 'Class', idCheck: 'Staff check', stayIn: 'Term start', stayOut: 'Term end',
   },
   // Universities, polytechnics and colleges: adult students use the apps
   // themselves; units are hostel rooms (block = hall / hostel).
@@ -32,7 +32,7 @@ const TERMS = {
     unit: 'Room', units: 'Hostel rooms',
     family: 'Parent / guardian', familyPlural: 'Parents & guardians', household: 'Family',
     manager: 'Administrator', dues: 'Hostel & fees',
-    idLabel: 'Matric / staff no.', classLabel: 'Department & level', idCheck: 'ID check',
+    idLabel: 'Matric / staff no.', classLabel: 'Department & level', idCheck: 'ID check', stayIn: 'Session start', stayOut: 'Session end',
     block: 'Hall',
   },
   hotel: {
@@ -41,7 +41,7 @@ const TERMS = {
     unit: 'Room', units: 'Rooms',
     family: 'Companion', familyPlural: 'Companions', household: 'Party',
     manager: 'Front desk', dues: 'Bills',
-    idLabel: 'Staff ID', classLabel: 'Team', idCheck: 'Staff check',
+    idLabel: 'Staff ID', classLabel: 'Team', idCheck: 'Staff check', stayIn: 'Check-in', stayOut: 'Check-out',
   },
   industrial: {
     site: 'Site', sites: 'Sites',
@@ -49,7 +49,7 @@ const TERMS = {
     unit: 'Department', units: 'Departments',
     family: 'Dependant', familyPlural: 'Dependants', household: 'Team',
     manager: 'Facility manager', dues: 'Charges',
-    idLabel: 'Staff ID', classLabel: 'Team', idCheck: 'Staff check',
+    idLabel: 'Staff ID', classLabel: 'Team', idCheck: 'Staff check', stayIn: 'Start date', stayOut: 'End date',
   },
   hospital: {
     site: 'Hospital', sites: 'Hospitals',
@@ -57,7 +57,7 @@ const TERMS = {
     unit: 'Ward', units: 'Wards',
     family: 'Next of kin', familyPlural: 'Next of kin', household: 'Next of kin',
     manager: 'Administrator', dues: 'Bills',
-    idLabel: 'Staff / patient no.', classLabel: 'Department', idCheck: 'Staff check',
+    idLabel: 'Staff / patient no.', classLabel: 'Department', idCheck: 'Staff check', stayIn: 'Admission', stayOut: 'Discharge',
   },
 };
 
@@ -74,16 +74,18 @@ const MODULES = {
   shifts:      { label: 'Staff shifts',      description: 'Shift hours that guards can check at the gate' },
   stays:       { label: 'Guest stays',       description: 'Check-in / check-out dates; access ends at check-out' },
   visiting:    { label: 'Visiting hours',    description: 'Guards are warned when visitors arrive outside visiting hours' },
+  requests:    { label: 'Requests',          description: 'Members send requests (housekeeping, call a nurse, repairs, incident reports) to the right staff' },
+  rollcall:    { label: 'Emergency roll-call', description: 'Start a roll-call in an evacuation and see who is safe and who is missing' },
 };
 
 const ALL_ON = { payments: true, marketplace: true, community: true, events: true, neighbours: true, household: true };
 const DEFAULT_MODULES = {
-  estate:     { ...ALL_ON, gatelog: false, shifts: false, stays: false, visiting: false },
-  school:     { ...ALL_ON, marketplace: false, neighbours: false, gatelog: true, shifts: true, stays: false, visiting: false },
-  university: { ...ALL_ON, household: false, gatelog: true, shifts: true, stays: false, visiting: true },
-  hotel:      { ...ALL_ON, payments: false, marketplace: false, community: false, neighbours: false, gatelog: true, shifts: true, stays: true, visiting: false },
-  industrial: { ...ALL_ON, payments: false, marketplace: false, household: false, gatelog: true, shifts: true, stays: false, visiting: false },
-  hospital:   { ...ALL_ON, payments: false, marketplace: false, community: false, events: false, neighbours: false, gatelog: true, shifts: true, stays: false, visiting: true },
+  estate:     { ...ALL_ON, gatelog: false, shifts: false, stays: false, visiting: false, requests: false, rollcall: false },
+  school:     { ...ALL_ON, marketplace: false, neighbours: false, gatelog: true, shifts: true, stays: false, visiting: false, requests: true, rollcall: true },
+  university: { ...ALL_ON, household: false, gatelog: true, shifts: true, stays: false, visiting: true, requests: true, rollcall: true },
+  hotel:      { ...ALL_ON, payments: false, marketplace: false, community: false, neighbours: false, gatelog: true, shifts: true, stays: true, visiting: false, requests: true, rollcall: true },
+  industrial: { ...ALL_ON, payments: false, marketplace: false, household: false, gatelog: true, shifts: true, stays: false, visiting: false, requests: true, rollcall: true },
+  hospital:   { ...ALL_ON, payments: false, marketplace: false, community: false, events: false, neighbours: false, gatelog: true, shifts: true, stays: true, visiting: true, requests: true, rollcall: true },
 };
 
 // Pass categories a host can pick, per type. 'guest' is the classic pass.
@@ -144,6 +146,7 @@ function siteConfig(estate) {
     terms: TERMS[type],
     modules: modulesFor(estate),
     passCategories: PASS_CATEGORIES[type].map(k => ({ key: k, ...CATEGORY_INFO[k] })),
+    ...require('./siteRoles').rolesConfig(type),
     relationships: RELATIONSHIPS[type] || null,
     inductionText: s.inductionText || '',
     visitingHours: {
@@ -169,6 +172,7 @@ const MODULE_BY_ROUTE = {
   '/api/events':      'events',
   '/api/household':   'household',
   '/api/gatelog':     'gatelog',
+  '/api/requests':    'requests',
 };
 
 function requiredModule(req) {

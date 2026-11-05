@@ -48,6 +48,18 @@ const userSchema = new mongoose.Schema({
     end:   { type: String, default: '' },
     days:  { type: [Number], default: [] },
   },
+  // Role inside the site (utils/siteRoles): patient, doctor, nurse, student,
+  // lecturer, warden, guest, housekeeping, employee, supervisor… Empty = the
+  // site type's default member role.
+  siteRole: { type: String, default: '' },
+  roleInfo: {
+    specialty:   { type: String, default: '' },   // e.g. Cardiology, Mathematics
+    onCall:      { type: Boolean, default: false },
+    onCallSince: { type: Date, default: null },
+  },
+  // Who looks after this member: a patient's doctor and nurse, a student's
+  // adviser and warden, an employee's supervisor (staff accounts).
+  assignedTo: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   // Free-text profile bits per sector: staff ID, job title, a student's class.
   memberProfile: {
     idNumber: { type: String, default: '' },

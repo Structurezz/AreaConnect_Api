@@ -22,6 +22,9 @@ const unitSchema = new mongoose.Schema({
     default: 'paid',
   },
   amountOwed: { type: Number, default: 0 },
+  // Restricted (e.g. an ICU ward): visitor passes to members here need their
+  // care team's approval before the gate accepts them.
+  restricted: { type: Boolean, default: false },
   // Where this unit is on the map (hall / building) — models/SitePlace
   placeId: { type: mongoose.Schema.Types.ObjectId, ref: 'SitePlace', default: null },
 }, { timestamps: true });

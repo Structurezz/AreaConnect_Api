@@ -19,6 +19,7 @@ router.post('/', [
 
 router.get('/', ctrl.getAlerts);
 
+router.post('/:id/respond', ctrl.respondToAlert);
 router.patch('/:id/acknowledge', authorize('security', 'estate_manager', 'super_admin'), ctrl.acknowledgeAlert);
 router.patch('/:id/resolve', authorize('security', 'estate_manager', 'super_admin'), ctrl.resolveAlert);
 

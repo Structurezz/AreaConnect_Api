@@ -30,7 +30,21 @@ const alertSchema = new mongoose.Schema({
     enum: ['all', 'staff', 'estate_manager', 'security'],
     default: 'all',
   },
+  // Role-based routing (services/alertRouting): the site staff this alert was
+  // sent to (care team, ward nurses, on-call doctors, hall warden…), who is
+  // responding, and when it was escalated because nobody answered.
+  routedTo:    [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  responders:  [{
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    name:   String,
+    role:   String,
+    status: { type: String, enum: ['on_my_way', 'arrived', 'cannot'], default: 'on_my_way' },
+    at:     { type: Date, default: Date.now },
+  }],
+  escalatedAt: { type: Date, default: null },
 }, { timestamps: true });
+
+alertSchema.index({ routedTo: 1, status: 1 });
 
 alertSchema.index({ estateId: 1, status: 1, createdAt: -1 });
 

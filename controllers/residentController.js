@@ -6,6 +6,7 @@ const { sendInviteEmail } = require('../services/emailService');
 const { emitNotification } = require('../services/socketService');
 const { unitCapacity } = require('../utils/unitCapacity');
 const { sectorFields } = require('../utils/memberFields');
+const { roleFields } = require('../utils/roleFields');
 
 // People allowed per unit come from the estate's plan (utils/unitCapacity)
 const capFor = (req) => (req._unitCap ??= unitCapacity(req.estateId));
@@ -46,6 +47,7 @@ exports.getResidents = async (req, res) => {
       User.find(filter)
         .populate('unitId', 'unitNumber block type')
         .populate('householdHead', 'name')
+        .populate('assignedTo', 'name siteRole roleInfo profilePhoto')
         .select('-passwordHash -refreshToken')
         .sort({ name: 1 })
         .skip(skip)
@@ -78,6 +80,7 @@ exports.getResident = async (req, res) => {
     const resident = await User.findOne({ _id: req.params.id, estateId: req.estateId, role: 'resident' })
       .populate('unitId', 'unitNumber block type')
       .populate('householdHead', 'name email phone profilePhoto')
+      .populate('assignedTo', 'name phone siteRole roleInfo profilePhoto')
       .select('-passwordHash -refreshToken');
     if (!resident) return res.status(404).json({ success: false, message: 'Resident not found' });
     // The family this resident heads (or belongs to)
@@ -100,7 +103,7 @@ exports.inviteResident = async (req, res) => {
     const { email, name, phone, unitId } = req.body;
     const estate = await Estate.findById(req.estateId);
     let extra;
-    try { extra = sectorFields(req.body); } catch (e) { return res.status(400).json({ success: false, message: e.message }); }
+    try { extra = { ...sectorFields(req.body), ...(await roleFields(req.body, req.estateId)) }; } catch (e) { return res.status(e.status || 400).json({ success: false, message: e.message }); }
 
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) {
@@ -257,7 +260,7 @@ exports.addResident = async (req, res) => {
   try {
     const { name, email, phone, password, unitId } = req.body;
     let extra;
-    try { extra = sectorFields(req.body); } catch (e) { return res.status(400).json({ success: false, message: e.message }); }
+    try { extra = { ...sectorFields(req.body), ...(await roleFields(req.body, req.estateId)) }; } catch (e) { return res.status(e.status || 400).json({ success: false, message: e.message }); }
 
     const exists = await User.findOne({ email });
     if (exists) return res.status(409).json({ success: false, message: 'Email already exists' });

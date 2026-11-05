@@ -486,6 +486,8 @@ const emitAlert = (estateId, alert) => {
   const raiser = alert?.residentId?._id || alert?.residentId;
   let target = io.to(room);
   if (raiser) target = target.to(`user:${raiser}`);
+  // Site staff the alert was routed to (alertRouting) follow its updates too
+  for (const id of alert?.routedTo || []) target = target.to(`user:${id?._id || id}`);
   target.emit('new_alert', alert);
   emitPlatform('alert', estateId, {
     id: alert?._id, type: alert?.type, severity: alert?.severity, status: alert?.status, title: alert?.title,

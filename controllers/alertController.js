@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Estate = require('../models/Estate');
 const { emitAlert } = require('../services/socketService');
 const { sendEmergencyAlertEmails } = require('../services/emailService');
+const { routeAlert, respond } = require('../services/alertRouting');
 
 const AUDIENCES = ['all', 'staff', 'estate_manager', 'security'];
 // Residents can only alert estate staff — a resident-raised alert going to
@@ -107,11 +108,14 @@ exports.createAlert = async (req, res) => {
       audience: resolvedAudience,
     });
     await alert.populate(POPULATE);
+    // Schools, hospitals, hotels…: also send it to the right site staff
+    await routeAlert(alert);
 
     emitAlert(req.estateId.toString(), alert.toObject());
     if (EMAIL_TYPES.includes(type)) emailAlert(alert, { isBroadcast: false });
 
-    const who = { staff: 'Security and estate management have', security: 'Security has', estate_manager: 'Estate management has', all: 'Everyone has' }[resolvedAudience];
+    let who = { staff: 'Security and estate management have', security: 'Security has', estate_manager: 'Estate management has', all: 'Everyone has' }[resolvedAudience];
+    if (alert.routedTo?.length) who = `${who.replace(/ have$| has$/, '')} and ${alert.routedTo.length} staff ${alert.routedTo.length === 1 ? 'member has' : 'members have'}`;
     return res.status(201).json({
       success: true,
       message: `Alert raised. ${who} been notified.`,
@@ -138,6 +142,8 @@ exports.getAlerts = async (req, res) => {
       filter.$or = [
         { residentId: req.user._id },
         { isEmergencyBroadcast: true, audience: { $in: ['all', null] } },
+        // Site staff (doctor, nurse, warden…) see alerts routed to them
+        { routedTo: req.user._id },
       ];
     } else if (role === 'security') {
       filter.audience = { $in: ['all', 'staff', 'security', null] };
@@ -188,6 +194,27 @@ async function updateStatus(req, res, update, action) {
   }
 }
 
+// POST /alerts/:id/respond { status: on_my_way | arrived | cannot } — site
+// staff the alert was routed to (or security / managers) say who's coming.
+exports.respondToAlert = async (req, res) => {
+  try {
+    const status = ['on_my_way', 'arrived', 'cannot'].includes(req.body.status) ? req.body.status : 'on_my_way';
+    const alert = await Alert.findOne({ _id: req.params.id, estateId: req.estateId });
+    if (!alert) return res.status(404).json({ success: false, message: 'Alert not found' });
+    const routed = (alert.routedTo || []).some(id => String(id) === String(req.user._id));
+    if (!routed && !STAFF_ROLES.includes(req.user.role)) return res.status(403).json({ success: false, message: 'This alert was not sent to you' });
+    if (alert.status === 'resolved') return res.status(409).json({ success: false, message: 'This alert is already resolved' });
+    await respond(alert, req.user, status);
+    await alert.populate(POPULATE);
+    emitAlert(req.estateId.toString(), { ...alert.toObject(), action: 'responded', actedBy: { _id: req.user._id, name: req.user.name, role: req.user.role } });
+    const msg = { on_my_way: "They've been told you're on your way", arrived: 'Marked as arrived', cannot: "Noted — others have been told you can't come" }[status];
+    return res.json({ success: true, message: msg, data: alert });
+  } catch (err) {
+    console.error('[respondToAlert]', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
 exports.acknowledgeAlert = (req, res) =>
   updateStatus(req, res, { status: 'acknowledged', acknowledgedAt: new Date() }, 'acknowledged');
 
@@ -216,6 +243,8 @@ exports.broadcastEmergency = async (req, res) => {
       audience: normalizeAudience(audience),
     });
     await alert.populate(POPULATE);
+    // Schools, hospitals, hotels…: also send it to the right site staff
+    await routeAlert(alert);
 
     emitAlert(req.estateId.toString(), alert.toObject());
     emailAlert(alert, { isBroadcast: true });

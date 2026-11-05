@@ -2,6 +2,7 @@ const router = require('express').Router();
 const { authenticate, authorize, scopeToEstate, requireEstate, requireActiveSubscription } = require('../middleware/auth');
 const ctrl = require('../controllers/siteController');
 const places = require('../controllers/placeController');
+const team = require('../controllers/teamSiteController');
 
 router.use(authenticate, scopeToEstate, requireEstate);
 
@@ -19,5 +20,14 @@ router.post('/places', mgr, places.create);
 router.patch('/places/:id', mgr, places.update);
 router.delete('/places/:id', mgr, places.remove);
 router.patch('/places/:id/units', mgr, places.linkUnits);
+
+// Roles: my team, staff directory, on-call, emergency roll-call
+router.get('/my-team', requireActiveSubscription, authorize('resident'), team.myTeam);
+router.get('/staff', requireActiveSubscription, team.staffList);
+router.patch('/me/on-call', requireActiveSubscription, authorize('resident'), team.setOnCall);
+router.get('/rollcall/active', team.activeRollCall);
+router.post('/rollcall', team.startRollCall);
+router.post('/rollcall/:id/respond', team.respondRollCall);
+router.post('/rollcall/:id/end', team.endRollCall);
 
 module.exports = router;

@@ -7,6 +7,7 @@ const siteTypes = require('../utils/siteTypes');
 const { shiftState, validHHMM } = require('../utils/siteClock');
 const { stayState, checkOutGuest } = require('../utils/stays');
 const { sectorFields } = require('../utils/memberFields');
+const { roleFields } = require('../utils/roleFields');
 const { emitNotification } = require('../services/socketService');
 
 const fail = (res, status, message, extra = {}) => res.status(status).json({ success: false, message, ...extra });
@@ -83,7 +84,7 @@ exports.updateSite = async (req, res) => {
 exports.updateMember = async (req, res) => {
   try {
     let update;
-    try { update = sectorFields(req.body); } catch (e) { return fail(res, 400, e.message); }
+    try { update = { ...sectorFields(req.body), ...(await roleFields(req.body, req.estateId)) }; } catch (e) { return fail(res, e.status || 400, e.message); }
     if (!Object.keys(update).length) return fail(res, 400, 'Nothing to update');
     const member = await User.findOne({ _id: req.params.id, estateId: req.estateId, role: { $in: ['resident', 'security', 'estate_manager'] } });
     if (!member) return fail(res, 404, 'Member not found');
@@ -97,7 +98,7 @@ exports.updateMember = async (req, res) => {
       const stay = Object.fromEntries(Object.entries(update).filter(([k]) => k.startsWith('stay.')));
       await User.updateMany({ householdHead: member._id, householdRole: 'member' }, { $set: stay });
     }
-    const fresh = await User.findById(member._id).select('name stay shift memberProfile').lean();
+    const fresh = await User.findById(member._id).select('name stay shift memberProfile siteRole roleInfo assignedTo').populate('assignedTo', 'name siteRole roleInfo profilePhoto').lean();
     return res.json({ success: true, message: 'Saved', data: fresh });
   } catch (err) {
     console.error('[updateMember]', err);
@@ -162,12 +163,16 @@ exports.staffCheck = async (req, res) => {
     const people = await User.find({
       estateId: req.estateId, role: { $in: ['resident', 'estate_manager'] }, householdStatus: { $ne: 'pending' },
       $or: [{ name: rx }, { phone: rx }, { email: rx }, { 'memberProfile.idNumber': rx }],
-    }).select('name phone profilePhoto unitId shift memberProfile isActive stay householdRole').populate('unitId', 'unitNumber block').limit(12).lean();
+    }).select('name phone profilePhoto unitId shift memberProfile isActive stay householdRole siteRole roleInfo').populate('unitId', 'unitNumber block').limit(12).lean();
+    const type = (await siteTypes.siteFor(req.estateId))?.site?.type;
+    const { roleDef } = require('../utils/siteRoles');
     const now = new Date();
     const data = people.map(p => ({
       _id: p._id, name: p.name, phone: p.phone, profilePhoto: p.profilePhoto, isActive: p.isActive,
       unit: p.unitId ? [p.unitId.block, p.unitId.unitNumber].filter(Boolean).join(' · ') : '',
       memberProfile: p.memberProfile || {}, shift: shiftState(p.shift, now),
+      role: roleDef(type, p.siteRole).key, roleLabel: roleDef(type, p.siteRole).label, staff: roleDef(type, p.siteRole).staff,
+      specialty: p.roleInfo?.specialty || '', onCall: !!p.roleInfo?.onCall,
       stay: p.stay?.checkIn || p.stay?.checkOut ? { ...p.stay, state: stayState(p, now) } : null,
     }));
     return res.json({ success: true, data });
