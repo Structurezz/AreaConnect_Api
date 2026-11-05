@@ -54,6 +54,51 @@ const ROLES = {
   ],
 };
 
+// What the onboarding form asks for each role (the apps render it):
+//   unit        — label of the unit picker ('' = no unit needed)
+//   stay        — ask for stay / admission dates
+//   id / group  — labels for memberProfile.idNumber / className ('' = hide)
+//   specialty   — label for roleInfo.specialty ('' = hide)
+//   shift, onCall, assign (assigned staff), kin (next of kin / parent / companion)
+//   emailOptional — can be added without an app login (e.g. a patient whose
+//                   next of kin uses the app; a young pupil whose parents do)
+const F = (o) => ({ unit: '', stay: false, id: '', group: '', specialty: '', shift: false, onCall: false, assign: false, kin: false, kinLabel: '', emailOptional: false, ...o });
+const FORMS = {
+  estate:     { resident: F({ unit: 'Apartment', kin: true, kinLabel: 'Family member' }) },
+  hospital: {
+    patient: F({ unit: 'Ward & bed', stay: true, id: 'Patient / hospital no.', assign: true, kin: true, kinLabel: 'Next of kin', emailOptional: true }),
+    doctor:  F({ unit: 'Ward or department they work in', id: 'Staff ID', specialty: 'Specialty', shift: true, onCall: true }),
+    nurse:   F({ unit: 'Ward they work in', id: 'Staff ID', shift: true, onCall: true }),
+    staff:   F({ unit: 'Department', id: 'Staff ID', specialty: 'Job title', shift: true }),
+  },
+  university: {
+    student:  F({ unit: 'Hall & room', stay: true, id: 'Matric number', group: 'Department & level', assign: true, kin: true, kinLabel: 'Parent / guardian' }),
+    lecturer: F({ unit: 'Department / office', id: 'Staff ID', specialty: 'Department / course' }),
+    warden:   F({ unit: 'Hall they cover', id: 'Staff ID', shift: true }),
+    clinic:   F({ unit: 'Clinic', id: 'Staff ID', specialty: 'Role (doctor, nurse…)', shift: true, onCall: true }),
+    staff:    F({ unit: 'Office', id: 'Staff ID', specialty: 'Job title', shift: true }),
+  },
+  school: {
+    student: F({ unit: 'Class', id: 'Admission number', group: 'Arm / house', assign: true, kin: true, kinLabel: 'Parent / guardian', emailOptional: true }),
+    teacher: F({ unit: 'Class they teach (form class)', id: 'Staff ID', specialty: 'Subject' }),
+    nurse:   F({ unit: 'Sick bay', id: 'Staff ID', shift: true, onCall: true }),
+    staff:   F({ unit: 'Office', id: 'Staff ID', specialty: 'Job title', shift: true }),
+  },
+  hotel: {
+    guest:        F({ unit: 'Room', stay: true, kin: true, kinLabel: 'Companion' }),
+    front_desk:   F({ unit: 'Desk / post', id: 'Staff ID', shift: true }),
+    housekeeping: F({ unit: 'Floor / section', id: 'Staff ID', shift: true }),
+    maintenance:  F({ unit: 'Workshop', id: 'Staff ID', specialty: 'Trade (electrical, plumbing…)', shift: true }),
+    duty_manager: F({ unit: 'Office', id: 'Staff ID', shift: true, onCall: true }),
+  },
+  industrial: {
+    employee:       F({ unit: 'Department', id: 'Staff ID', specialty: 'Job title', shift: true, assign: true }),
+    supervisor:     F({ unit: 'Department they supervise', id: 'Staff ID', shift: true }),
+    safety_officer: F({ unit: 'Office', id: 'Staff ID', shift: true, onCall: true }),
+    first_aider:    F({ unit: 'Department', id: 'Staff ID', shift: true, onCall: true }),
+  },
+};
+
 // What a member's assigned people are called
 const ASSIGN_LABEL = {
   estate: '', hospital: 'Care team', university: 'Adviser & warden', school: 'Class teacher',
@@ -107,11 +152,11 @@ const requestKind = (type, key) => (REQUEST_KINDS[normType(type)] || []).find(k 
 function rolesConfig(type) {
   const t = normType(type);
   return {
-    roles: rolesFor(t),
+    roles: rolesFor(t).map(r => ({ ...r, form: (FORMS[t] || {})[r.key] || F({ unit: 'Unit' }) })),
     defaultRole: defaultRole(t),
     assignLabel: ASSIGN_LABEL[t] || '',
     requestKinds: REQUEST_KINDS[t] || [],
   };
 }
 
-module.exports = { ROLES, ASSIGN_LABEL, REQUEST_KINDS, rolesFor, defaultRole, roleDef, roleOf, isStaff, requestKind, rolesConfig };
+module.exports = { FORMS, ROLES, ASSIGN_LABEL, REQUEST_KINDS, rolesFor, defaultRole, roleDef, roleOf, isStaff, requestKind, rolesConfig };

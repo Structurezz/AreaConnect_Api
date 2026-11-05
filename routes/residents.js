@@ -36,7 +36,7 @@ router.post('/bulk-invite', authorize('estate_manager', 'super_admin'), [
 // Direct add (no email)
 router.post('/', authorize('estate_manager', 'super_admin'), [
   body('name').notEmpty(),
-  body('email').isEmail(),
+  // Email is checked in the controller: members without an app login have none
 ], validate, ctrl.addResident);
 
 router.patch('/:id/suspend',     authorize('estate_manager', 'super_admin'), ctrl.suspendResident);

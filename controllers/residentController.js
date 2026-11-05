@@ -7,6 +7,8 @@ const { emitNotification } = require('../services/socketService');
 const { unitCapacity } = require('../utils/unitCapacity');
 const { sectorFields } = require('../utils/memberFields');
 const { roleFields } = require('../utils/roleFields');
+const { siteFor } = require('../utils/siteTypes');
+const { rolesFor, defaultRole, roleDef, FORMS } = require('../utils/siteRoles');
 
 // People allowed per unit come from the estate's plan (utils/unitCapacity)
 const capFor = (req) => (req._unitCap ??= unitCapacity(req.estateId));
@@ -34,6 +36,15 @@ exports.getResidents = async (req, res) => {
     const filter = { estateId: req.estateId, role: 'resident', householdRole: type === 'family' ? 'member' : { $ne: 'member' } };
     // Residents with no unit can't sign in — managers need to find them fast
     if (view === 'no_unit') filter.unitId = null;
+    // Non-estate sites list staff (doctors, teachers…) and members (patients,
+    // students…) separately: ?group=staff | members, or ?role=<siteRole>
+    const { group, role: roleKey } = req.query;
+    if (group === 'staff' || group === 'members' || roleKey) {
+      const siteType = (await siteFor(req.estateId))?.site?.type;
+      const staffKeys = rolesFor(siteType).filter(r => r.staff).map(r => r.key);
+      if (roleKey) filter.siteRole = roleKey === defaultRole(siteType) ? { $nin: staffKeys } : roleKey;
+      else filter.siteRole = group === 'staff' ? { $in: staffKeys } : { $nin: staffKeys };
+    }
 
     if (search) {
       filter.$or = [
@@ -54,6 +65,11 @@ exports.getResidents = async (req, res) => {
         .limit(parseInt(limit)),
       User.countDocuments(filter),
     ]);
+    const siteType = (await siteFor(req.estateId))?.site?.type;
+    const staffKeys = rolesFor(siteType).filter(r => r.staff).map(r => r.key);
+    const [staffCount] = await Promise.all([
+      staffKeys.length ? User.countDocuments({ estateId: req.estateId, role: 'resident', householdRole: { $ne: 'member' }, siteRole: { $in: staffKeys } }) : 0,
+    ]);
     const [noUnitCount, familyCount, residentCount] = await Promise.all([
       User.countDocuments({ estateId: req.estateId, role: 'resident', unitId: null, householdRole: { $ne: 'member' } }),
       User.countDocuments({ estateId: req.estateId, role: 'resident', householdRole: 'member' }),
@@ -66,6 +82,8 @@ exports.getResidents = async (req, res) => {
       noUnitCount,
       familyCount,
       residentCount,
+      staffCount,
+      memberCount: residentCount - staffCount,
       pagination: { total, page: parseInt(page), pages: Math.ceil(total / limit) },
     });
   } catch (err) {
@@ -258,9 +276,22 @@ exports.bulkInviteResidents = async (req, res) => {
 
 exports.addResident = async (req, res) => {
   try {
-    const { name, email, phone, password, unitId } = req.body;
+    const { name, phone, password, unitId } = req.body;
+    let { email } = req.body;
     let extra;
     try { extra = { ...sectorFields(req.body), ...(await roleFields(req.body, req.estateId)) }; } catch (e) { return res.status(e.status || 400).json({ success: false, message: e.message }); }
+
+    // Members whose role allows it (a patient, a young pupil) can be added
+    // without an app login — their next of kin / parents use the app.
+    const noLogin = req.body.noLogin === true || req.body.noLogin === 'true';
+    if (noLogin) {
+      const type = (await siteFor(req.estateId))?.site?.type;
+      const form = (FORMS[type] || {})[roleDef(type, extra.siteRole).key];
+      if (!form?.emailOptional) return res.status(400).json({ success: false, message: 'An email address is needed for this role' });
+      email = `nologin-${require('crypto').randomBytes(8).toString('hex')}@members.areaconnect.invalid`;
+    } else if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ success: false, message: 'A valid email is required' });
+    }
 
     const exists = await User.findOne({ email });
     if (exists) return res.status(409).json({ success: false, message: 'Email already exists' });
@@ -273,7 +304,7 @@ exports.addResident = async (req, res) => {
       return res.status(400).json({ success: false, message: `Unit is full (max ${await capFor(req)} occupants)` });
     }
 
-    const passwordHash = await bcrypt.hash(password || 'Estate@123', 12);
+    const passwordHash = await bcrypt.hash(noLogin ? require('crypto').randomBytes(24).toString('hex') : (password || 'Estate@123'), 12);
     const resident = await User.create({
       name, email, phone,
       passwordHash,
@@ -287,7 +318,10 @@ exports.addResident = async (req, res) => {
       status: 'occupied',
     });
 
-    return res.status(201).json({ success: true, message: 'Resident added', data: resident.toSafeObject() });
+    // "Doctor added" / "Patient added" on non-estate sites
+    const siteType = (await siteFor(req.estateId))?.site?.type;
+    const label = siteType && siteType !== 'estate' ? roleDef(siteType, extra.siteRole).label : 'Resident';
+    return res.status(201).json({ success: true, message: `${label} added`, data: resident.toSafeObject() });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
