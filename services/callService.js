@@ -68,7 +68,7 @@ function startRinging(call, payload) {
   setTimer(call._id, 'ring', RING_TIMEOUT_MS, () =>
     finalize(call._id, { ringingStatus: 'missed', reason: 'no_answer' }).catch(() => {}));
   const body = pushCallPayload(call, payload);
-  const send = (repeat) => push().sendToUser(call.calleeId, { ...body, repeat, sentAt: Date.now() }, { ttl: 40, urgency: 'high', topic: `call${call._id}` });
+  const send = (repeat) => push().sendToUser(call.calleeId, { ...body, repeat, sentAt: Date.now() }, { ttl: 40, urgency: 'high', topic: `call${call._id}`, reword: false });
   send(0);
   PUSH_REPEAT_MS.forEach((ms, i) => setTimer(call._id, `push${i}`, ms, () => send(i + 1)));
 }

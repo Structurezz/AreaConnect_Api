@@ -42,13 +42,18 @@ async function unsubscribe(endpoint) {
 
 /**
  * Push a JSON payload to every device of a user. Never throws.
- * opts: { ttl (s), urgency: 'very-low'|'low'|'normal'|'high', topic }
+ * opts: { ttl (s), urgency: 'very-low'|'low'|'normal'|'high', topic, reword (default true) }
  */
 async function sendToUser(userId, payload, opts = {}) {
   try {
     const subs = await PushSubscription.find({ userId }).lean();
     if (!subs.length) return { sent: 0 };
     await getVapid();
+    // Non-estate sites get their own words ("unit" → "ward", …)
+    if (opts.reword !== false && payload && (payload.title || payload.body)) {
+      const user = await require('../models/User').findById(userId).select('estateId').lean().catch(() => null);
+      if (user?.estateId) payload = await require('../utils/siteWording').rewordNotification(user.estateId, payload).catch(() => payload);
+    }
     const body = JSON.stringify(payload);
     let sent = 0;
     await Promise.all(subs.map(async (s) => {

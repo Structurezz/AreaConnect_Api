@@ -2,6 +2,9 @@ const bcrypt = require('bcryptjs');
 const { stayBlock } = require('../utils/stays');
 const { normType } = require('../utils/siteTypes');
 const { locationFor } = require('../services/geocoding');
+const siteWording = require('../utils/siteWording');
+// "assigned to a unit in this estate" in the site's own words
+const noUnitMessage = async (user) => siteWording.reword(NO_UNIT_MESSAGE, await siteWording.siteTypeOf(user.estateId).catch(() => 'estate'));
 const crypto = require('crypto');
 const User = require('../models/User');
 const { isUnassignedResident, NO_UNIT_MESSAGE } = require('../middleware/auth');
@@ -172,7 +175,7 @@ exports.login = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
     if (isUnassignedResident(user)) {
-      return res.status(403).json({ success: false, code: 'NO_UNIT', message: NO_UNIT_MESSAGE });
+      return res.status(403).json({ success: false, code: 'NO_UNIT', message: await noUnitMessage(user) });
     }
 
     const accessToken = generateAccessToken(user._id, user.role, user.estateId);
@@ -221,7 +224,7 @@ exports.refresh = async (req, res) => {
     const stay = user.role === 'resident' && stayBlock(user);
     if (stay) return res.status(401).json({ success: false, code: stay.code, message: stay.message });
     if (isUnassignedResident(user)) {
-      return res.status(403).json({ success: false, code: 'NO_UNIT', message: NO_UNIT_MESSAGE });
+      return res.status(403).json({ success: false, code: 'NO_UNIT', message: await noUnitMessage(user) });
     }
 
     const accessToken = generateAccessToken(user._id, user.role, user.estateId);

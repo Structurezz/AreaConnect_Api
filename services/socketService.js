@@ -538,6 +538,14 @@ const emitGroupMessage = (estateId, message) => {
  * Pass userId to target one user; omit/null to broadcast estate-wide.
  */
 const emitNotification = (estateId, notification, userId = null) => {
+  if (!io) return;
+  // Non-estate sites get their own words ("unit" → "ward", …)
+  require('../utils/siteWording').rewordNotification(estateId, notification)
+    .catch(() => notification)
+    .then((n) => sendNotification(estateId, n || notification, userId));
+};
+
+const sendNotification = (estateId, notification, userId) => {
   if (io) {
     const room = userId ? `user:${userId}` : `estate:${estateId}`;
     io.to(room).emit('notification', {

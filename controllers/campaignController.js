@@ -510,7 +510,7 @@ exports.sendPush = async (req, res) => {
         id: `campaign:${c._id}:${u._id}`, type: 'campaign', title, body,
         meta: { kind: 'campaign', campaignId: String(c._id), url: relUrl },
       }, String(u._id));
-      const r = await push.sendToUser(u._id, { title, body, url: relUrl, tag: `campaign-${c._id}` }, { ttl: 86400 });
+      const r = await push.sendToUser(u._id, { title, body, url: relUrl, tag: `campaign-${c._id}` }, { ttl: 86400, reword: false });
       if (r?.sent) devices += 1;
     });
 

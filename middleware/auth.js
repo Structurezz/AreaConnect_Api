@@ -4,6 +4,7 @@ const Subscription = require('../models/Subscription');
 const { canAccess, requiredAreas } = require('../utils/teamAccess');
 const household = require('../utils/householdAccess');
 const siteTypes = require('../utils/siteTypes');
+const siteWording = require('../utils/siteWording');
 const { stayBlock } = require('../utils/stays');
 
 // A resident account with no unit can't use the estate apps until a manager
@@ -33,6 +34,12 @@ const authenticate = async (req, res, next) => {
     }
 
     req.user = user;
+    // Non-estate sites: reword server messages ("unit" → "ward", …)
+    if (user.estateId) {
+      const type = await siteWording.siteTypeOf(user.estateId);
+      const fix = siteWording.rewordResponses(type);
+      if (fix) { const json = res.json.bind(res); res.json = (body) => json(fix(body)); }
+    }
     // Invited team members only reach the areas they were given
     if (!canAccess(user, req)) {
       return res.status(403).json({
