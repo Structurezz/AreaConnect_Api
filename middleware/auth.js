@@ -71,7 +71,11 @@ const authenticate = async (req, res, next) => {
       const mod = siteTypes.requiredModule(req);
       if (mod) {
         const estate = await siteTypes.siteFor(user.estateId);
-        if (!siteTypes.modulesFor(estate)[mod]) {
+        // Calls stay open between a member and site staff (patient ↔ doctor,
+        // student ↔ warden) even where neighbour-to-neighbour calling is off
+        const staffCall = mod === 'neighbours' && req.baseUrl === '/api/calls' && estate?.site?.type && estate.site.type !== 'estate'
+          && await require('../utils/staffCall').staffCallAllowed(user, req, estate.site.type);
+        if (!staffCall && !siteTypes.modulesFor(estate)[mod]) {
           return res.status(403).json({ success: false, code: 'MODULE_OFF', module: mod, message: `${siteTypes.MODULES[mod].label} isn't available here.` });
         }
       }

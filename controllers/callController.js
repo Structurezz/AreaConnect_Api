@@ -79,7 +79,7 @@ exports.startCall = async (req, res) => {
     if (!mongoose.isValidObjectId(calleeId) || String(calleeId) === String(me._id)) {
       return res.status(400).json({ success: false, message: 'Pick someone to call' });
     }
-    const callee = await User.findById(calleeId).select('name role profilePhoto estateId managedEstates isActive isDiscoverable unitId').populate('unitId', 'unitNumber block').lean();
+    const callee = await User.findById(calleeId).select('name role profilePhoto estateId managedEstates isActive isDiscoverable unitId siteRole').populate('unitId', 'unitNumber block').lean();
     if (!callee || !callee.isActive || !inEstate(callee, req.estateId)) {
       return res.status(404).json({ success: false, message: 'That person isn\'t in your estate' });
     }
@@ -87,8 +87,13 @@ exports.startCall = async (req, res) => {
     // Who pays: resident → resident is a paid call. Resident → security /
     // management is an emergency call (free). Staff calling anyone is free.
     let kind;
-    if (STAFF_ROLES.includes(me.role)) kind = 'staff';
-    else if (STAFF_ROLES.includes(callee.role)) kind = 'emergency';
+    // Site staff (doctor, nurse, warden, front desk…) call and are called free
+    const { siteFor } = require('../utils/siteTypes');
+    const { roleDef } = require('../utils/siteRoles');
+    const siteType = (await siteFor(req.estateId))?.site?.type;
+    const siteStaff = (u) => siteType && siteType !== 'estate' && roleDef(siteType, u.siteRole).staff;
+    if (STAFF_ROLES.includes(me.role) || siteStaff(me)) kind = 'staff';
+    else if (STAFF_ROLES.includes(callee.role) || siteStaff(callee)) kind = 'emergency';
     else if (callee.role === 'resident') {
       if (callee.isDiscoverable === false) return res.status(403).json({ success: false, message: 'This neighbour isn\'t taking calls' });
       kind = 'standard';

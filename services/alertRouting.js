@@ -130,6 +130,8 @@ async function escalateDue(olderThanMs = ESCALATE_AFTER_MS) {
         alert.routedTo = all;
         alert.escalatedAt = new Date();
         await alert.save();
+        // The raiser (and the staff rooms) see it was escalated too
+        try { require('./socketService').emitAlert(String(alert.estateId), { ...alert.toObject(), action: 'escalated' }); } catch {}
         notify(all, alert, {
           title: `No response yet: ${alert.title || 'Emergency'}${alert.unitId ? ` — ${place(alert.unitId)}` : ''}`,
           body: `${alert.residentId?.name || 'Someone'} still needs help. Nobody has responded in 2 minutes.`,
