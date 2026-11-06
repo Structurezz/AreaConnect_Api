@@ -39,6 +39,8 @@ exports.getResidents = async (req, res) => {
     // Non-estate sites list staff (doctors, teachers…) and members (patients,
     // students…) separately: ?group=staff | members, or ?role=<siteRole>
     const { group, role: roleKey } = req.query;
+    // ?onCall=1 — staff currently on call (industrial "Employees" filter)
+    if (req.query.onCall === '1') filter['roleInfo.onCall'] = true;
     if (group === 'staff' || group === 'members' || roleKey) {
       const siteType = (await siteFor(req.estateId))?.site?.type;
       const staffKeys = rolesFor(siteType).filter(r => r.staff).map(r => r.key);
