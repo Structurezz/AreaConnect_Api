@@ -16,7 +16,7 @@ const Alert = require('../models/Alert');
 const User = require('../models/User');
 const Unit = require('../models/Unit');
 const { siteFor, normType } = require('../utils/siteTypes');
-const { rolesFor, roleDef } = require('../utils/siteRoles');
+const { rolesFor, roleDef, roleLabelFor } = require('../utils/siteRoles');
 
 const ESCALATE_AFTER_MS = 2 * 60 * 1000;
 const kindOf = (alertType) => (['medical', 'security', 'fire'].includes(alertType) ? alertType : 'other');
@@ -97,8 +97,7 @@ async function routeAlert(alert) {
 // A routed staff member responds ("On my way", "Arrived", "Can't come")
 async function respond(alert, user, status = 'on_my_way') {
   const estate = await siteFor(alert.estateId);
-  const role = roleDef(estate?.site?.type, user.siteRole);
-  const entry = { userId: user._id, name: user.name, role: role.label, status, at: new Date() };
+  const entry = { userId: user._id, name: user.name, role: roleLabelFor(user, estate?.site?.type), status, at: new Date() };
   const i = (alert.responders || []).findIndex(r => String(r.userId) === String(user._id));
   if (i >= 0) alert.responders[i] = entry; else alert.responders.push(entry);
   if (status !== 'cannot' && alert.status === 'open') { alert.status = 'acknowledged'; alert.acknowledgedAt = new Date(); }

@@ -10,7 +10,7 @@ const Unit = require('../models/Unit');
 const Visitor = require('../models/Visitor');
 const RollCall = require('../models/RollCall');
 const { siteFor, normType } = require('../utils/siteTypes');
-const { rolesFor, roleDef } = require('../utils/siteRoles');
+const { rolesFor, roleDef, roleLabelFor } = require('../utils/siteRoles');
 const { shiftState } = require('../utils/siteClock');
 const { stayState } = require('../utils/stays');
 
@@ -153,8 +153,8 @@ async function rollCallView(rc, user, type) {
     myResponse: mine, canManage: full,
   };
   if (full) {
-    const people = await User.find({ _id: { $in: [...rc.expected, ...rc.responses.map(r => r.userId)] } }).select('name phone profilePhoto siteRole unitId').populate('unitId', 'unitNumber block').lean();
-    const card = (u) => ({ _id: u._id, name: u.name, phone: u.phone, profilePhoto: u.profilePhoto, roleLabel: roleDef(type, u.siteRole).label, unit: unitText(u.unitId) });
+    const people = await User.find({ _id: { $in: [...rc.expected, ...rc.responses.map(r => r.userId)] } }).select('name phone profilePhoto siteRole role unitId').populate('unitId', 'unitNumber block').lean();
+    const card = (u) => ({ _id: u._id, name: u.name, phone: u.phone, profilePhoto: u.profilePhoto, roleLabel: roleLabelFor(u, type), unit: unitText(u.unitId) });
     const byId = new Map(people.map(p => [String(p._id), p]));
     out.needHelp = rc.responses.filter(r => r.status === 'help').map(r => ({ ...card(byId.get(String(r.userId)) || { _id: r.userId }), note: r.note, at: r.at }));
     out.missingPeople = rc.expected.filter(id => !answered.has(String(id))).map(id => byId.get(String(id))).filter(Boolean).map(card);

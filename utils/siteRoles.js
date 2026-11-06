@@ -156,6 +156,14 @@ const roleOf = (user, type) => roleDef(type, user?.siteRole).key;
 const isStaff = (user, type) => roleDef(type, user?.siteRole).staff;
 const requestKind = (type, key) => (REQUEST_KINDS[normType(type)] || []).find(k => k.key === key);
 
+// Label for anyone on a site: guards are Security, managers the site's
+// manager word (Administrator / Front desk…), members their site role.
+function roleLabelFor(user, type) {
+  if (user?.role === 'security') return 'Security';
+  if (user?.role === 'estate_manager' || user?.role === 'super_admin') return require('./siteTypes').TERMS[normType(type)].manager;
+  return roleDef(type, user?.siteRole).label;
+}
+
 // Config for the apps
 function rolesConfig(type) {
   const t = normType(type);
@@ -167,4 +175,4 @@ function rolesConfig(type) {
   };
 }
 
-module.exports = { FORMS, ROLES, ASSIGN_LABEL, REQUEST_KINDS, rolesFor, defaultRole, roleDef, roleOf, isStaff, requestKind, rolesConfig };
+module.exports = { roleLabelFor, FORMS, ROLES, ASSIGN_LABEL, REQUEST_KINDS, rolesFor, defaultRole, roleDef, roleOf, isStaff, requestKind, rolesConfig };

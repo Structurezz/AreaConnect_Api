@@ -7,7 +7,7 @@ const ServiceRequest = require('../models/ServiceRequest');
 const User = require('../models/User');
 const Unit = require('../models/Unit');
 const { siteFor, normType } = require('../utils/siteTypes');
-const { requestKind, roleDef, rolesFor } = require('../utils/siteRoles');
+const { requestKind, roleDef, rolesFor, roleLabelFor } = require('../utils/siteRoles');
 
 const POPULATE = [
   { path: 'requesterId', select: 'name phone profilePhoto siteRole' },
@@ -60,7 +60,7 @@ async function routeFor(estateId, type, kind, subjectId) {
   return ids(staff);
 }
 
-const roleLabelOf = (user, type) => (['estate_manager', 'super_admin'].includes(user.role) ? 'Management' : roleDef(type, user.siteRole).label);
+const roleLabelOf = (user, type) => (['estate_manager', 'super_admin'].includes(user.role) ? 'Management' : roleLabelFor(user, type));
 
 function pushAll(ids, payload, urgent) {
   const push = require('../services/pushService');

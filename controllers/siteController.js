@@ -163,7 +163,7 @@ exports.staffCheck = async (req, res) => {
     const people = await User.find({
       estateId: req.estateId, role: { $in: ['resident', 'estate_manager'] }, householdStatus: { $ne: 'pending' },
       $or: [{ name: rx }, { phone: rx }, { email: rx }, { 'memberProfile.idNumber': rx }],
-    }).select('name phone profilePhoto unitId shift memberProfile isActive stay householdRole siteRole roleInfo').populate('unitId', 'unitNumber block').limit(12).lean();
+    }).select('name phone profilePhoto unitId shift memberProfile isActive stay householdRole siteRole roleInfo role').populate('unitId', 'unitNumber block').limit(12).lean();
     const type = (await siteTypes.siteFor(req.estateId))?.site?.type;
     const { roleDef } = require('../utils/siteRoles');
     const now = new Date();
@@ -171,7 +171,11 @@ exports.staffCheck = async (req, res) => {
       _id: p._id, name: p.name, phone: p.phone, profilePhoto: p.profilePhoto, isActive: p.isActive,
       unit: p.unitId ? [p.unitId.block, p.unitId.unitNumber].filter(Boolean).join(' · ') : '',
       memberProfile: p.memberProfile || {}, shift: shiftState(p.shift, now),
-      role: roleDef(type, p.siteRole).key, roleLabel: roleDef(type, p.siteRole).label, staff: roleDef(type, p.siteRole).staff,
+      // Managers have no site role — show them as the site's manager
+      // (Administrator / Front desk…), never as a patient or student
+      ...(p.role === 'estate_manager'
+        ? { role: 'manager', roleLabel: siteTypes.TERMS[siteTypes.normType(type)].manager, staff: true }
+        : { role: roleDef(type, p.siteRole).key, roleLabel: roleDef(type, p.siteRole).label, staff: roleDef(type, p.siteRole).staff }),
       specialty: p.roleInfo?.specialty || '', onCall: !!p.roleInfo?.onCall,
       stay: p.stay?.checkIn || p.stay?.checkOut ? { ...p.stay, state: stayState(p, now) } : null,
     }));
