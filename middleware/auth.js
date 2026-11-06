@@ -80,7 +80,9 @@ const authenticate = async (req, res, next) => {
         // student ↔ warden) even where neighbour-to-neighbour calling is off
         const staffCall = mod === 'neighbours' && req.baseUrl === '/api/calls' && estate?.site?.type && estate.site.type !== 'estate'
           && await require('../utils/staffCall').staffCallAllowed(user, req, estate.site.type);
-        if (!staffCall && !siteTypes.modulesFor(estate)[mod]) {
+        // Staff roles (porter, teacher, doctor…) don't get member-only modules
+        const staffHidden = require('../utils/siteRoles').hiddenModulesFor(user, estate?.site?.type).includes(mod);
+        if (!staffCall && (staffHidden || !siteTypes.modulesFor(estate)[mod])) {
           return res.status(403).json({ success: false, code: 'MODULE_OFF', module: mod, message: `${siteTypes.MODULES[mod].label} isn't available here.` });
         }
       }

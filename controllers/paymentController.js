@@ -65,6 +65,12 @@ exports.createSchedule = async (req, res) => {
       role: 'resident',
       isActive: true,
       householdRole: { $ne: 'member' },
+      // Staff (porters, teachers, doctors…) are never billed member fees
+      ...(await (async () => {
+        const t = (await require('../utils/siteTypes').siteFor(req.estateId))?.site?.type;
+        const staffKeys = require('../utils/siteRoles').rolesFor(t).filter(r => r.staff).map(r => r.key);
+        return staffKeys.length ? { siteRole: { $nin: staffKeys } } : {};
+      })()),
     }).select('_id');
 
     if (residents.length) {

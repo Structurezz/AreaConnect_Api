@@ -54,6 +54,13 @@ const ROLES = {
   ],
 };
 
+// Member-only features staff roles don't get (a porter, teacher, doctor or
+// housekeeper doesn't pay student fees / patient bills, add family, or sell
+// on the members' marketplace). Enforced in middleware/auth and hidden in
+// the apps; staff are also never billed.
+const STAFF_HIDDEN_MODULES = ['payments', 'household', 'marketplace'];
+const hiddenModulesFor = (user, type) => (roleDef(type, user?.siteRole).staff ? STAFF_HIDDEN_MODULES : []);
+
 // What the onboarding form asks for each role (the apps render it):
 //   unit        — label of the unit picker ('' = no unit needed)
 //   stay        — ask for stay / admission dates
@@ -168,11 +175,11 @@ function roleLabelFor(user, type) {
 function rolesConfig(type) {
   const t = normType(type);
   return {
-    roles: rolesFor(t).map(r => ({ ...r, form: (FORMS[t] || {})[r.key] || F({ unit: 'Unit' }) })),
+    roles: rolesFor(t).map(r => ({ ...r, form: (FORMS[t] || {})[r.key] || F({ unit: 'Unit' }), hide: r.staff ? STAFF_HIDDEN_MODULES : [] })),
     defaultRole: defaultRole(t),
     assignLabel: ASSIGN_LABEL[t] || '',
     requestKinds: REQUEST_KINDS[t] || [],
   };
 }
 
-module.exports = { roleLabelFor, FORMS, ROLES, ASSIGN_LABEL, REQUEST_KINDS, rolesFor, defaultRole, roleDef, roleOf, isStaff, requestKind, rolesConfig };
+module.exports = { STAFF_HIDDEN_MODULES, hiddenModulesFor, roleLabelFor, FORMS, ROLES, ASSIGN_LABEL, REQUEST_KINDS, rolesFor, defaultRole, roleDef, roleOf, isStaff, requestKind, rolesConfig };
