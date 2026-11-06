@@ -22,4 +22,7 @@ const messageSchema = new mongoose.Schema({
 messageSchema.index({ estateId: 1, isGroupMessage: 1, createdAt: 1 });
 messageSchema.index({ senderId: 1, receiverId: 1 });
 
+messageSchema.index({ receiverId: 1, createdAt: -1 });
+messageSchema.index({ senderId: 1, receiverId: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Message', messageSchema);

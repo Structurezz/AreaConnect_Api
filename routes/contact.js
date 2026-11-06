@@ -6,7 +6,7 @@ const { brandMark, withLogo } = require('../services/emailBrand');
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 const FROM = () => process.env.RESEND_FROM || 'AreaConnect <noreply@areaconnect.pro>';
 
-router.post('/', async (req, res) => {
+router.post('/', require('../middleware/rateLimits').contact, async (req, res) => {
   const { name, email, company, subject, message } = req.body;
 
   if (!name || !email || !subject || !message) {

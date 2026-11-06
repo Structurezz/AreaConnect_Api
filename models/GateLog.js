@@ -19,4 +19,6 @@ const gateLogSchema = new mongoose.Schema({
 
 gateLogSchema.index({ estateId: 1, timeIn: -1 });
 
+gateLogSchema.index({ estateId: 1, timeOut: 1 });
+
 module.exports = mongoose.model('GateLog', gateLogSchema);

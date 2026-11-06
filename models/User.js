@@ -112,4 +112,27 @@ userSchema.methods.toSafeObject = function () {
   return obj;
 };
 
+
+// Lookups by estate are on nearly every request (lists, routing, counts)
+userSchema.index({ estateId: 1, role: 1, name: 1 });
+userSchema.index({ estateId: 1, siteRole: 1, isActive: 1 });
+userSchema.index({ managedEstates: 1 });
+userSchema.index({ assignedTo: 1 });
+userSchema.index({ unitId: 1 });
+userSchema.index({ householdHead: 1, householdRole: 1 });
+userSchema.index({ requestedEstateId: 1, householdStatus: 1 });
+userSchema.index({ 'stay.status': 1, 'stay.checkOut': 1 });
+userSchema.index({ 'stay.status': 1, 'stay.checkIn': 1 });
+
+// Keep the auth cache (utils/authCache) in step with writes
+const bust = () => require('../utils/authCache');
+userSchema.post('save', (doc) => bust().bustUser(doc._id));
+userSchema.post(['updateOne', 'findOneAndUpdate', 'findOneAndDelete', 'deleteOne'], function () {
+  const id = this.getFilter?.()?._id;
+  if (id?.$in) id.$in.forEach((x) => bust().bustUser(x));
+  else if (id) bust().bustUser(id);
+  else bust().bustAllUsers();
+});
+userSchema.post(['updateMany', 'deleteMany'], () => bust().bustAllUsers());
+
 module.exports = mongoose.model('User', userSchema);

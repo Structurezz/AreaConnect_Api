@@ -66,4 +66,10 @@ const visitorSchema = new mongoose.Schema({
 visitorSchema.index({ estateId: 1, status: 1 });
 visitorSchema.index({ visitorCode: 1 });
 
+visitorSchema.index({ estateId: 1, createdAt: -1 });
+visitorSchema.index({ estateId: 1, hostResidentId: 1, createdAt: -1 });
+visitorSchema.index({ hostResidentId: 1, status: 1 });
+visitorSchema.index({ estateId: 1, expectedDate: 1 });
+visitorSchema.index({ status: 1, expectedDate: 1 }); // pass-expiry sweeper
+
 module.exports = mongoose.model('Visitor', visitorSchema);

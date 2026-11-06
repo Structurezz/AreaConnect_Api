@@ -21,6 +21,7 @@ const subscriptionSchema = new mongoose.Schema({
   // Pending upgrade (awaiting Paystack confirmation)
   pendingRef:    { type: String },
   pendingPlanId: { type: mongoose.Schema.Types.ObjectId, ref: 'Plan' },
+  pendingAmount: { type: Number, default: 0 },
   pendingCycle:  { type: String },
 
   // Tracks which day-thresholds have already had a reminder email sent (e.g. [7, 3, 1])
@@ -75,5 +76,11 @@ subscriptionSchema.methods.isCompActive = function () {
   if (!this.comp.expiresAt) return true;
   return new Date(this.comp.expiresAt) > new Date();
 };
+
+// Keep the auth cache's subscription status in step with writes
+subscriptionSchema.post('save', (doc) => require('../utils/authCache').bustSub(doc.estateId));
+subscriptionSchema.post(['updateOne', 'findOneAndUpdate', 'updateMany', 'findOneAndDelete', 'deleteOne', 'deleteMany'], function () {
+  require('../utils/authCache').bustSub(this.getFilter?.()?.estateId);
+});
 
 module.exports = mongoose.model('Subscription', subscriptionSchema);

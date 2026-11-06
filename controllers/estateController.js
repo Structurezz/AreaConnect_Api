@@ -195,8 +195,11 @@ exports.getEstatesOverview = async (req, res) => {
 exports.getEstate = async (req, res) => {
   try {
     const estate = await Estate.findById(req.params.estateId)
+      .select('-constitution.extractedText')
       .populate('managerId', 'name email phone');
     if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
+    // Only people in this estate (or managing it) can read it
+    if (!assertEstateAccess(req.user, estate)) return res.status(404).json({ success: false, message: 'Estate not found' });
 
     // Lazy backfill: if the estate has an address but no lat/lng yet, geocode inline
     // so existing records get map coordinates the first time anyone views them.
@@ -208,7 +211,9 @@ exports.getEstate = async (req, res) => {
       }
     }
 
-    return res.json({ success: true, data: estate });
+    const data = estate.toObject();
+    if (req.user.role !== 'super_admin') delete data.adminNotes;
+    return res.json({ success: true, data });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
@@ -227,10 +232,10 @@ exports.getEstateDetail = async (req, res) => {
       Estate.findById(estateId).populate('managerId', 'name email phone'),
       User.find({ estateId, role: 'resident' })
         .populate('unitId', 'unitNumber block type')
-        .select('-passwordHash -refreshToken')
+        .select(require('../utils/safeQuery').PRIVATE_USER)
         .sort({ name: 1 }),
       User.find({ estateId, role: 'security' })
-        .select('-passwordHash -refreshToken')
+        .select(require('../utils/safeQuery').PRIVATE_USER)
         .sort({ name: 1 }),
       Unit.find({ estateId }).sort({ unitNumber: 1 }),
       // Replace the client's N+1: ship the single sub for this estate directly
@@ -291,9 +296,20 @@ exports.getEstateDetail = async (req, res) => {
 exports.updateEstate = async (req, res) => {
   try {
     const { name, address, settings, location: manualLocation } = req.body;
+    // Only this estate's managers (or AreaConnect admins) may change it
+    const target = await Estate.findById(req.params.estateId).select('managerId');
+    if (!target || !assertEstateAccess(req.user, target) || !['estate_manager', 'super_admin'].includes(req.user.role)) {
+      return res.status(404).json({ success: false, message: 'Estate not found' });
+    }
     const update = {};
-    if (name !== undefined) update.name = name;
-    if (settings !== undefined) update.settings = settings;
+    if (name !== undefined) update.name = String(name).trim();
+    // Settings: only these simple switches here — dues enforcement has its own
+    // controller (it needs the manager's confirmation flow)
+    if (settings && typeof settings === 'object') {
+      for (const k of ['requireVisitorApproval', 'marketplaceApproval', 'allowGuestChat', 'householdApproval']) {
+        if (typeof settings[k] === 'boolean') update[`settings.${k}`] = settings[k];
+      }
+    }
     // Profile fields (managers and admins); activation is admin-only
     for (const f of ['city', 'state', 'estateType', 'contactPhone', 'contactEmail', 'adminNotes', 'logoUrl']) {
       if (req.body[f] !== undefined && (f !== 'adminNotes' || req.user.role === 'super_admin')) update[f] = String(req.body[f]).trim();
@@ -525,7 +541,7 @@ function assertEstateAccess(user, estate) {
 exports.geocodeEstate = async (req, res) => {
   try {
     const estate = await Estate.findById(req.params.estateId);
-    if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
+    if (!estate || !assertEstateAccess(req.user, estate)) return res.status(404).json({ success: false, message: 'Estate not found' });
     if (!estate.address) return res.status(400).json({ success: false, message: 'Estate has no address to geocode' });
 
     const geo = await geocodeAddress(estate.address, estate);

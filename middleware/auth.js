@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Subscription = require('../models/Subscription');
 const { canAccess, requiredAreas } = require('../utils/teamAccess');
 const household = require('../utils/householdAccess');
+const authCache = require('../utils/authCache');
 const siteTypes = require('../utils/siteTypes');
 const siteWording = require('../utils/siteWording');
 const { stayBlock } = require('../utils/stays');
@@ -20,9 +21,13 @@ const authenticate = async (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
+    // Single-purpose tokens (e.g. a call-decline link) are never a login
+    if (decoded.purpose) return res.status(401).json({ success: false, message: 'Invalid token' });
 
-    const user = await User.findById(decoded.userId).select('-passwordHash -refreshToken');
+    // Cached for a few seconds (utils/authCache) — this runs on every request.
+    // Lean and without the photo / bank fields: nothing saves req.user.
+    const user = await authCache.user(decoded.userId);
     // Hotel guests: before check-in / after check-out (checked-out guests are
     // inactive, so this comes first to give them the right message).
     if (user?.role === 'resident') {
@@ -51,7 +56,7 @@ const authenticate = async (req, res, next) => {
     }
     // Family members are locked out while their household head is suspended
     if (user.role === 'resident' && user.householdRole === 'member') {
-      const head = await User.findById(user.householdHead).select('isActive').lean();
+      const head = await authCache.user(user.householdHead);
       if (!head || !head.isActive) {
         return res.status(401).json({ success: false, code: 'HOUSEHOLD_INACTIVE', message: 'Your household account is paused. Ask the head of your household to contact the estate manager.' });
       }
@@ -129,12 +134,12 @@ const BLOCKED_STATUSES = ['suspended', 'expired', 'cancelled'];
 const requireActiveSubscription = async (req, res, next) => {
   try {
     if (!req.estateId) return next();
-    const sub = await Subscription.findOne({ estateId: req.estateId }).select('status');
-    if (sub && BLOCKED_STATUSES.includes(sub.status)) {
+    const status = await authCache.subStatus(req.estateId);
+    if (status && BLOCKED_STATUSES.includes(status)) {
       return res.status(402).json({
         success: false,
-        subscriptionStatus: sub.status,
-        message: `Your subscription is ${sub.status}. Renew your plan to regain access.`,
+        subscriptionStatus: status,
+        message: `Your subscription is ${status}. Renew your plan to regain access.`,
       });
     }
     next();

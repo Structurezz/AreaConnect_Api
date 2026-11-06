@@ -3,15 +3,18 @@ const { body } = require('express-validator');
 const ctrl = require('../controllers/authController');
 const validate = require('../middleware/validate');
 const { authenticate, authorize, scopeToEstate, requireEstate } = require('../middleware/auth');
+const limits = require('../middleware/rateLimits');
 
-router.post('/register', [
+router.post('/register', limits.register, [
   body('name').trim().notEmpty().withMessage('Name is required'),
   body('email').isEmail().withMessage('Valid email required'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('role').optional().isIn(['super_admin', 'estate_manager', 'resident', 'security']),
+  // Public sign-up: managers, residents and guards only. super_admin accounts
+  // are created by AreaConnect admins (/api/users), never here.
+  body('role').optional().isIn(['estate_manager', 'resident', 'security']),
 ], validate, ctrl.register);
 
-router.post('/login', [
+router.post('/login', limits.loginPerIp, limits.loginPerEmail, [
   body('email').isEmail(),
   body('password').notEmpty(),
 ], validate, ctrl.login);
@@ -42,6 +45,7 @@ router.post(
 // Public: residents / security ask their estate manager to reset their password
 router.post(
   '/forgot-password/request',
+  limits.passwordReset,
   [ body('email').isEmail().withMessage('Valid email required') ],
   validate,
   ctrl.requestPasswordReset,

@@ -554,7 +554,7 @@ exports.verifyPayment = async (req, res) => {
     }
 
     const { data } = await axios.get(
-      `${PAYSTACK_BASE}/transaction/verify/${reference}`,
+      `${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(reference)}`,
       { headers: paystackHeaders() }
     );
 
@@ -645,13 +645,18 @@ exports.attachPaystackTransaction = async (req, res) => {
       return res.status(503).json({ success: false, message: 'Payment gateway not configured' });
     }
 
+    // A reference can only ever be used once, platform-wide, and never for
+    // marketplace / call-credit / plan charges
+    if (/^(MKT|CRD|PLAN)[-_]/i.test(String(reference))) return res.status(400).json({ success: false, message: 'This reference is not a levy payment' });
+    const usedElsewhere = await Payment.findOne({ paystackReference: reference, estateId: { $ne: req.estateId } }).select('_id').lean();
+    if (usedElsewhere) return res.status(409).json({ success: false, message: 'This reference is already attached to another estate' });
     const existing = await Payment.findOne({ paystackReference: reference, estateId: req.estateId });
     if (existing && existing.status === 'paid') {
       return res.json({ success: true, data: existing, alreadyPaid: true });
     }
 
     const { data } = await axios.get(
-      `${PAYSTACK_BASE}/transaction/verify/${reference}`,
+      `${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(reference)}`,
       { headers: paystackHeaders() },
     );
     if (data?.data?.status !== 'success') {
@@ -715,7 +720,7 @@ exports.reconcilePayment = async (req, res) => {
     }
 
     const { data } = await axios.get(
-      `${PAYSTACK_BASE}/transaction/verify/${reference}`,
+      `${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(reference)}`,
       { headers: paystackHeaders() },
     );
     if (data?.data?.status !== 'success') {

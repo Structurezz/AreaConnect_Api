@@ -10,7 +10,7 @@ router.get('/platform-all', authenticate, authorize('super_admin'), ctrl.getAllA
 
 router.use(authenticate, scopeToEstate, requireEstate, requireActiveSubscription);
 
-router.post('/', [
+router.post('/', require('../middleware/rateLimits').alerts, [
   body('type').optional().isIn(['security', 'fire', 'medical', 'noise', 'other']),
   body('audience').optional().isIn(['all', 'staff', 'estate_manager', 'security']),
   body('note').optional().isString().isLength({ max: 1000 }),

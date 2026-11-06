@@ -7,7 +7,7 @@ const validate = require('../middleware/validate');
 router.use(authenticate, scopeToEstate, requireActiveSubscription);
 
 // Public code verification (security uses this, still needs auth)
-router.get('/verify/:code', authorize('security', 'estate_manager', 'super_admin'), ctrl.verifyVisitorCode);
+router.get('/verify/:code', authorize('security', 'estate_manager', 'super_admin'), require('../middleware/rateLimits').verifyCode, ctrl.verifyVisitorCode);
 
 router.get('/', authorize('resident', 'estate_manager', 'security', 'super_admin'), ctrl.getVisitors);
 router.get('/:id', authorize('resident', 'estate_manager', 'security', 'super_admin'), ctrl.getVisitorById);

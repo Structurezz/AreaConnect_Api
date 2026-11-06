@@ -407,7 +407,7 @@ exports.adminStartCall = async (req, res) => {
     const call = await Call.create({ estateId, callerId: req.user._id, calleeId: callee._id, kind: 'staff', ratePerMinute: 0 });
     calls.startRinging(call, {
       callId: String(call._id), kind: 'staff',
-      from: { _id: req.user._id, name: `${req.user.name} · AreaConnect`, role: 'super_admin', profilePhoto: req.user.profilePhoto || '', unit: 'AreaConnect support', online: true },
+      from: { _id: req.user._id, name: `${req.user.name} · AreaConnect`, role: 'super_admin', profilePhoto: (await require('../models/User').findById(req.user._id).select('profilePhoto').lean())?.profilePhoto || '', unit: 'AreaConnect support', online: true },
       iceServers: iceServers(),
     });
     res.status(201).json({ success: true, data: { call, callee: publicProfile(callee), iceServers: iceServers() } });

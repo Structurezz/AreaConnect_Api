@@ -267,7 +267,8 @@ exports.getVisitors = async (req, res) => {
         .populate('verifiedBySecurityId', 'name')
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(parseInt(limit)),
+        .limit(Math.min(200, parseInt(limit) || 20))
+        .lean(),
       Visitor.countDocuments(filter),
     ]);
     const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
@@ -294,7 +295,8 @@ exports.getVisitors = async (req, res) => {
 exports.verifyVisitorCode = async (req, res) => {
   try {
     const { code } = req.params;
-    const visitor = await Visitor.findOne({ visitorCode: code.toUpperCase() })
+    // Only this estate's passes — a guard can never read another estate's
+    const visitor = await Visitor.findOne({ visitorCode: String(code).toUpperCase(), estateId: req.estateId })
       .populate('hostResidentId', 'name phone')
       .populate('hostUnitId', 'unitNumber block')
       .populate('estateId', 'name');
@@ -409,7 +411,7 @@ exports.cancelPass = async (req, res) => {
 
 exports.approveEarlyEntry = async (req, res) => {
   try {
-    const visitor = await Visitor.findById(req.params.id);
+    const visitor = await Visitor.findOne({ _id: req.params.id, estateId: req.estateId });
     if (!visitor) return res.status(404).json({ success: false, message: 'Visitor not found' });
 
     // Only the host of this visitor can approve
@@ -445,7 +447,7 @@ exports.approveEarlyEntry = async (req, res) => {
 
 exports.checkIn = async (req, res) => {
   try {
-    const visitor = await Visitor.findById(req.params.id);
+    const visitor = await Visitor.findOne({ _id: req.params.id, estateId: req.estateId });
     if (!visitor) return res.status(404).json({ success: false, message: 'Visitor not found' });
     if (visitor.status === 'checked-in') {
       return res.status(409).json({ success: false, message: 'Already checked in' });
@@ -541,8 +543,10 @@ exports.checkIn = async (req, res) => {
 
 exports.checkOut = async (req, res) => {
   try {
-    const visitor = await Visitor.findById(req.params.id);
+    const visitor = await Visitor.findOne({ _id: req.params.id, estateId: req.estateId });
     if (!visitor) return res.status(404).json({ success: false, message: 'Visitor not found' });
+    // Only someone actually inside can be checked out (not blacklisted / cancelled / pending passes)
+    if (visitor.status !== 'checked-in') return res.status(409).json({ success: false, message: `This visitor isn't checked in (${visitor.status.replace('-', ' ')})` });
 
     visitor.status = 'checked-out';
     visitor.exitTime = new Date();
@@ -584,6 +588,11 @@ exports.getVisitorById = async (req, res) => {
       .populate('hostUnitId', 'unitNumber block')
       .populate('verifiedBySecurityId', 'name');
     if (!visitor) return res.status(404).json({ success: false, message: 'Not found' });
+    // Residents only see their own passes (or ones held for their care-team approval)
+    if (req.user.role === 'resident' && String(visitor.hostResidentId?._id || visitor.hostResidentId) !== String(req.user._id)
+      && !(visitor.approverIds || []).some((id) => String(id) === String(req.user._id))) {
+      return res.status(404).json({ success: false, message: 'Not found' });
+    }
     // Where the visitor is going (for the shareable pass / directions)
     const place = publicPlace(await placeForUnit(visitor.hostUnitId?._id || visitor.hostUnitId).catch(() => null));
     return res.json({ success: true, data: visitor, place });

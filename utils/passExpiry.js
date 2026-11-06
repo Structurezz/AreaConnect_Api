@@ -22,6 +22,8 @@ const isPastExpiry = (v, now = new Date()) => {
 const overdueFilter = (extra = {}, now = new Date()) => ({
   ...extra,
   status: { $in: OPEN },
+  // Narrows the scan to the {status, expectedDate} index (duration is never negative)
+  expectedDate: { $lt: now },
   $expr: {
     $lt: [
       { $add: ['$expectedDate', { $multiply: [{ $ifNull: ['$expectedDuration', DEFAULT_DURATION_MIN] }, 60000] }] },

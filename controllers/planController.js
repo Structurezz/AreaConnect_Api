@@ -213,21 +213,29 @@ exports.updateSubscription = async (req, res) => {
 
 exports.initializeUpgrade = async (req, res) => {
   try {
-    const { planId, cycle, billingModel, residentCount } = req.body;
+    const { planId, billingModel } = req.body;
+    const cycle = req.body.cycle === 'annual' ? 'annual' : 'monthly';
     const estateId = req.estateId;
 
-    const plan = await Plan.findById(planId);
+    const plan = await Plan.findOne({ _id: planId, isActive: true });
     if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
 
-    let amount;
+    // Price is always computed here — never from client-sent counts
+    let amount, residentCount = 0;
     if (billingModel === 'per_resident') {
       if (!plan.price.perResident) return res.status(400).json({ success: false, message: 'Per-resident pricing not available for this plan' });
-      amount = (residentCount || 1) * plan.price.perResident;
+      residentCount = Math.max(1, await User.countDocuments({ estateId, role: 'resident', isActive: true, householdRole: { $ne: 'member' } }));
+      amount = residentCount * plan.price.perResident * (cycle === 'annual' ? 12 : 1);
     } else {
       amount = cycle === 'annual' ? plan.price.annual : plan.price.monthly;
     }
 
-    if (amount === 0) {
+    // A ₦0 price means "contact sales" (e.g. Enterprise), not a free plan
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ success: false, message: 'This plan is arranged with our team — please contact us to switch to it.' });
+    }
+
+    if (false) {
       // Free plan — just switch directly
       const now = new Date();
       const next = new Date(now);
@@ -261,7 +269,8 @@ exports.initializeUpgrade = async (req, res) => {
         planName: plan.name,
         cycle,
         billingModel: billingModel || 'flat',
-        residentCount: residentCount || 0,
+        residentCount,
+        amount,
         managerId: req.user._id.toString(),
       },
     }, { headers: paystackHeaders() });
@@ -269,7 +278,7 @@ exports.initializeUpgrade = async (req, res) => {
     // Store pending reference on subscription
     await Subscription.findOneAndUpdate(
       { estateId },
-      { pendingRef: reference, pendingPlanId: planId, pendingCycle: cycle },
+      { pendingRef: reference, pendingPlanId: planId, pendingCycle: cycle, pendingAmount: amount },
       { upsert: true }
     );
 
@@ -288,20 +297,34 @@ exports.verifyUpgrade = async (req, res) => {
       return res.status(503).json({ success: false, message: 'Gateway not configured' });
     }
 
-    const { data } = await axios.get(`${PAYSTACK_BASE}/transaction/verify/${reference}`, { headers: paystackHeaders() });
+    if (!/^[A-Za-z0-9_-]{6,100}$/.test(String(reference))) return res.status(400).json({ success: false, message: 'Invalid reference' });
+
+    // Already applied (e.g. the page was refreshed) — don't extend again
+    const current = await Subscription.findOne({ estateId: req.estateId }).populate('planId');
+    if (current?.lastRenewalReference === reference) return res.json({ success: true, data: current });
+    // Only the reference this estate started can be verified, once
+    if (!current || current.pendingRef !== reference) return res.status(400).json({ success: false, message: 'This payment does not belong to your pending upgrade' });
+
+    const { data } = await axios.get(`${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(reference)}`, { headers: paystackHeaders() });
     if (data.data.status !== 'success') {
       return res.status(400).json({ success: false, message: 'Payment not successful' });
     }
 
     const meta = data.data.metadata || {};
-    const estateId      = meta.estateId;
+    if (String(meta.estateId) !== String(req.estateId)) return res.status(400).json({ success: false, message: 'Payment does not match this estate' });
+    const estateId      = req.estateId;
     const planId        = meta.planId;
-    const cycle         = meta.cycle;
+    const cycle         = meta.cycle === 'annual' ? 'annual' : 'monthly';
     const billingModel  = meta.billingModel || 'flat';
-    const residentCount = meta.residentCount || 0;
+    const residentCount = Number(meta.residentCount) || 0;
 
     const plan = await Plan.findById(planId);
     if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
+    // The amount actually paid must cover what was asked for
+    const expected = Number(current.pendingAmount || meta.amount || 0);
+    if (!expected || data.data.currency !== 'NGN' || Number(data.data.amount) < expected * 100) {
+      return res.status(400).json({ success: false, message: 'Payment amount does not match the plan' });
+    }
 
     const now = new Date();
     const next = new Date(now);
@@ -323,7 +346,7 @@ exports.verifyUpgrade = async (req, res) => {
     };
 
     const sub = await Subscription.findOneAndUpdate(
-      { estateId },
+      { estateId, pendingRef: reference },
       {
         planId, cycle, billingModel, residentCount, status: 'active',
         startDate: now, nextBillingDate: next,
@@ -333,11 +356,13 @@ exports.verifyUpgrade = async (req, res) => {
         lastSuccessfulRenewalAt: now,
         lastRenewalReference: reference,
         remindersSent: [],
-        $unset: { pendingRef: '', pendingPlanId: '', pendingCycle: '' },
+        $unset: { pendingRef: '', pendingPlanId: '', pendingCycle: '', pendingAmount: '' },
         updatedBy: req.user._id,
       },
-      { upsert: true, new: true }
+      { new: true }
     ).populate('planId');
+    // A concurrent request already used this reference
+    if (!sub) return res.json({ success: true, data: await Subscription.findOne({ estateId }).populate('planId') });
 
     return res.json({ success: true, data: sub });
   } catch (err) {

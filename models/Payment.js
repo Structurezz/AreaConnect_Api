@@ -25,4 +25,8 @@ paymentSchema.index({ estateId: 1, residentId: 1, status: 1 });
 paymentSchema.index({ scheduleId: 1, status: 1 });
 paymentSchema.index({ paystackReference: 1 }, { sparse: true });
 
+paymentSchema.index({ estateId: 1, createdAt: -1 });
+paymentSchema.index({ estateId: 1, status: 1, paidAt: -1 });
+paymentSchema.index({ residentId: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Payment', paymentSchema);

@@ -176,8 +176,10 @@ const MODULE_BY_ROUTE = {
 };
 
 function requiredModule(req) {
-  const base = req.baseUrl || '';
-  const path = req.path || '';
+  // Express matches routes case-insensitively — compare in lower case so
+  // /API/Team can't slip past these maps
+  const base = (req.baseUrl || '').toLowerCase();
+  const path = (req.path || '').toLowerCase();
   if (base === '/api/calls') {
     // Receiving and answering calls (e.g. from the estate office) stays on.
     if (req.method !== 'POST') return path === '/directory' ? 'neighbours' : null;

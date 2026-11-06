@@ -18,8 +18,14 @@ const server = http.createServer(app);
 initSocket(server);
 require('./services/callService').startSweeper(); // tidies calls left hanging by a restart
 
+// Railway sits in front of us — trust its proxy so req.ip is the client's
+// (rate limits would otherwise lump everyone together)
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+// gzip JSON responses (lists shrink 5–10×)
+app.use(require('compression')());
 app.use(mongoSanitize());
 
 // CORS
@@ -67,7 +73,8 @@ app.use(cookieParser());
 
 // Logging
 if (process.env.NODE_ENV !== 'test') {
-  app.use(morgan('dev'));
+  // Short production logs; skip health checks
+  app.use(morgan(process.env.NODE_ENV === 'production' ? 'tiny' : 'dev', { skip: (req) => req.path === '/health' }));
 }
 
 // Static files
@@ -128,21 +135,11 @@ app.get('/health', (req, res) => {
   res.json({ success: true, message: 'Estate Management API running', timestamp: new Date() });
 });
 
-// Temp: delete user by email
-app.delete('/api/dev/user', async (req, res) => {
-  const seedSecret = process.env.SEED_SECRET || 'area_connect_seed_2024';
-  if (req.headers['x-seed-secret'] !== seedSecret) return res.status(403).json({ success: false });
-  const User = require('./models/User');
-  const { email } = req.query;
-  const user = await User.findOneAndDelete({ email });
-  if (!user) return res.json({ success: false, message: 'User not found' });
-  res.json({ success: true, message: `Deleted user: ${user.email}` });
-});
-
 // One-time demo seed endpoint
+// Never available in production, and only with an explicit SEED_SECRET.
 app.post('/api/seed-demo', async (req, res) => {
-  const seedSecret = process.env.SEED_SECRET || 'area_connect_seed_2024';
-  if (req.headers['x-seed-secret'] !== seedSecret) {
+  const seedSecret = process.env.SEED_SECRET;
+  if (process.env.NODE_ENV === 'production' || !seedSecret || req.headers['x-seed-secret'] !== seedSecret) {
     return res.status(403).json({ success: false, message: 'Forbidden' });
   }
   try {
@@ -172,7 +169,10 @@ app.use((err, req, res, next) => {
 // Database connection and server start
 const PORT = process.env.PORT || 6000;
 
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/estate_management')
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/estate_management', {
+  // Keep warm connections (no cold TLS handshakes to Atlas after idle)
+  maxPoolSize: 50, minPoolSize: 5, serverSelectionTimeoutMS: 10000, socketTimeoutMS: 45000,
+})
   .then(() => {
     console.log('✅ MongoDB connected');
     server.listen(PORT, () => {

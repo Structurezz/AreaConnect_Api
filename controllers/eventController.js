@@ -29,9 +29,11 @@ exports.createEvent = async (req, res) => {
 
 exports.updateEvent = async (req, res) => {
   try {
+    // Never let the body move the event to another estate or rewrite owners / RSVPs
+    const { estateId, createdBy, _id, rsvps, attendees, ...changes } = req.body || {};
     const event = await Event.findOneAndUpdate(
       { _id: req.params.id, estateId: req.estateId },
-      req.body,
+      { $set: changes },
       { new: true, runValidators: true }
     ).populate('createdBy', 'name profilePhoto');
     if (!event) return res.status(404).json({ success: false, message: 'Event not found' });

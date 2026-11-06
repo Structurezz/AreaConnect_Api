@@ -44,8 +44,10 @@ const isHouseholdMember = (user) => user?.role === 'resident' && user.householdR
 
 // Permission this request needs, or null when it's open to every member.
 function requiredPermission(req) {
-  const base = req.baseUrl || '';
-  const path = req.path || '';
+  // Express matches routes case-insensitively — compare in lower case so
+  // /API/Team can't slip past these maps
+  const base = (req.baseUrl || '').toLowerCase();
+  const path = (req.path || '').toLowerCase();
   // Calls: members can always receive and answer calls; placing calls,
   // buzzing and buying credits need 'neighbours'.
   if (base === '/api/calls') {

@@ -25,6 +25,12 @@ const COOKIE_OPTS = {
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
+async function notifyManagersOfWaitingGuard(user, estate) {
+  const { sendToUser } = require('../services/pushService');
+  const managers = await User.find({ estateId: user.estateId, role: 'estate_manager', isActive: true }).select('_id');
+  managers.forEach((m) => sendToUser(m._id, { title: 'New guard waiting for approval', body: `${user.name} signed up as security with the estate code. Approve them on the Guards page if they work for you.`, url: '/guards', tag: `guard-${user._id}` }).catch(() => {}));
+}
+
 async function notifyManagersOfWaitingResident(user, estate) {
   const { sendToUser } = require('../services/pushService');
   const { sendManagerNotificationEmail } = require('../services/emailService');
@@ -103,8 +109,13 @@ exports.register = async (req, res) => {
       });
     }
 
+    // Only these roles can sign themselves up (super_admin never)
+    if (role && !['resident', 'security'].includes(role)) {
+      return res.status(400).json({ success: false, message: 'Invalid role' });
+    }
+
     // Resident / security — require estate code
-    if (role === 'resident' || role === 'security') {
+    if (!role || role === 'resident' || role === 'security') {
       if (!estateCode) {
         return res.status(400).json({ success: false, message: 'Estate code required for this role' });
       }
@@ -120,9 +131,23 @@ exports.register = async (req, res) => {
     const user = await User.create({
       name, email, phone,
       passwordHash,
-      role: role || 'resident',
+      role: role === 'security' ? 'security' : 'resident',
       estateId,
+      // A guard who signs up with the estate code waits for the manager to
+      // approve them (Guards page → Activate) — the code alone must never
+      // grant gate access to resident data.
+      isActive: role !== 'security',
     });
+
+    if (user.role === 'security') {
+      notifyManagersOfWaitingGuard(user, estateData).catch((e) => console.error('[waiting guard]', e.message));
+      return res.status(201).json({
+        success: true,
+        pendingApproval: true,
+        message: `Account created. ${estateData?.name || 'Your estate'}'s manager needs to approve you before you can sign in — we've let them know.`,
+        data: { user: user.toSafeObject(), estate: { name: estateData?.name } },
+      });
+    }
 
     // Residents who join with the estate code have no unit yet, so they can't
     // sign in until a manager assigns one. Tell the managers they're waiting.
@@ -133,7 +158,7 @@ exports.register = async (req, res) => {
         success: true,
         pendingUnit: true,
         message: `Account created. ${estateData?.name || 'Your estate'}'s manager needs to add you to your unit before you can sign in — we've let them know.`,
-        data: { user: user.toSafeObject(), estate: estateData },
+        data: { user: user.toSafeObject(), estate: { name: estateData?.name } },
       });
     }
 

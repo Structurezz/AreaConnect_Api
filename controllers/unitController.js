@@ -10,6 +10,16 @@ exports.getUnits = async (req, res) => {
     const filter = { estateId: req.estateId };
     if (status) filter.status = status;
 
+    // Residents and guards get the unit list without who lives where or
+    // what anyone owes (that's manager-only data)
+    if (!['estate_manager', 'super_admin'].includes(req.user.role)) {
+      const [plain, cap] = await Promise.all([
+        Unit.find(filter).select('unitNumber block type status residentIds placeId restricted').sort({ block: 1, unitNumber: 1 }).lean(),
+        unitCapacity(req.estateId),
+      ]);
+      return res.json({ success: true, data: withCapacity(plain.map(u => ({ ...u, residentIds: u.residentIds.map(String) })), cap), occupantsPerUnit: cap });
+    }
+
     const units = await Unit.find(filter)
       .populate('residentIds', 'name email phone profilePhoto')
       .sort({ block: 1, unitNumber: 1 });

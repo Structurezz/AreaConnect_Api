@@ -50,8 +50,10 @@ const isTeamMember = (user) => user?.role === 'estate_manager' && user.teamRole 
 
 // Areas required for this request, or null when it's open to every member.
 function requiredAreas(req) {
-  const base = req.baseUrl || '';
-  const path = req.path || '';
+  // Express matches routes case-insensitively — compare in lower case so
+  // /API/Team can't slip past these maps
+  const base = (req.baseUrl || '').toLowerCase();
+  const path = (req.path || '').toLowerCase();
   const read = req.method === 'GET';
 
   // Everyone on the team can see basic estate info, dashboard counts and the

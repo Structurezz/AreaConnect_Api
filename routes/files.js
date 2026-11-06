@@ -29,9 +29,17 @@ router.get('/:id', async (req, res) => {
       if (found.length === 0) continue;
       const meta = found[0];
 
-      res.setHeader('Content-Type',   meta.contentType || 'application/octet-stream');
+      // Only safe media types render in the browser. Anything else (HTML,
+      // JS, SVG, text…) is served as a download, sandboxed, so an uploaded
+      // file can never run script on the API's origin.
+      const ct = String(meta.contentType || '').toLowerCase();
+      const inline = /^(image\/(jpeg|png|webp|gif)|application\/pdf|audio\/[\w.+-]+|video\/[\w.+-]+)$/.test(ct);
+      res.setHeader('Content-Type', inline ? ct : 'application/octet-stream');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      // (Not on PDFs/media — a sandbox CSP stops Chrome's PDF viewer)
+      if (!inline) res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
       // ?download=1 saves with the original file name (chat attachments)
-      if (req.query.download) {
+      if (req.query.download || !inline) {
         const safe = String(meta.filename || 'file').replace(/[^\w.\- ]+/g, '_').slice(0, 120);
         res.setHeader('Content-Disposition', `attachment; filename="${safe}"`);
       }

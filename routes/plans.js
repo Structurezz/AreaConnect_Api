@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ctrl = require('../controllers/planController');
+const { requireEstate } = require('../middleware/auth');
 const { authenticate, authorize, scopeToEstate } = require('../middleware/auth');
 
 // Paystack webhook — needs the raw body for HMAC verification, so this route
@@ -31,8 +32,8 @@ router.get('/public', ctrl.getPlans);
 
 // Estate manager — view own subscription + self-serve upgrade
 router.get('/my-subscription', authenticate, scopeToEstate, ctrl.getMySubscription);
-router.post('/upgrade/initialize', authenticate, scopeToEstate, ctrl.initializeUpgrade);
-router.get('/upgrade/verify/:reference', authenticate, scopeToEstate, ctrl.verifyUpgrade);
+router.post('/upgrade/initialize', authenticate, authorize('estate_manager', 'super_admin'), scopeToEstate, requireEstate, ctrl.initializeUpgrade);
+router.get('/upgrade/verify/:reference', authenticate, authorize('estate_manager', 'super_admin'), scopeToEstate, requireEstate, ctrl.verifyUpgrade);
 
 // Admin only
 const adminOnly = [authenticate, authorize('super_admin')];

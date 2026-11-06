@@ -17,4 +17,6 @@ const rollCallSchema = new mongoose.Schema({
   endedBy:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 }, { timestamps: true });
 
+rollCallSchema.index({ estateId: 1, endedAt: 1, createdAt: -1 });
+
 module.exports = mongoose.model('RollCall', rollCallSchema);

@@ -76,16 +76,21 @@ const initSocket = (server) => {
     // from the database, so a client can't join another estate's staff or
     // security rooms, and mobile apps that never sent a role (and so never
     // received staff/security alerts) now land in the right rooms.
-    socket.on('join', async ({ userId: claimedUserId } = {}) => {
+    socket.on('join', async () => {
       try {
-        let userId = claimedUserId;
+        // Identity comes ONLY from a signed access token — never from a
+        // client-sent userId (that let anyone join another user's or estate's
+        // rooms). An expired token is accepted for up to 7 days so a guard
+        // whose 15-minute token lapsed keeps receiving alerts; the account
+        // must still be active (checked below).
         const token = socket.handshake?.auth?.token;
-        if (token) {
-          // Signature proves identity; expiry is ignored on purpose — a guard
-          // whose access token lapsed must keep receiving alerts.
-          try { userId = jwt.verify(token, process.env.JWT_SECRET, { ignoreExpiration: true }).userId; }
-          catch { return socket.emit('join_error', { message: 'Invalid token' }); }
-        }
+        if (!token) return socket.emit('join_error', { message: 'Sign in required' });
+        let payload;
+        try { payload = jwt.verify(token, process.env.JWT_SECRET, { ignoreExpiration: true, algorithms: ['HS256'] }); }
+        catch { return socket.emit('join_error', { message: 'Invalid token' }); }
+        if (payload.purpose) return socket.emit('join_error', { message: 'Invalid token' });
+        if (payload.exp && payload.exp * 1000 < Date.now() - 7 * 24 * 3600 * 1000) return socket.emit('join_error', { message: 'Session expired' });
+        const userId = payload.userId;
         if (!userId || !mongoose.isValidObjectId(userId)) return;
 
         const user = await User.findById(userId).select('role estateId isActive').lean();
@@ -104,6 +109,7 @@ const initSocket = (server) => {
         if (!user.estateId) return;
 
         const estateId = String(user.estateId);
+        socket.data.estateId = estateId;
         socket.join(`estate:${estateId}`);
         if (user.role === 'security') {
           socket.join(`estate:${estateId}:security`);
@@ -132,20 +138,19 @@ const initSocket = (server) => {
     // Live location shared with estate staff (only while a share is active).
     socket.on('safety:location', (pos) => { if (socket.data.userId) require('./safetyService').updateShare(socket.data.userId, pos || {}); });
 
-    socket.on('send_message', (data) => {
-      if (data.isGroupMessage) {
-        io.to(`estate:${data.estateId}`).emit('new_message', data);
-      } else {
-        io.to(`user:${data.receiverId}`).emit('new_message', data);
-        socket.emit('new_message', data); // echo back to sender
-      }
-    });
+    // Messages are sent through the REST API, which emits them to the right
+    // rooms. The old client relay let anyone inject messages into any estate.
+    socket.on('send_message', () => {});
 
-    socket.on('typing', ({ estateId, senderId, receiverId, isGroup }) => {
+    // Typing indicator: only within the sender's own estate / to a real user,
+    // and the sender is always the authenticated socket.
+    socket.on('typing', ({ receiverId, isGroup } = {}) => {
+      const me = socket.data.userId;
+      if (!me) return;
       if (isGroup) {
-        socket.to(`estate:${estateId}`).emit('user_typing', { senderId });
-      } else {
-        io.to(`user:${receiverId}`).emit('user_typing', { senderId });
+        if (socket.data.estateId) socket.to(`estate:${socket.data.estateId}`).emit('user_typing', { senderId: me });
+      } else if (receiverId && mongoose.isValidObjectId(receiverId)) {
+        io.to(`user:${receiverId}`).emit('user_typing', { senderId: me });
       }
     });
 

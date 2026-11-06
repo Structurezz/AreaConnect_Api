@@ -1,3 +1,4 @@
+const { escapeRx, PRIVATE_USER, pageLimit } = require('../utils/safeQuery');
 const User    = require('../models/User');
 const Unit    = require('../models/Unit');
 const Estate  = require('../models/Estate');
@@ -18,7 +19,8 @@ const capFor = (req) => (req._unitCap ??= unitCapacity(req.estateId));
 const genTempPassword = () => {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
   let s = 'Estate@';
-  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  // crypto-random, 10 characters (was 6 from Math.random)
+  for (let i = 0; i < 10; i++) s += chars[require('crypto').randomInt(chars.length)];
   return s;
 };
 
@@ -30,7 +32,8 @@ const residentsLoginUrl = (type) =>
 
 exports.getResidents = async (req, res) => {
   try {
-    const { page = 1, limit = 20, search, filter: view, type } = req.query;
+    const { page = 1, search, filter: view, type } = req.query;
+    const limit = pageLimit(req.query.limit, 20, 500);
     // Family members (added by a household head) are listed separately from
     // the residents the manager onboarded: ?type=family for them.
     const filter = { estateId: req.estateId, role: 'resident', householdRole: type === 'family' ? 'member' : { $ne: 'member' } };
@@ -50,8 +53,8 @@ exports.getResidents = async (req, res) => {
 
     if (search) {
       filter.$or = [
-        { name:  { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
+        { name:  escapeRx(search) },
+        { email: escapeRx(search) },
       ];
     }
 
@@ -61,7 +64,7 @@ exports.getResidents = async (req, res) => {
         .populate('unitId', 'unitNumber block type')
         .populate('householdHead', 'name')
         .populate('assignedTo', 'name siteRole roleInfo profilePhoto')
-        .select('-passwordHash -refreshToken')
+        .select(PRIVATE_USER)
         .sort({ name: 1 })
         .skip(skip)
         .limit(parseInt(limit)),
@@ -109,7 +112,7 @@ exports.getResident = async (req, res) => {
       .populate('unitId', 'unitNumber block type')
       .populate('householdHead', 'name email phone profilePhoto')
       .populate('assignedTo', 'name phone siteRole roleInfo profilePhoto')
-      .select('-passwordHash -refreshToken');
+      .select(PRIVATE_USER);
     if (!resident) return res.status(404).json({ success: false, message: 'Resident not found' });
     // The family this resident heads (or belongs to)
     const headId = resident.householdRole === 'member' ? resident.householdHead?._id : resident._id;
@@ -319,11 +322,15 @@ exports.addResident = async (req, res) => {
       return res.status(400).json({ success: false, message: `Unit is full (max ${await capFor(req)} occupants)` });
     }
 
-    const passwordHash = await bcrypt.hash(noLogin ? require('crypto').randomBytes(24).toString('hex') : (password || 'Estate@123'), 12);
+    // No shared default password any more: a one-time password is generated
+    // (shown to the manager once) and must be changed at first sign-in.
+    const tempPassword = noLogin || password ? null : genTempPassword();
+    const passwordHash = await bcrypt.hash(noLogin ? require('crypto').randomBytes(24).toString('hex') : (password || tempPassword), 12);
     const resident = await User.create({
       name, email, phone,
       passwordHash,
       role: 'resident',
+      mustChangePassword: !noLogin,
       estateId: req.estateId,
       unitId,
     });
@@ -336,7 +343,7 @@ exports.addResident = async (req, res) => {
     // "Doctor added" / "Patient added" on non-estate sites
     const siteType = (await siteFor(req.estateId))?.site?.type;
     const label = siteType && siteType !== 'estate' ? roleDef(siteType, extra.siteRole).label : 'Resident';
-    return res.status(201).json({ success: true, message: `${label} added`, data: resident.toSafeObject() });
+    return res.status(201).json({ success: true, message: `${label} added`, data: resident.toSafeObject(), ...(tempPassword && { tempPassword }) });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Server error' });
   }

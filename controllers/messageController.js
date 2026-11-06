@@ -72,6 +72,19 @@ exports.sendMessage = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Message is empty' });
     }
 
+    // DMs only to people in the same estate (managers: any estate they run),
+    // and never across a safety block.
+    if (!isGroup) {
+      if (!recipient || !mongoose.isValidObjectId(recipient)) return res.status(400).json({ success: false, message: 'Choose who to message' });
+      const other = await User.findById(recipient).select('estateId managedEstates role').lean();
+      const sameEstate = other && (String(other.estateId) === String(req.estateId)
+        || (other.managedEstates || []).some((e) => String(e) === String(req.estateId))
+        || other.role === 'super_admin' || req.user.role === 'super_admin');
+      if (!sameEstate) return res.status(403).json({ success: false, message: "You can't message this person" });
+      const block = await require('../services/safetyService').findBlockBetween(req.user._id, recipient).catch(() => null);
+      if (block) return res.status(409).json({ success: false, code: 'UNAVAILABLE', message: "This person isn't available" });
+    }
+
     const isImageFile = file && /^image\//i.test(file.mimetype);
     const message = await Message.create({
       estateId: req.estateId,
@@ -90,10 +103,13 @@ exports.sendMessage = async (req, res) => {
 
     res.status(201).json({ success: true, data: message });
 
-    // Emit DM to receiver in real-time
+    // Real-time: DMs to the receiver, group messages to the estate (the
+    // server emits these — clients no longer relay messages over the socket)
     if (!message.isGroupMessage && recipient) {
       const io = getIO();
       io?.to(`user:${recipient}`).emit('new_message', message.toObject());
+    } else if (message.isGroupMessage && req.estateId) {
+      emitGroupMessage(String(req.estateId), message.toObject());
     }
 
     // Fire Nkechi async — don't block the response

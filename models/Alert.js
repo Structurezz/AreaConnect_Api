@@ -48,4 +48,8 @@ alertSchema.index({ routedTo: 1, status: 1 });
 
 alertSchema.index({ estateId: 1, status: 1, createdAt: -1 });
 
+alertSchema.index({ estateId: 1, createdAt: -1 });
+alertSchema.index({ residentId: 1, createdAt: -1 });
+alertSchema.index({ status: 1, escalatedAt: 1, createdAt: 1 }); // escalation sweeper
+
 module.exports = mongoose.model('Alert', alertSchema);

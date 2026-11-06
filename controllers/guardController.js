@@ -1,3 +1,4 @@
+const { escapeRx, PRIVATE_USER, pageLimit } = require('../utils/safeQuery');
 const User   = require('../models/User');
 const Estate = require('../models/Estate');
 const bcrypt = require('bcryptjs');
@@ -6,7 +7,8 @@ const { sendInviteEmail } = require('../services/emailService');
 const genTempPassword = () => {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
   let s = 'Guard@';
-  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  // crypto-random, 10 characters (was 6 from Math.random)
+  for (let i = 0; i < 10; i++) s += chars[require('crypto').randomInt(chars.length)];
   return s;
 };
 
@@ -17,20 +19,21 @@ const guardLoginUrl = () =>
 
 exports.getGuards = async (req, res) => {
   try {
-    const { page = 1, limit = 20, search } = req.query;
+    const { page = 1, search } = req.query;
+    const limit = pageLimit(req.query.limit, 20, 500);
     const filter = { estateId: req.estateId, role: 'security' };
 
     if (search) {
       filter.$or = [
-        { name:  { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
+        { name:  escapeRx(search) },
+        { email: escapeRx(search) },
       ];
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const [guards, total] = await Promise.all([
       User.find(filter)
-        .select('-passwordHash -refreshToken')
+        .select(PRIVATE_USER)
         .sort({ name: 1 })
         .skip(skip)
         .limit(parseInt(limit)),
@@ -53,7 +56,7 @@ exports.getGuards = async (req, res) => {
 exports.getGuard = async (req, res) => {
   try {
     const guard = await User.findOne({ _id: req.params.id, estateId: req.estateId, role: 'security' })
-      .select('-passwordHash -refreshToken');
+      .select(PRIVATE_USER);
     if (!guard) return res.status(404).json({ success: false, message: 'Guard not found' });
     return res.json({ success: true, data: guard });
   } catch (err) {

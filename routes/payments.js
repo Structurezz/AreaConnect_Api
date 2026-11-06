@@ -23,12 +23,18 @@ router.post('/wallet/resolve', authorize('estate_manager', 'super_admin'), [
   body('accountNumber').isLength({ min: 10, max: 10 }).withMessage('Account number must be 10 digits'),
 ], validate, ctrl.resolveAccount);
 
-router.post('/wallet/bank', authorize('estate_manager', 'super_admin'), [
+// Payout account and withdrawals: the estate owner only — never an invited
+// team member, even one with finance access (they could pay out to themselves)
+const ownerOnly = (req, res, next) => (req.user.role === 'estate_manager' && req.user.teamRole === 'member'
+  ? res.status(403).json({ success: false, code: 'OWNER_ONLY', message: 'Only the estate owner can change the payout account or withdraw.' })
+  : next());
+
+router.post('/wallet/bank', authorize('estate_manager', 'super_admin'), ownerOnly, [
   body('bankCode').notEmpty().withMessage('Bank is required'),
   body('accountNumber').isLength({ min: 10, max: 10 }).withMessage('Account number must be 10 digits'),
 ], validate, ctrl.saveBankAccount);
 
-router.post('/wallet/withdraw', authorize('estate_manager', 'super_admin'), [
+router.post('/wallet/withdraw', authorize('estate_manager', 'super_admin'), ownerOnly, [
   body('amount').isFloat({ min: 100 }).withMessage('Minimum withdrawal is ₦100'),
 ], validate, ctrl.withdrawFromWallet);
 
@@ -84,12 +90,14 @@ router.post('/reconcile/:reference',
 // Lets the manager see every Paystack capture, including ones that
 // have no matching Payment row in our DB — then attach to a resident +
 // schedule to pull the money through.
+// AreaConnect admins only: the gateway ledger spans every estate, and
+// attaching a reference creates paid money in an estate's wallet.
 router.get('/paystack/recent',
-  authorize('estate_manager', 'super_admin'),
+  authorize('super_admin'),
   ctrl.getPaystackLedger,
 );
 router.post('/paystack/attach',
-  authorize('estate_manager', 'super_admin'),
+  authorize('super_admin'),
   ctrl.attachPaystackTransaction,
 );
 

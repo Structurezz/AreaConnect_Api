@@ -83,7 +83,9 @@ const estateSchema = new mongoose.Schema({
 // Generate a unique 6-char estate invite code before saving
 estateSchema.pre('save', function (next) {
   if (!this.estateCode) {
-    this.estateCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    // Unambiguous characters, crypto-random (was Math.random)
+    const ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    this.estateCode = Array.from({ length: 8 }, () => ABC[require('crypto').randomInt(ABC.length)]).join('');
   }
   next();
 });

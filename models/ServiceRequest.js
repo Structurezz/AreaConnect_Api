@@ -34,4 +34,7 @@ const serviceRequestSchema = new mongoose.Schema({
 serviceRequestSchema.index({ estateId: 1, status: 1, createdAt: -1 });
 serviceRequestSchema.index({ routedTo: 1, status: 1 });
 
+serviceRequestSchema.index({ estateId: 1, requesterId: 1, createdAt: -1 });
+serviceRequestSchema.index({ assigneeId: 1, status: 1 });
+
 module.exports = mongoose.model('ServiceRequest', serviceRequestSchema);

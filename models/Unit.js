@@ -31,4 +31,6 @@ const unitSchema = new mongoose.Schema({
 
 unitSchema.index({ estateId: 1, unitNumber: 1 }, { unique: true });
 
+unitSchema.index({ estateId: 1, block: 1 });
+
 module.exports = mongoose.model('Unit', unitSchema);
