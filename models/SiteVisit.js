@@ -36,6 +36,14 @@ const siteVisitSchema = new mongoose.Schema({
   countryCode:{ type: String, default: '' },
   city:       { type: String, default: '' },
   region:     { type: String, default: '' },
+  isp:        { type: String, default: '' },
+  // ip-api flags: proxy = VPN/Tor/proxy exit, hosting = datacenter IP. Either
+  // means the country above is where the server is, not the person.
+  proxy:      { type: Boolean, default: false },
+  hosting:    { type: Boolean, default: false },
+
+  // Crawlers, link previewers and headless scanners — excluded from reports
+  isBot:      { type: Boolean, index: true },
 
   visitedAt:  { type: Date, default: Date.now, index: true },
 }, { timestamps: false });

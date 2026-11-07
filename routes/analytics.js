@@ -9,5 +9,6 @@ router.post('/visit', ctrl.logVisit);
 // Super-admin reports
 router.get('/visitors/stats',  authenticate, authorize('super_admin'), ctrl.getStats);
 router.get('/visitors/recent', authenticate, authorize('super_admin'), ctrl.getRecent);
+router.get('/visitors/people', authenticate, authorize('super_admin'), ctrl.getPeople);
 
 module.exports = router;
