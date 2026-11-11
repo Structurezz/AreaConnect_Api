@@ -1230,7 +1230,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
   <!-- Logo -->
   <table cellpadding="0" cellspacing="0" style="margin:0 0 32px;"><tr>
     <td style="vertical-align:middle;padding-right:10px;"><img src="cid:ac-logo" width="36" height="36" alt="AreaConnector" style="display:block;border:0;border-radius:9px;"></td>
-    <td style="vertical-align:middle;font-size:18px;font-weight:800;letter-spacing:-0.02em;color:${C.ink};">Area<span style="color:${C.green};">Connect</span></td>
+    <td style="vertical-align:middle;font-size:18px;font-weight:800;letter-spacing:-0.02em;color:${C.ink};">Area<span style="color:${C.green};">Connector</span></td>
   </tr></table>
 
   <!-- Hero: story on the left, live phone beside it -->
@@ -1398,7 +1398,7 @@ const sendTrialEndingEmail = async ({ to, managerName, estateName, trialEndsAt, 
   <!-- Logo -->
   <table cellpadding="0" cellspacing="0" style="margin:0 0 32px;"><tr>
     <td style="vertical-align:middle;padding-right:10px;"><img src="cid:ac-logo" width="36" height="36" alt="AreaConnector" style="display:block;border:0;border-radius:9px;"></td>
-    <td style="vertical-align:middle;font-size:18px;font-weight:800;letter-spacing:-0.02em;color:${C.ink};">Area<span style="color:${C.green};">Connect</span></td>
+    <td style="vertical-align:middle;font-size:18px;font-weight:800;letter-spacing:-0.02em;color:${C.ink};">Area<span style="color:${C.green};">Connector</span></td>
   </tr></table>
 
   <!-- Hero: check-in on the left, live phone beside it -->
@@ -1631,7 +1631,7 @@ const sendCampaignEmail = async ({ to, name, subject, preheader, htmlBody, ctaUr
     ? brandMark({ size: 24 })
     : `<span style="font-size:24px;font-weight:800;letter-spacing:-0.03em;color:#0F172A;">${
         brandName.startsWith('Area')
-          ? `Area<span style="color:${primary};">${brandName.slice(4) || 'Connect'}</span>`
+          ? `Area<span style="color:${primary};">${brandName.slice(4) || 'Connector'}</span>`
           : brandName
       }</span>`;
 

@@ -138,7 +138,7 @@ const generateInvoicePdf = async (inv) => {
     const brandY = M + HEADER_H + 10;
     doc.fillColor([17, 24, 39]).font('Helvetica-Bold').fontSize(13)
        .text('Area', M, brandY, { continued: true })
-       .fillColor(GREEN).text('Connect', { continued: false });
+       .fillColor(GREEN).text('Connector', { continued: false });
 
     // ── Bill To + Invoice Meta ───────────────────────────────────────────────
     const sectionY = brandY + 20;
