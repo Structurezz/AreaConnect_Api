@@ -480,7 +480,7 @@ exports.requestPasswordReset = async (req, res) => {
       }
 
       // Fire-and-forget email to each manager
-      const FRONTEND_URL = process.env.ESTATE_MANAGER_URL || process.env.FRONTEND_URL || 'https://area-connector.areaconnect.pro';
+      const FRONTEND_URL = process.env.ESTATE_MANAGER_URL || process.env.FRONTEND_URL || 'https://areamanager.area-connector.com';
       const reviewUrl = `${FRONTEND_URL}/settings/password-requests`;
       Promise.allSettled(managers.map(m =>
         emailService.sendPasswordResetRequestEmail?.({
@@ -549,8 +549,8 @@ exports.approvePasswordReset = async (req, res) => {
     // Email the resident with the temp password.
     try {
       const loginUrl = user.role === 'security'
-        ? (process.env.SECURITY_URL || 'https://area-guards.areaconnect.pro')
-        : (process.env.RESIDENT_URL || 'https://area-mates.areaconnect.pro');
+        ? (process.env.SECURITY_URL || 'https://areaguards.area-connector.com')
+        : (process.env.RESIDENT_URL || 'https://areamates.area-connector.com');
       await emailService.sendInviteEmail({
         to: user.email,
         name: user.name,
@@ -654,8 +654,8 @@ exports.adminApprovePasswordReset = async (req, res) => {
 
     try {
       const loginUrl = user.role === 'security'
-        ? (process.env.SECURITY_URL || 'https://area-guards.areaconnect.pro')
-        : (process.env.RESIDENT_URL || 'https://area-mates.areaconnect.pro');
+        ? (process.env.SECURITY_URL || 'https://areaguards.area-connector.com')
+        : (process.env.RESIDENT_URL || 'https://areamates.area-connector.com');
       await emailService.sendInviteEmail({
         to: user.email,
         name: user.name,

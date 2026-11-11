@@ -1,5 +1,5 @@
-// Landing-page "Book a demo" — 30-min video calls with the AreaConnect team.
-// Meetings are created on Zoho Meeting when configured (host: michael@areaconnect.pro),
+// Landing-page "Book a demo" — 30-min video calls with the AreaConnector team.
+// Meetings are created on Zoho Meeting when configured (host: michael@area-connector.com),
 // otherwise Google Meet. Every booking is stored so taken slots disappear.
 const express = require('express');
 const rateLimit = require('express-rate-limit');
@@ -11,7 +11,7 @@ const DemoBooking = require('../models/DemoBooking');
 
 const router = express.Router();
 
-const HOST_EMAIL   = process.env.DEMO_HOST_EMAIL || 'michael@areaconnect.pro';
+const HOST_EMAIL   = process.env.DEMO_HOST_EMAIL || 'michael@area-connector.com';
 const SLOT_MINUTES = 30;
 const DAY_START    = 9;       // 09:00 WAT
 const DAY_END      = 17;      // last slot starts 16:30 WAT
@@ -20,7 +20,7 @@ const LEAD_MINUTES = 120;     // no bookings less than 2h out
 const WAT_OFFSET   = 60;      // Africa/Lagos is UTC+1 year-round (no DST)
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
-const FROM = () => process.env.RESEND_FROM || 'AreaConnect <noreply@areaconnect.pro>';
+const FROM = () => process.env.RESEND_FROM || 'AreaConnector <noreply@area-connector.com>';
 
 const esc = (s = '') => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -90,9 +90,9 @@ function icsInvite({ uid, start, end, summary, description, location, organizer,
     `DESCRIPTION:${icsText(description)}`,
     location ? `LOCATION:${icsText(location)}` : null,
     location ? `URL:${location}` : null,
-    `ORGANIZER;CN=Michael at AreaConnect:mailto:${organizer}`,
+    `ORGANIZER;CN=Michael at AreaConnector:mailto:${organizer}`,
     `ATTENDEE;CN=${icsText(attendee.name)};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${attendee.email}`,
-    'BEGIN:VALARM', 'TRIGGER:-PT15M', 'ACTION:DISPLAY', 'DESCRIPTION:AreaConnect demo in 15 minutes', 'END:VALARM',
+    'BEGIN:VALARM', 'TRIGGER:-PT15M', 'ACTION:DISPLAY', 'DESCRIPTION:AreaConnector demo in 15 minutes', 'END:VALARM',
     'END:VEVENT', 'END:VCALENDAR',
   ].filter(Boolean).join('\r\n');
 }
@@ -100,12 +100,12 @@ function icsInvite({ uid, start, end, summary, description, location, organizer,
 function guestEmailHtml({ name, when, joinLink, meetingName, start, end }) {
   const gcalStamp = (d) => d.toISOString().replace(/[-:]|\.\d{3}/g, '');
   const addGoogle = 'https://calendar.google.com/calendar/render?' + new URLSearchParams({
-    action: 'TEMPLATE', text: 'AreaConnect demo call', dates: `${gcalStamp(start)}/${gcalStamp(end)}`,
-    details: joinLink ? `Join: ${joinLink}` : 'AreaConnect demo', location: joinLink || '',
+    action: 'TEMPLATE', text: 'AreaConnector demo call', dates: `${gcalStamp(start)}/${gcalStamp(end)}`,
+    details: joinLink ? `Join: ${joinLink}` : 'AreaConnector demo', location: joinLink || '',
   });
   const addOutlook = 'https://outlook.live.com/calendar/0/deeplink/compose?' + new URLSearchParams({
-    subject: 'AreaConnect demo call', startdt: start.toISOString(), enddt: end.toISOString(),
-    body: joinLink ? `Join: ${joinLink}` : 'AreaConnect demo', location: joinLink || '', path: '/calendar/action/compose', rru: 'addevent',
+    subject: 'AreaConnector demo call', startdt: start.toISOString(), enddt: end.toISOString(),
+    body: joinLink ? `Join: ${joinLink}` : 'AreaConnector demo', location: joinLink || '', path: '/calendar/action/compose', rru: 'addevent',
   });
   const btn = (href, label, primary) => `<a href="${esc(href)}" style="display:inline-block;margin:4px 6px 4px 0;padding:11px 20px;border-radius:999px;font-size:14px;font-weight:600;text-decoration:none;${primary ? 'background:#10B981;color:#fff;' : 'background:#F1F5F9;color:#0F172A;'}">${label}</a>`;
   return `
@@ -116,7 +116,7 @@ function guestEmailHtml({ name, when, joinLink, meetingName, start, end }) {
       </div>
       <div style="padding:28px;">
         <h1 style="margin:0 0 8px;font-size:22px;color:#0F172A;">You're booked, ${esc(name.split(' ')[0])}!</h1>
-        <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">Thanks for booking a demo. I'll walk you through AreaConnect and answer any questions about your estate.</p>
+        <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">Thanks for booking a demo. I'll walk you through AreaConnector and answer any questions about your estate.</p>
         <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:14px;padding:16px 18px;margin-bottom:20px;">
           <div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#10B981;">When</div>
           <div style="font-size:16px;font-weight:700;color:#0F172A;margin-top:4px;">${esc(when)} WAT</div>
@@ -125,7 +125,7 @@ function guestEmailHtml({ name, when, joinLink, meetingName, start, end }) {
         ${joinLink ? btn(joinLink, `Join ${esc(meetingName)}`, true) : '<p style="color:#475569;font-size:14px;">Your meeting link will follow shortly.</p>'}
         <div style="margin-top:8px;">${btn(addGoogle, 'Add to Google Calendar')}${btn(addOutlook, 'Add to Outlook')}</div>
         <p style="margin:24px 0 0;color:#64748B;font-size:13px;line-height:1.6;">A calendar invite is attached. Need to reschedule? Just reply to this email.</p>
-        <p style="margin:20px 0 0;color:#0F172A;font-size:14px;">— Michael Orizu<br><span style="color:#64748B;">Founder, AreaConnect</span></p>
+        <p style="margin:20px 0 0;color:#0F172A;font-size:14px;">— Michael Orizu<br><span style="color:#64748B;">Founder, AreaConnector</span></p>
       </div>
     </div>
     <p style="text-align:center;font-size:12px;color:#94A3B8;margin-top:16px;">Powered by Area Connector Technologies · RC 9607864</p>
@@ -163,9 +163,9 @@ router.post('/book', bookLimiter, async (req, res) => {
       timeZone: 'Africa/Lagos', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hour12: true,
     });
 
-    const topic = `AreaConnect demo — ${name}${company ? ` (${company})` : ''}`;
+    const topic = `AreaConnector demo — ${name}${company ? ` (${company})` : ''}`;
     const details = [
-      'A 30-minute walkthrough of the AreaConnect estate management platform.',
+      'A 30-minute walkthrough of the AreaConnector estate management platform.',
       '',
       `Name: ${name}`,
       `Email: ${email}`,
@@ -210,14 +210,14 @@ router.post('/book', bookLimiter, async (req, res) => {
     if (process.env.RESEND_API_KEY) {
       const resend = getResend();
       const row = (k, v) => v ? `<tr><td style="padding:6px 0;color:#6b7280;font-size:13px;width:130px;">${k}</td><td style="padding:6px 0;font-weight:600;color:#111;">${esc(v)}</td></tr>` : '';
-      const ics = icsInvite({ uid: `${booking._id}@areaconnect.pro`, start, end, summary: 'AreaConnect demo call', description: `${details}\n\nJoin: ${joinLink || 'link to follow'}`, location: joinLink || '', organizer: HOST_EMAIL, attendee: { email, name } });
+      const ics = icsInvite({ uid: `${booking._id}@area-connector.com`, start, end, summary: 'AreaConnector demo call', description: `${details}\n\nJoin: ${joinLink || 'link to follow'}`, location: joinLink || '', organizer: HOST_EMAIL, attendee: { email, name } });
 
       // To the customer — branded invite from the host, with a calendar file.
       resend.emails.send(withLogo({
-        from: `Michael at AreaConnect <${HOST_EMAIL}>`,
+        from: `Michael at AreaConnector <${HOST_EMAIL}>`,
         to: email,
         replyTo: HOST_EMAIL,
-        subject: `Your AreaConnect demo — ${when} WAT`,
+        subject: `Your AreaConnector demo — ${when} WAT`,
         html: guestEmailHtml({ name, when, joinLink, meetingName, start, end }),
         attachments: [{ filename: 'areaconnect-demo.ics', content: Buffer.from(ics).toString('base64') }],
       })).catch(err => console.error('Demo guest email error:', err));

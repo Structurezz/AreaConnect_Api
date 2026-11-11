@@ -134,7 +134,7 @@ const generateInvoicePdf = async (inv) => {
     doc.fillColor(WHITE).font('Helvetica-Bold').fontSize(9)
        .text(statusLabel, badgeX + 8, badgeY + 4);
 
-    // ── AreaConnect brand ────────────────────────────────────────────────────
+    // ── AreaConnector brand ────────────────────────────────────────────────────
     const brandY = M + HEADER_H + 10;
     doc.fillColor([17, 24, 39]).font('Helvetica-Bold').fontSize(13)
        .text('Area', M, brandY, { continued: true })

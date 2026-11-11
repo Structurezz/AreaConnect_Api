@@ -8,7 +8,7 @@ const Subscription = require('../models/Subscription');
 const OnboardingInvite = require('../models/OnboardingInvite');
 const { sendManagerOnboardEmail, sendOnboardingInviteEmail } = require('../services/emailService');
 
-const MANAGER_APP = () => process.env.ESTATE_MANAGER_URL || 'https://area-connector.areaconnect.pro';
+const MANAGER_APP = () => process.env.ESTATE_MANAGER_URL || 'https://areamanager.area-connector.com';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PROFILE_FIELDS = ['city', 'state', 'estateType', 'contactPhone', 'contactEmail', 'adminNotes', 'logoUrl'];
 

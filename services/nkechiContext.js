@@ -57,7 +57,7 @@ async function buildBriefing(estateId) {
 
   const lines = [];
   lines.push(`ESTATE: ${estate.name}${estate.address ? ` — ${estate.address}` : ''}`);
-  lines.push(`Estate manager: ${estate.managerId?.name || 'not set'} · ${residents} active residents · ${units} units · ${guards} security staff · on AreaConnect since ${day(estate.createdAt)}`);
+  lines.push(`Estate manager: ${estate.managerId?.name || 'not set'} · ${residents} active residents · ${units} units · ${guards} security staff · on AreaConnector since ${day(estate.createdAt)}`);
 
   // Lounge feed — what's hot this week (engagement-ranked), then what's newest
   const score = (p) => (p.likes?.length || 0) + 2 * (p.comments?.length || 0);

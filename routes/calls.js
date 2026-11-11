@@ -4,7 +4,7 @@ const ctrl = require('../controllers/callController');
 const validate = require('../middleware/validate');
 const { authenticate, scopeToEstate, requireEstate, requireActiveSubscription } = require('../middleware/auth');
 
-// AreaConnect admins aren't in an estate, so their routes come before the
+// AreaConnector admins aren't in an estate, so their routes come before the
 // estate-scoped middleware below.
 const { authorize } = require('../middleware/auth');
 const admin = [authenticate, authorize('super_admin')];

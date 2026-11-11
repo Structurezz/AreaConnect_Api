@@ -47,7 +47,7 @@ exports.listWithdrawals = async (req, res) => {
 };
 
 // Super admin — live Paystack balance vs what's owed to managers, so admin
-// knows how much can safely be moved out to the AreaConnect bank account.
+// knows how much can safely be moved out to the AreaConnector bank account.
 //   walletBalances: sum of every estate's withdrawable wallet (online-paid levies
 //                   minus pending/success withdrawals, floored at 0 per estate)
 //   queued:         pending withdrawals with no Paystack transfer yet — still

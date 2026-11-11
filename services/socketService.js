@@ -46,6 +46,7 @@ const initSocket = (server) => {
   const originFn = (origin, callback) => {
     if (!origin) return callback(null, true);
     if (
+      /\.area-connector\.com$/.test(origin) ||
       /\.areaconnect\.pro$/.test(origin) ||
       /\.up\.railway\.app$/.test(origin) ||
       /^http:\/\/localhost:\d+$/.test(origin)
@@ -100,7 +101,7 @@ const initSocket = (server) => {
           if (room.startsWith('estate:') || room.startsWith('user:')) socket.leave(room);
         }
         // Personal room for everyone (calls, direct notifications) — including
-        // AreaConnect admins, who don't belong to an estate.
+        // AreaConnector admins, who don't belong to an estate.
         socket.join(`user:${userId}`);
         socket.data.userId = String(userId);
         socket.data.role = user.role;
@@ -567,7 +568,7 @@ const getIO = () => io;
 
 /**
  * Broadcast a notification to every connected client (across all estates).
- * Used for platform-wide events like AreaConnect FM going live.
+ * Used for platform-wide events like AreaConnector FM going live.
  */
 const emitGlobalNotification = (notification) => {
   if (!io) return;

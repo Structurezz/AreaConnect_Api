@@ -22,7 +22,7 @@ const guestInviteSchema = new mongoose.Schema({
 
 const podcastShowSchema = new mongoose.Schema({
   hostUserId:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  hostName:     { type: String, default: 'AreaConnect FM' },
+  hostName:     { type: String, default: 'AreaConnector FM' },
   title:        { type: String, required: true },
   description:  { type: String, default: '' },
   coverImage:   { type: String, default: '' },

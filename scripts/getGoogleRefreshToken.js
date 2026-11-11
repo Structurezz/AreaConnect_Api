@@ -4,7 +4,7 @@
 // 1. Google Cloud Console → enable "Google Calendar API"
 // 2. Credentials → OAuth client ID → type "Desktop app"
 // 3. GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... node scripts/getGoogleRefreshToken.js
-// 4. Open the printed URL, sign in as michael@areaconnect.pro, approve
+// 4. Open the printed URL, sign in as michael@area-connector.com, approve
 // 5. Put the printed GOOGLE_REFRESH_TOKEN into the server env (Railway)
 require('dotenv').config();
 const http = require('http');

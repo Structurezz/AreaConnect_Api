@@ -5,7 +5,7 @@ const { getIO, emitGlobalNotification, emitNotification, cleanupPodcastShow } = 
 // Fields the admin hub can set on a show
 const SHOW_FIELDS = ['title', 'description', 'coverImage', 'scheduledAt', 'isRecurring', 'recurrence', 'category', 'tags', 'language',
   'seriesName', 'episodeNumber', 'durationMins', 'audience', 'segments', 'notes'];
-const RESIDENTS_URL = () => process.env.RESIDENTS_URL || 'https://area-mates.areaconnect.pro';
+const RESIDENTS_URL = () => process.env.RESIDENTS_URL || 'https://areamates.area-connector.com';
 const guestLink = (token) => `${RESIDENTS_URL()}/live-guest/${token}`;
 // Listeners only see shows/episodes meant for everyone or for their estate
 const audienceFilter = (user) => {
@@ -62,7 +62,7 @@ exports.createShow = async (req, res) => {
     const { title } = req.body;
     if (!title?.trim()) return res.status(400).json({ success: false, message: 'Title required' });
 
-    const doc = { hostUserId: req.user._id, hostName: req.body.hostName?.trim() || req.user.name || 'AreaConnect FM', status: 'scheduled' };
+    const doc = { hostUserId: req.user._id, hostName: req.body.hostName?.trim() || req.user.name || 'AreaConnector FM', status: 'scheduled' };
     SHOW_FIELDS.forEach((k) => { if (req.body[k] !== undefined) doc[k] = req.body[k]; });
     doc.title = title.trim();
     doc.scheduledAt = req.body.scheduledAt ? new Date(req.body.scheduledAt) : null;
@@ -121,7 +121,7 @@ exports.goLive = async (req, res) => {
     notifyAudience(show, {
       id:    `podcast:${show._id}`,
       type:  'live_podcast',
-      title: '📻 AreaConnect FM is LIVE — tap to tune in',
+      title: '📻 AreaConnector FM is LIVE — tap to tune in',
       body:  `${show.hostName} just started "${show.title}"`,
       meta:  {
         kind: 'podcast_show',

@@ -4,7 +4,7 @@ const { Resend } = require('resend');
 const { brandMark, withLogo } = require('../services/emailBrand');
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
-const FROM = () => process.env.RESEND_FROM || 'AreaConnect <noreply@areaconnect.pro>';
+const FROM = () => process.env.RESEND_FROM || 'AreaConnector <noreply@area-connector.com>';
 
 router.post('/', require('../middleware/rateLimits').contact, async (req, res) => {
   const { name, email, company, subject, message } = req.body;
@@ -21,7 +21,7 @@ router.post('/', require('../middleware/rateLimits').contact, async (req, res) =
   try {
     await getResend().emails.send(withLogo({
       from: FROM(),
-      to: 'michael@areaconnect.pro',
+      to: 'michael@area-connector.com',
       replyTo: email,
       subject: `[Contact] ${subject} — ${name}`,
       html: `
@@ -37,7 +37,7 @@ router.post('/', require('../middleware/rateLimits').contact, async (req, res) =
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
           <p style="color:#374151;font-size:14px;line-height:1.7;white-space:pre-wrap;">${message}</p>
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
-          <p style="color:#9ca3af;font-size:12px;">Sent via areaconnect.pro contact form — reply directly to respond to ${name}.</p>
+          <p style="color:#9ca3af;font-size:12px;">Sent via area-connector.com contact form — reply directly to respond to ${name}.</p>
         </div>
       `,
     }));

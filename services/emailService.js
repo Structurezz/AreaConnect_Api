@@ -6,7 +6,7 @@ const { brandMark, withLogo } = require('./emailBrand');
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 // Every single send goes through here so the logo attachment is never missed
 const sendEmail = (payload) => getResend().emails.send(withLogo(payload));
-const FROM      = () => process.env.RESEND_FROM || 'Orizu <noreply@areaconnect.pro>';
+const FROM      = () => process.env.RESEND_FROM || 'Orizu <noreply@area-connector.com>';
 
 // ── Visitor pass ─────────────────────────────────────────────────────────────
 const sendVisitorPass = async ({ to, visitorName, hostName, code, expectedDate, estateName, place }) => {
@@ -165,7 +165,7 @@ const sendTeamInviteEmail = async ({ to, name, estateName, inviterName, permissi
   const { error } = await sendEmail({
     from: FROM(),
     to,
-    subject: `${inviterName || 'Your estate manager'} added you to the ${estateName || 'estate'} team on AreaConnect`,
+    subject: `${inviterName || 'Your estate manager'} added you to the ${estateName || 'estate'} team on AreaConnector`,
     html: `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;padding:0;">
@@ -178,7 +178,7 @@ const sendTeamInviteEmail = async ({ to, name, estateName, inviterName, permissi
     </div>
     <div style="padding:32px;">
       <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 22px;">
-        Hi <strong>${escapeHtml(name || 'there')}</strong>, ${inviter} has added you to the management team for <strong>${estate}</strong> on AreaConnect.
+        Hi <strong>${escapeHtml(name || 'there')}</strong>, ${inviter} has added you to the management team for <strong>${estate}</strong> on AreaConnector.
       </p>
 
       <p style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9CA3AF;margin:0 0 10px;">You can manage</p>
@@ -195,7 +195,7 @@ const sendTeamInviteEmail = async ({ to, name, estateName, inviterName, permissi
       </div>
 
       <div style="text-align:center;margin-bottom:24px;">
-        <a href="${loginUrl}" style="display:inline-block;background:linear-gradient(135deg,#10B981,#059669);color:#fff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 40px;border-radius:10px;">Sign in to AreaConnect &rarr;</a>
+        <a href="${loginUrl}" style="display:inline-block;background:linear-gradient(135deg,#10B981,#059669);color:#fff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 40px;border-radius:10px;">Sign in to AreaConnector &rarr;</a>
       </div>
       <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:14px 16px;">
         <p style="font-size:13px;color:#92400E;line-height:1.5;margin:0;">You'll be asked to set your own password the first time you sign in. Keep your login private.</p>
@@ -340,8 +340,8 @@ const fmtNGN = (n) => `&#8358;${Number(n || 0).toLocaleString('en-NG', { minimum
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' }) : '&mdash;';
 
 // Estate manager web app — links in manager-facing emails (upgrade, dashboard)
-const FRONTEND_URL = process.env.ESTATE_MANAGER_URL || 'https://area-connector.areaconnect.pro';
-const RESIDENTS_APP_URL = process.env.RESIDENTS_URL || 'https://area-mates.areaconnect.pro';
+const FRONTEND_URL = process.env.ESTATE_MANAGER_URL || 'https://areamanager.area-connector.com';
+const RESIDENTS_APP_URL = process.env.RESIDENTS_URL || 'https://areamates.area-connector.com';
 const DEFAULT_HERO  = `${FRONTEND_URL}/estate-hero.jpeg`;
 
 const METHOD_LABELS = {
@@ -686,7 +686,7 @@ const sendLiveAnnouncementEmail = async ({
 
     <div style="background:#F8FAFC;border-top:1px solid #E2E8F0;padding:14px 24px;text-align:center;">
       <span style="font-size:11px;color:#64748B;">
-        Live broadcast at ${estateName} &middot; AreaConnect Estate Management
+        Live broadcast at ${estateName} &middot; AreaConnector Estate Management
       </span>
     </div>
   </div>
@@ -909,7 +909,7 @@ const sendCompGiftEmail = async ({
   const issuedAt       = new Date();
 
   // ── Build inv object shaped like the existing receipt system ────────────
-  // Two line items: the plan at its normal price, then an AreaConnect gift
+  // Two line items: the plan at its normal price, then an AreaConnector gift
   // credit that offsets it to zero. Shared pdfService renders a RECEIPT
   // (status 'paid') with a green PAID badge.
   const inv = {
@@ -919,7 +919,7 @@ const sendCompGiftEmail = async ({
     paidAt: issuedAt,
     status: 'paid',
     method: 'comp',
-    recordedBy: grantedByName || 'AreaConnect team',
+    recordedBy: grantedByName || 'AreaConnector team',
     estate: {
       name:       estateName,
       estateCode: estateCode || '—',
@@ -943,10 +943,10 @@ const sendCompGiftEmail = async ({
         total:       normalAmount,
       },
       {
-        description: 'AreaConnect gift credit',
+        description: 'AreaConnector gift credit',
         detail:      reason
           ? `Reason: ${reason}`
-          : `Comp granted by ${grantedByName || 'AreaConnect team'}`,
+          : `Comp granted by ${grantedByName || 'AreaConnector team'}`,
         frequency:   'one_time',
         quantity:    1,
         unitPrice:   -normalAmount,
@@ -957,8 +957,8 @@ const sendCompGiftEmail = async ({
     subtotal: 0,
     total:    0,
     notes: expiresAt
-      ? `This is a complimentary gift from the AreaConnect team. Normal pricing of ${fmtNGN(normalAmount)}/${cycleLabel} resumes after ${fmtDate(expiresAt)}.`
-      : `This is a complimentary gift from the AreaConnect team. Comp access stays active until an AreaConnect admin ends it.`,
+      ? `This is a complimentary gift from the AreaConnector team. Normal pricing of ${fmtNGN(normalAmount)}/${cycleLabel} resumes after ${fmtDate(expiresAt)}.`
+      : `This is a complimentary gift from the AreaConnector team. Comp access stays active until an AreaConnector admin ends it.`,
   };
 
   // Generate the PDF. We don't let a PDF failure block the email — the
@@ -996,7 +996,7 @@ const sendCompGiftEmail = async ({
           ['Plan',        planName],
           ['Billing',     cycle === 'annual' ? 'Annual' : 'Monthly'],
           ['Access until', expiryText],
-          grantedByName ? ['Granted by', `${grantedByName} &middot; AreaConnect team`] : null,
+          grantedByName ? ['Granted by', `${grantedByName} &middot; AreaConnector team`] : null,
         ].filter(Boolean).map(([label, val], i) => `
           <tr style="background:${i%2===0?'#F8FAFC':'#fff'};">
             <td style="padding:11px 24px;font-size:12px;color:#94A3B8;font-weight:600;width:42%;">${label}</td>
@@ -1011,7 +1011,7 @@ const sendCompGiftEmail = async ({
             <td align="right" style="font-size:13px;color:#64748B;padding:4px 0;"><span style="text-decoration:line-through;">${normalAmountFmt}</span></td>
           </tr>
           <tr>
-            <td style="font-size:13px;color:#059669;padding:4px 0;font-weight:600;">AreaConnect gift credit</td>
+            <td style="font-size:13px;color:#059669;padding:4px 0;font-weight:600;">AreaConnector gift credit</td>
             <td align="right" style="font-size:13px;color:#059669;padding:4px 0;font-weight:600;">&minus; ${normalAmountFmt}</td>
           </tr>
           <tr>
@@ -1022,7 +1022,7 @@ const sendCompGiftEmail = async ({
             <td align="right" style="font-size:22px;color:#10B981;font-weight:900;letter-spacing:-0.02em;padding:4px 0;">&#8358;0.00</td>
           </tr>
           <tr>
-            <td colspan="2" style="font-size:11px;color:#94A3B8;padding:6px 0 0;">You will not be charged for this period. ${expiresAt ? `Normal pricing of ${normalAmountFmt}/${cycleLabel} resumes after ${fmtDate(expiresAt)}.` : 'This gift stays active until an AreaConnect admin ends it.'}</td>
+            <td colspan="2" style="font-size:11px;color:#94A3B8;padding:6px 0 0;">You will not be charged for this period. ${expiresAt ? `Normal pricing of ${normalAmountFmt}/${cycleLabel} resumes after ${fmtDate(expiresAt)}.` : 'This gift stays active until an AreaConnector admin ends it.'}</td>
           </tr>
         </table>
       </div>
@@ -1052,7 +1052,7 @@ const sendCompGiftEmail = async ({
   <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
     <div style="background:linear-gradient(135deg,#F59E0B 0%,#D97706 60%,#B45309 100%);padding:36px 32px;text-align:center;">
       <div style="font-size:52px;margin-bottom:6px;line-height:1;">🎁</div>
-      <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.85);margin-bottom:8px;">A gift from AreaConnect</div>
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.85);margin-bottom:8px;">A gift from AreaConnector</div>
       <h1 style="font-size:26px;font-weight:900;color:#fff;letter-spacing:-0.02em;line-height:1.2;margin:0;">
         ${estateName}, you've just unlocked<br>${planName} — on the house.
       </h1>
@@ -1103,7 +1103,7 @@ const sendCompGiftEmail = async ({
         Questions, feedback, or want to switch plans later?
         Just reply to this email &mdash; a real human will respond within a few hours.<br><br>
         Welcome aboard,<br>
-        <strong style="color:#0F172A;">The AreaConnect team</strong>
+        <strong style="color:#0F172A;">The AreaConnector team</strong>
       </p>
     </div>
   </div>
@@ -1142,8 +1142,8 @@ const getPitchAssets = () => {
 const sendPitchEmail = async ({ to, name, title, company, city }) => {
   if (!process.env.RESEND_API_KEY) return { skipped: true };
 
-  const REPLY_TO  = 'michael@areaconnect.pro';
-  const REGISTER  = 'https://area-connector.areaconnect.pro/register';
+  const REPLY_TO  = 'michael@area-connector.com';
+  const REGISTER  = 'https://areamanager.area-connector.com/register';
   const firstName = escapeHtml((name || '').trim().split(' ')[0] || 'there');
   const org       = escapeHtml(company || 'your estate');
   const where     = city ? ` in ${escapeHtml(city)}` : '';
@@ -1155,7 +1155,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
 
   const C = { ink: '#0F172A', body: '#475569', muted: '#94A3B8', line: '#E2E8F0', soft: '#F8FAFC', green: '#10B981', greenDark: '#059669', indigo: '#6366F1' };
 
-  // An ordinary evening on AreaConnect — mirrors what the phone animation shows
+  // An ordinary evening on AreaConnector — mirrors what the phone animation shows
   const timeline = [
     ['6:28 PM', C.indigo, 'Ada creates a visitor pass',     'Tunde gets a 6-digit code by SMS.'],
     ['6:31 PM', C.green,  'Gate 2 verifies the code',       'The guard checks it in seconds — no phone calls, no paper log.'],
@@ -1214,7 +1214,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
     html: `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light">
-<title>AreaConnect</title>
+<title>AreaConnector</title>
 <style>
   @media only screen and (max-width:640px) {
     .stack { display:block !important; width:100% !important; padding-left:0 !important; padding-right:0 !important; }
@@ -1229,7 +1229,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
 
   <!-- Logo -->
   <table cellpadding="0" cellspacing="0" style="margin:0 0 32px;"><tr>
-    <td style="vertical-align:middle;padding-right:10px;"><img src="cid:ac-logo" width="36" height="36" alt="AreaConnect" style="display:block;border:0;border-radius:9px;"></td>
+    <td style="vertical-align:middle;padding-right:10px;"><img src="cid:ac-logo" width="36" height="36" alt="AreaConnector" style="display:block;border:0;border-radius:9px;"></td>
     <td style="vertical-align:middle;font-size:18px;font-weight:800;letter-spacing:-0.02em;color:${C.ink};">Area<span style="color:${C.green};">Connect</span></td>
   </tr></table>
 
@@ -1242,7 +1242,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
       </h1>
       <p style="margin:0 0 14px;font-size:16px;line-height:1.7;color:${C.body};">Hi ${firstName},</p>
       <p style="margin:0 0 28px;font-size:16px;line-height:1.7;color:${C.body};">
-        I’m Michael, founder of AreaConnect. We help estates like ${org}${where} run the gate, dues and resident
+        I’m Michael, founder of AreaConnector. We help estates like ${org}${where} run the gate, dues and resident
         updates from one place &mdash; so evenings are a little calmer for everyone.
       </p>
 
@@ -1252,7 +1252,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
       </table>
     </td>
     <td class="stack phone-col" width="320" valign="top" style="width:320px;padding:0;">
-      <a href="https://areaconnect.pro" style="display:inline-block;text-decoration:none;">
+      <a href="https://area-connector.com" style="display:inline-block;text-decoration:none;">
         <img src="cid:ac-phone" width="320" alt="AreaMates app: visitor passes updating live as guests arrive" style="display:block;border:0;width:320px;max-width:100%;height:auto;">
       </a>
       <div style="font-size:12px;color:${C.muted};margin-top:6px;">Live on a resident’s phone &middot; AreaMates</div>
@@ -1283,7 +1283,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
       <a href="${REGISTER}" style="display:inline-block;background:${C.green};color:#FFFFFF;font-size:15px;font-weight:700;text-decoration:none;padding:13px 22px;border-radius:999px;">Start my free month &rarr;</a>
     </td>
     <td style="padding:0 0 10px;">
-      <a href="https://areaconnect.pro/contact#book-demo" style="display:inline-block;background:#FFFFFF;color:${C.greenDark};font-size:15px;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:999px;border:1px solid #A7F3D0;">Book a 15-min walkthrough</a>
+      <a href="https://area-connector.com/contact#book-demo" style="display:inline-block;background:#FFFFFF;color:${C.greenDark};font-size:15px;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:999px;border:1px solid #A7F3D0;">Book a 15-min walkthrough</a>
     </td>
   </tr></table>
 
@@ -1293,14 +1293,14 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
     <td valign="top" style="padding-top:22px;">
       <div style="font-size:15px;line-height:1.6;color:${C.body};">No pressure either way &mdash; thanks for reading.</div>
       <div style="font-size:15px;font-weight:700;color:${C.ink};margin-top:6px;">Michael Orizu</div>
-      <div style="font-size:13px;color:${C.muted};">Founder, AreaConnect &middot; <a href="mailto:${REPLY_TO}" style="color:${C.greenDark};text-decoration:none;">${REPLY_TO}</a></div>
+      <div style="font-size:13px;color:${C.muted};">Founder, AreaConnector &middot; <a href="mailto:${REPLY_TO}" style="color:${C.greenDark};text-decoration:none;">${REPLY_TO}</a></div>
     </td>
   </tr></table>
 
   <!-- Quiet opt-out -->
   <p style="margin:30px 0 0;font-size:12px;line-height:1.8;color:${C.muted};">
     Not the right time? <a href="${reply(`Not right now${about}`, 'Hi Michael,\n\nNot right now, thanks.\n')}" style="color:${C.body};">Let me know</a>
-    and I won’t follow up. &middot; <a href="${reply(`Unsubscribe${about}`, 'Please remove me from AreaConnect emails.')}" style="color:${C.muted};">Unsubscribe</a><br>
+    and I won’t follow up. &middot; <a href="${reply(`Unsubscribe${about}`, 'Please remove me from AreaConnector emails.')}" style="color:${C.muted};">Unsubscribe</a><br>
     Area Connector Technologies &middot; RC 9607864 &middot; Lagos, Nigeria
   </p>
 
@@ -1318,9 +1318,9 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
 const sendTrialEndingEmail = async ({ to, managerName, estateName, trialEndsAt, planName, monthlyPrice }) => {
   if (!process.env.RESEND_API_KEY || !to) return { skipped: true };
 
-  const REPLY_TO  = 'michael@areaconnect.pro';
+  const REPLY_TO  = 'michael@area-connector.com';
   const UPGRADE   = `${FRONTEND_URL}/upgrade`;
-  const BOOK      = 'https://areaconnect.pro/contact#book-demo';
+  const BOOK      = 'https://area-connector.com/contact#book-demo';
   const firstName = escapeHtml((managerName || '').trim().split(' ')[0] || 'there');
   const estate    = escapeHtml(estateName || 'your estate');
   const plan      = escapeHtml(planName || 'Starter');
@@ -1344,7 +1344,7 @@ const sendTrialEndingEmail = async ({ to, managerName, estateName, trialEndsAt, 
     ['⏳', 'Haven’t really tried it', 'Life got busy — can I have a little more time?'],
   ].map(([icon, label, hint]) => `
         <td class="stack" width="50%" valign="top" style="padding:0 4px 8px;">
-          <a href="${reply(`My AreaConnect trial: ${label}${about}`, `Hi Michael,\n\nHow the trial went for us: ${label} — ${hint}.\n\n`)}"
+          <a href="${reply(`My AreaConnector trial: ${label}${about}`, `Hi Michael,\n\nHow the trial went for us: ${label} — ${hint}.\n\n`)}"
              style="display:block;text-decoration:none;background:#FFFFFF;border:1px solid ${C.line};border-radius:12px;padding:13px 14px;">
             <table width="100%" cellpadding="0" cellspacing="0"><tr>
               <td width="32" style="font-size:19px;vertical-align:middle;">${icon}</td>
@@ -1377,12 +1377,12 @@ const sendTrialEndingEmail = async ({ to, managerName, estateName, trialEndsAt, 
     from: FROM(),
     reply_to: REPLY_TO,
     to,
-    subject: `How’s ${estateName || 'your estate'} finding AreaConnect? Your trial ends ${endsLine}`,
+    subject: `How’s ${estateName || 'your estate'} finding AreaConnector? Your trial ends ${endsLine}`,
     attachments: getPitchAssets(),
     html: `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light">
-<title>AreaConnect</title>
+<title>AreaConnector</title>
 <style>
   @media only screen and (max-width:640px) {
     .stack { display:block !important; width:100% !important; padding-left:0 !important; padding-right:0 !important; }
@@ -1397,7 +1397,7 @@ const sendTrialEndingEmail = async ({ to, managerName, estateName, trialEndsAt, 
 
   <!-- Logo -->
   <table cellpadding="0" cellspacing="0" style="margin:0 0 32px;"><tr>
-    <td style="vertical-align:middle;padding-right:10px;"><img src="cid:ac-logo" width="36" height="36" alt="AreaConnect" style="display:block;border:0;border-radius:9px;"></td>
+    <td style="vertical-align:middle;padding-right:10px;"><img src="cid:ac-logo" width="36" height="36" alt="AreaConnector" style="display:block;border:0;border-radius:9px;"></td>
     <td style="vertical-align:middle;font-size:18px;font-weight:800;letter-spacing:-0.02em;color:${C.ink};">Area<span style="color:${C.green};">Connect</span></td>
   </tr></table>
 
@@ -1410,7 +1410,7 @@ const sendTrialEndingEmail = async ({ to, managerName, estateName, trialEndsAt, 
       </h1>
       <p style="margin:0 0 14px;font-size:16px;line-height:1.7;color:${C.body};">Hi ${firstName},</p>
       <p style="margin:0 0 14px;font-size:16px;line-height:1.7;color:${C.body};">
-        It’s Michael, founder of AreaConnect. Thank you for trying us out with ${estate}.
+        It’s Michael, founder of AreaConnector. Thank you for trying us out with ${estate}.
         Your free trial on the <strong style="color:${C.ink};">${plan}</strong> plan ends <strong style="color:${C.ink};">${endsLine}</strong>${endDate ? ` (${endDate})` : ''},
         and I’d genuinely love to hear how it’s gone.
       </p>
@@ -1427,7 +1427,7 @@ const sendTrialEndingEmail = async ({ to, managerName, estateName, trialEndsAt, 
       </tr></table>
     </td>
     <td class="stack phone-col" width="320" valign="top" style="width:320px;padding:0;">
-      <a href="https://areaconnect.pro" style="display:inline-block;text-decoration:none;">
+      <a href="https://area-connector.com" style="display:inline-block;text-decoration:none;">
         <img src="cid:ac-phone" width="320" alt="AreaMates app: visitor passes updating live as guests arrive" style="display:block;border:0;width:320px;max-width:100%;height:auto;">
       </a>
       <div style="font-size:12px;color:${C.muted};margin-top:6px;">What your residents see &middot; AreaMates</div>
@@ -1467,12 +1467,12 @@ const sendTrialEndingEmail = async ({ to, managerName, estateName, trialEndsAt, 
     <td valign="top" style="padding-top:22px;">
       <div style="font-size:15px;line-height:1.6;color:${C.body};">Whatever you decide, thank you for giving us a try.</div>
       <div style="font-size:15px;font-weight:700;color:${C.ink};margin-top:6px;">Michael Orizu</div>
-      <div style="font-size:13px;color:${C.muted};">Founder, AreaConnect &middot; <a href="mailto:${REPLY_TO}" style="color:${C.greenDark};text-decoration:none;">${REPLY_TO}</a></div>
+      <div style="font-size:13px;color:${C.muted};">Founder, AreaConnector &middot; <a href="mailto:${REPLY_TO}" style="color:${C.greenDark};text-decoration:none;">${REPLY_TO}</a></div>
     </td>
   </tr></table>
 
   <p style="margin:30px 0 0;font-size:12px;line-height:1.8;color:${C.muted};">
-    You’re receiving this because ${estate} is on an AreaConnect free trial.<br>
+    You’re receiving this because ${estate} is on an AreaConnector free trial.<br>
     Area Connector Technologies &middot; RC 9607864 &middot; Lagos, Nigeria
   </p>
 
@@ -1595,13 +1595,13 @@ const sendCampaignEmail = async ({ to, name, subject, preheader, htmlBody, ctaUr
 
   const primary   = theme?.primaryColor    || '#059669';
   const accent    = theme?.accentColor     || '#34D399';
-  const brandName = brand?.name            || 'AreaConnect';
+  const brandName = brand?.name            || 'AreaConnector';
   const logoUrl   = brand?.logoUrl         || '';
   const social    = brand?.social || {
     twitter:   process.env.BRAND_TWITTER_URL   || 'https://x.com/areaconnect',
     instagram: process.env.BRAND_INSTAGRAM_URL || 'https://instagram.com/areaconnect',
     linkedin:  process.env.BRAND_LINKEDIN_URL  || 'https://linkedin.com/company/areaconnect',
-    website:   process.env.BRAND_WEBSITE_URL   || 'https://areaconnect.pro',
+    website:   process.env.BRAND_WEBSITE_URL   || 'https://area-connector.com',
   };
 
   const nameFallback = (name || '').trim() || 'there';
@@ -1627,7 +1627,7 @@ const sendCampaignEmail = async ({ to, name, subject, preheader, htmlBody, ctaUr
 
   const logoBlock = logoUrl
     ? `<img src="${logoUrl}" alt="${brandName}" style="height:36px;display:inline-block;" />`
-    : brandName === 'AreaConnect'
+    : brandName === 'AreaConnector'
     ? brandMark({ size: 24 })
     : `<span style="font-size:24px;font-weight:800;letter-spacing:-0.03em;color:#0F172A;">${
         brandName.startsWith('Area')
@@ -1695,10 +1695,10 @@ const ALERT_TYPE_LABEL = {
 };
 const ALERT_SEVERITY_COLOR = { critical: '#B91C1C', high: '#DC2626', medium: '#D97706', low: '#2563EB' };
 const APP_URL_BY_ROLE = {
-  resident:       process.env.RESIDENTS_URL || 'https://area-mates.areaconnect.pro',
-  estate_manager: process.env.CLIENT_URL    || 'https://area-connector.areaconnect.pro',
-  super_admin:    process.env.CLIENT_URL    || 'https://area-connector.areaconnect.pro',
-  security:       process.env.SECURITY_URL  || 'https://area-guards.areaconnect.pro',
+  resident:       process.env.RESIDENTS_URL || 'https://areamates.area-connector.com',
+  estate_manager: process.env.CLIENT_URL    || 'https://areamanager.area-connector.com',
+  super_admin:    process.env.CLIENT_URL    || 'https://areamanager.area-connector.com',
+  security:       process.env.SECURITY_URL  || 'https://areaguards.area-connector.com',
 };
 
 const escapeHtml = (v) => String(v ?? '')
@@ -1740,7 +1740,7 @@ const buildAlertEmailHtml = ({ name, estateName, alert, raisedBy, isBroadcast, u
     <p style="margin:16px 0 0;font-size:12px;color:#94A3B8;line-height:1.5;">In immediate danger? Call 112 (Nigeria emergency line) first.</p>
   </div>
 </div>
-<p style="text-align:center;font-size:11px;color:#94A3B8;margin:0;padding:14px 16px 20px;">AreaConnect &middot; ${escapeHtml(estateName)}</p>
+<p style="text-align:center;font-size:11px;color:#94A3B8;margin:0;padding:14px 16px 20px;">AreaConnector &middot; ${escapeHtml(estateName)}</p>
 </body></html>`;
 };
 
@@ -1823,14 +1823,14 @@ const sendBuzzEmail = async ({ to, toName, fromName, fromPhotoUrl, fromUnit, est
 };
 
 
-// ── Call-credit receipts (purchase or AreaConnect gift) ─────────────────────
+// ── Call-credit receipts (purchase or AreaConnector gift) ─────────────────────
 const sendCreditReceiptEmail = async ({ to, name, inv, pdf }) => {
   if (!process.env.RESEND_API_KEY || !to) return { skipped: true };
   const { isGift, credits, balanceAfter, note } = inv.meta || {};
   const first = escapeHtml((name || 'there').split(' ')[0]);
   const naira = (n) => `₦${Number(n || 0).toLocaleString('en-NG')}`;
   const value = Math.abs(inv.items[0]?.total || 0);
-  const appUrl = `${process.env.RESIDENTS_URL || 'https://area-mates.areaconnect.pro'}/neighbours`;
+  const appUrl = `${process.env.RESIDENTS_URL || 'https://areamates.area-connector.com'}/neighbours`;
   const headline = isGift ? `🎁 You've received ${credits} free call credits` : `Payment received — ${credits} call credits added`;
   const rows = [
     ['Credits', `${credits} (≈ ${credits} min of neighbour calls)`],
@@ -1843,7 +1843,7 @@ const sendCreditReceiptEmail = async ({ to, name, inv, pdf }) => {
   await sendEmail({
     from: FROM(),
     to,
-    subject: isGift ? `🎁 ${credits} free call credits from AreaConnect` : `Receipt: ${credits} call credits — ${naira(inv.total)}`,
+    subject: isGift ? `🎁 ${credits} free call credits from AreaConnector` : `Receipt: ${credits} call credits — ${naira(inv.total)}`,
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="background:#EEF2FF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
 <div style="width:100%;max-width:100%;margin:0;background:#fff;border-radius:0;overflow:hidden;border:0;">
@@ -1854,7 +1854,7 @@ const sendCreditReceiptEmail = async ({ to, name, inv, pdf }) => {
   </div>
   <div style="padding:24px 28px;">
     <p style="font-size:15px;color:#334155;line-height:1.6;margin:0 0 16px;">Hi ${first}, ${isGift
-      ? 'AreaConnect has added free call credits to your account. Use them to call your neighbours from AreaMates.'
+      ? 'AreaConnector has added free call credits to your account. Use them to call your neighbours from AreaMates.'
       : 'thanks for your purchase. Your call credits are ready to use.'}</p>
     ${isGift && note ? `<p style="font-size:15px;line-height:1.6;color:#0F172A;background:#F5F3FF;border-left:3px solid #6366F1;padding:12px 14px;border-radius:8px;margin:0 0 16px;">“${escapeHtml(note)}”</p>` : ''}
     <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:20px;">
@@ -1872,7 +1872,7 @@ const sendCreditReceiptEmail = async ({ to, name, inv, pdf }) => {
 };
 
 // ── Admin onboarding: manager welcome (one or many estates) ───────────────────
-const MANAGER_APP = () => process.env.ESTATE_MANAGER_URL || 'https://area-connector.areaconnect.pro';
+const MANAGER_APP = () => process.env.ESTATE_MANAGER_URL || 'https://areamanager.area-connector.com';
 
 const onboardShell = ({ eyebrow, title, body }) => `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -1908,20 +1908,20 @@ const sendManagerOnboardEmail = async ({ to, name, estates = [], tempPassword, t
           <p style="font-family:'Courier New',Courier,monospace;font-size:22px;font-weight:800;letter-spacing:0.08em;color:#047857;background:#F0FDF9;border:1px solid #A7F3D0;border-radius:8px;padding:10px 14px;display:inline-block;margin:0;">${escapeHtml(tempPassword)}</p>
         </div>
       </div>` : `
-      <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 24px;">Sign in with your existing AreaConnect login &mdash; the new ${names.length > 1 ? 'estates are' : 'estate is'} already in your estate switcher.</p>`;
+      <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 24px;">Sign in with your existing AreaConnector login &mdash; the new ${names.length > 1 ? 'estates are' : 'estate is'} already in your estate switcher.</p>`;
 
   const { error } = await sendEmail({
     from: FROM(),
     to,
     subject: names.length > 1
-      ? `${names.length} estates are ready for you on AreaConnect`
-      : `${names[0] || 'Your estate'} is ready on AreaConnect`,
+      ? `${names.length} estates are ready for you on AreaConnector`
+      : `${names[0] || 'Your estate'} is ready on AreaConnector`,
     html: onboardShell({
-      eyebrow: 'Estate manager &middot; AreaConnect',
+      eyebrow: 'Estate manager &middot; AreaConnector',
       title: names.length > 1 ? 'Your estates are set up' : 'Your estate is set up',
       body: `
       <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 22px;">
-        Hi <strong>${escapeHtml(name || 'there')}</strong>, the AreaConnect team has set up ${names.length > 1 ? 'these estates' : 'this estate'} for you to manage${trialDays ? ` &mdash; with a <strong>${trialDays}-day free trial</strong>` : ''}.
+        Hi <strong>${escapeHtml(name || 'there')}</strong>, the AreaConnector team has set up ${names.length > 1 ? 'these estates' : 'this estate'} for you to manage${trialDays ? ` &mdash; with a <strong>${trialDays}-day free trial</strong>` : ''}.
       </p>
       <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">${list}</table>
       ${login}
@@ -1941,13 +1941,13 @@ const sendOnboardingInviteEmail = async ({ to, name, estateName, link, note, tri
   const { error } = await sendEmail({
     from: FROM(),
     to,
-    subject: `Set up ${estateName || 'your estate'} on AreaConnect`,
+    subject: `Set up ${estateName || 'your estate'} on AreaConnector`,
     html: onboardShell({
       eyebrow: `${escapeHtml(estateName || 'Your estate')} &middot; Invitation`,
-      title: 'You’re invited to AreaConnect',
+      title: 'You’re invited to AreaConnector',
       body: `
       <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 18px;">
-        Hi <strong>${escapeHtml(name || 'there')}</strong>, we&rsquo;ve reserved a place for <strong>${escapeHtml(estateName || 'your estate')}</strong> on AreaConnect &mdash; visitor passes, dues, security alerts and a resident community in one place.
+        Hi <strong>${escapeHtml(name || 'there')}</strong>, we&rsquo;ve reserved a place for <strong>${escapeHtml(estateName || 'your estate')}</strong> on AreaConnector &mdash; visitor passes, dues, security alerts and a resident community in one place.
       </p>
       ${note ? `<div style="border-left:3px solid #10B981;background:#F0FDF9;padding:12px 16px;border-radius:0 8px 8px 0;margin:0 0 22px;font-size:14px;color:#065F46;line-height:1.6;">${escapeHtml(note)}</div>` : ''}
       <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 26px;">It takes about two minutes. Your details are filled in already &mdash; just choose a password. You get a <strong>${trialDays}-day free trial</strong>, no card needed.</p>
@@ -1961,7 +1961,7 @@ const sendOnboardingInviteEmail = async ({ to, name, estateName, link, note, tri
   return { sent: true };
 };
 
-// ── AreaConnect FM: invite a guest / estate leader onto a show ────────────────
+// ── AreaConnector FM: invite a guest / estate leader onto a show ────────────────
 const ROLE_LABEL = { guest: 'Guest', co_host: 'Co-host', estate_leader: 'Estate leader', expert: 'Expert guest' };
 const sendPodcastInviteEmail = async ({ to, name, role, showTitle, hostName, when, topic, link }) => {
   if (!process.env.RESEND_API_KEY) return { skipped: true };
@@ -1969,13 +1969,13 @@ const sendPodcastInviteEmail = async ({ to, name, role, showTitle, hostName, whe
   const { error } = await sendEmail({
     from: FROM(),
     to,
-    subject: `You're invited on AreaConnect FM — "${showTitle}"`,
+    subject: `You're invited on AreaConnector FM — "${showTitle}"`,
     html: onboardShell({
-      eyebrow: `AreaConnect FM &middot; ${escapeHtml(r)}`,
+      eyebrow: `AreaConnector FM &middot; ${escapeHtml(r)}`,
       title: 'You’re invited to speak',
       body: `
       <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 18px;">
-        Hi <strong>${escapeHtml(name || 'there')}</strong>, ${escapeHtml(hostName || 'AreaConnect FM')} would love to have you as <strong>${escapeHtml(r.toLowerCase())}</strong> on <strong>&ldquo;${escapeHtml(showTitle)}&rdquo;</strong>, streamed live to residents across AreaConnect estates.
+        Hi <strong>${escapeHtml(name || 'there')}</strong>, ${escapeHtml(hostName || 'AreaConnector FM')} would love to have you as <strong>${escapeHtml(r.toLowerCase())}</strong> on <strong>&ldquo;${escapeHtml(showTitle)}&rdquo;</strong>, streamed live to residents across AreaConnector estates.
       </p>
       <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 22px;border:1px solid #E5E7EB;border-radius:12px;">
         ${when ? `<tr><td style="padding:12px 16px;font-size:12px;color:#6B7280;width:110px;">When</td><td style="padding:12px 16px;font-size:14px;color:#111827;font-weight:600;">${escapeHtml(when)}</td></tr>` : ''}

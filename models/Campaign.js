@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 // Channels that actually deliver today. login_sidebar is kept for legacy rows only.
 const PLACEMENTS = ['modal', 'dashboard_banner', 'lounge_feed', 'email', 'push', 'login_sidebar'];
-// What the campaign is trying to move — maps to a real AreaConnect feature.
+// What the campaign is trying to move — maps to a real AreaConnector feature.
 const GOALS = ['onboarding', 'payments', 'visitors', 'security', 'community', 'marketplace', 'podcast', 'upgrade', 'referral', 'announcement', 'retention'];
 const FREQUENCIES = ['until_dismissed', 'once', 'until_clicked'];
 const SUB_STATUSES = ['trial', 'active', 'expired', 'suspended', 'cancelled', 'none'];

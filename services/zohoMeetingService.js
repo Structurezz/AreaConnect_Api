@@ -1,5 +1,5 @@
 // Zoho Meeting for landing-page demo bookings, hosted by the Zoho account behind
-// ZOHO_REFRESH_TOKEN (michael@areaconnect.pro). Generate the token with
+// ZOHO_REFRESH_TOKEN (michael@area-connector.com). Generate the token with
 // scripts/getZohoRefreshToken.js.
 const axios = require('axios');
 

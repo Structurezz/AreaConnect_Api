@@ -32,7 +32,7 @@ const markOverdue = async (estateId) => {
   }
 };
 
-// Only dues paid online (Paystack) are money AreaConnect actually holds, so
+// Only dues paid online (Paystack) are money AreaConnector actually holds, so
 // only they count towards the withdrawable wallet. Cash / bank transfers the
 // manager records by hand were paid to the estate directly — they show as
 // paid on the resident's record but must never be withdrawable.

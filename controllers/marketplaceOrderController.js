@@ -9,7 +9,7 @@ const escrow = require('../services/marketplaceEscrow');
 const { sendWithdrawalReceiptEmail } = require('../services/emailService');
 
 const { PAYSTACK_BASE, paystackHeaders, naira } = escrow;
-const RESIDENTS_URL = () => process.env.RESIDENTS_URL || 'https://area-mates.areaconnect.pro';
+const RESIDENTS_URL = () => process.env.RESIDENTS_URL || 'https://areamates.area-connector.com';
 const fail = (res, code, message, extra = {}) => res.status(code).json({ success: false, message, ...extra });
 const MULTI_QTY = ['food', 'services', 'skills'];
 const POP = [

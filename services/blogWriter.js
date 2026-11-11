@@ -9,12 +9,12 @@ const MODEL = process.env.BLOG_MODEL || 'gemini-2.5-flash';
 const CATEGORIES = ['Guide', 'Security', 'Payments', 'Community', 'Management', 'Product'];
 const WAT_OFFSET_MS = 60 * 60_000;
 
-// What AreaConnect actually does — the only product facts articles may state.
+// What AreaConnector actually does — the only product facts articles may state.
 const PRODUCT_FACTS = `
-AreaConnect is an estate management platform built in Lagos, Nigeria (founded August 2026), with three apps:
-- AreaConnect Admin (web, for estate managers): residents and units (CSV bulk invite), guard management, payment schedules and levies, Paystack collection, estate wallet with bank withdrawals, announcements with read receipts, live alerts, visitor oversight and blacklist, estate constitution upload, analytics, in-app calls, multi-estate on Enterprise.
+AreaConnector is an estate management platform built in Lagos, Nigeria (founded August 2026), with three apps:
+- AreaConnector Admin (web, for estate managers): residents and units (CSV bulk invite), guard management, payment schedules and levies, Paystack collection, estate wallet with bank withdrawals, announcements with read receipts, live alerts, visitor oversight and blacklist, estate constitution upload, analytics, in-app calls, multi-estate on Enterprise.
 - AreaMates (iOS, Android, web, for residents): visitor passes with QR code and 6-digit code shareable on WhatsApp, instant passes, approving early arrivals, cancelling passes, paying dues with Paystack (card, transfer, USSD) with invoices and receipts, SOS panic button (security, fire, medical), personal safety tools ("I'm being followed" silent alarm to staff, live location sharing with security for up to 1 hour, silent safety blocks, gate watch), in-app voice calls to the gate, neighbours and manager, "buzz a neighbour", estate group chat and direct messages, marketplace with escrow checkout and seller wallets, community lounge (feed, 24-hour stories, events and RSVP, polls, community DJ queue, radio), push notifications.
-- AreaConnect Guard (Android/iOS, for security): verify visitors by typing their 6-digit code, one-tap check-in/check-out, blacklist "access denied", panic alerts with a siren, acknowledge/resolve alerts, offline mode with sync, entry log, incident escalation.
+- AreaConnector Guard (Android/iOS, for security): verify visitors by typing their 6-digit code, one-tap check-in/check-out, blacklist "access denied", panic alerts with a siren, acknowledge/resolve alerts, offline mode with sync, entry log, incident escalation.
 - Nkechi: built-in AI assistant in the estate chat.
 - Pricing: Starter ₦20,000/month (up to 50 residents), Growth ₦47,000 (up to 200), Premium ₦80,000 (up to 500), Enterprise custom. Annual billing saves 20%. 14-day free trial.
 `;
@@ -24,8 +24,8 @@ Rules:
 - Audience: Nigerian estate managers, residents' associations, property managers and residents. Use Nigerian context (Lagos, Abuja, naira, Paystack, PHCN/generators, okada/dispatch riders) naturally.
 - Be genuinely useful and practical: concrete steps, checklists, templates, examples.
 - NEVER invent statistics, survey results, percentages, studies, quotes, named people, named estates, case studies or customer stories. If you use an example, make it clearly hypothetical ("Imagine an estate with 120 units...").
-- Do NOT claim how many estates or users AreaConnect has, and don't make claims about AreaConnect beyond the product facts given.
-- Mention AreaConnect only where it genuinely fits (usually 1–3 times, plus a short closing paragraph). The article must stand on its own as helpful advice.
+- Do NOT claim how many estates or users AreaConnector has, and don't make claims about AreaConnector beyond the product facts given.
+- Mention AreaConnector only where it genuinely fits (usually 1–3 times, plus a short closing paragraph). The article must stand on its own as helpful advice.
 - No legal or financial guarantees; suggest consulting a professional where appropriate.
 - British/Nigerian English spelling. Warm, clear, confident tone. No hype, no emojis.
 - 900–1,300 words in the body.
@@ -93,7 +93,7 @@ function clean(article, category) {
 }
 
 async function draft(category, topic) {
-  const prompt = `You are the editor of the AreaConnect blog.\n${PRODUCT_FACTS}\n${RULES}\nWrite an article in the "${category}" category on this topic:\n"${topic}"\n${SCHEMA_HINT}`;
+  const prompt = `You are the editor of the AreaConnector blog.\n${PRODUCT_FACTS}\n${RULES}\nWrite an article in the "${category}" category on this topic:\n"${topic}"\n${SCHEMA_HINT}`;
   const res = await model().generateContent(prompt);
   const text = res.response.text().trim().replace(/^```json\s*|```$/g, '');
   return clean(JSON.parse(text), category);
@@ -109,7 +109,7 @@ async function uniqueSlug(title) {
 // Ask Gemini for new topic ideas once the bank is exhausted.
 async function freshTopics(n = 10) {
   const existing = (await Article.find({}, 'title').sort({ publishedAt: -1 }).limit(300).lean()).map((a) => a.title);
-  const prompt = `${PRODUCT_FACTS}\nSuggest ${n} new, specific, genuinely useful blog article topics for Nigerian estate managers and residents, related to what AreaConnect offers. Spread them across these categories: ${CATEGORIES.join(', ')}. Do not repeat or closely paraphrase any of these existing titles:\n${existing.map((t) => `- ${t}`).join('\n')}\nReturn ONLY JSON: [{"category": string, "topic": string}]`;
+  const prompt = `${PRODUCT_FACTS}\nSuggest ${n} new, specific, genuinely useful blog article topics for Nigerian estate managers and residents, related to what AreaConnector offers. Spread them across these categories: ${CATEGORIES.join(', ')}. Do not repeat or closely paraphrase any of these existing titles:\n${existing.map((t) => `- ${t}`).join('\n')}\nReturn ONLY JSON: [{"category": string, "topic": string}]`;
   const res = await model().generateContent(prompt);
   const list = JSON.parse(res.response.text().trim().replace(/^```json\s*|```$/g, ''));
   return list.filter((t) => CATEGORIES.includes(t.category) && t.topic).map((t) => [t.category, t.topic]);

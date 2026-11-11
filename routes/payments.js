@@ -90,7 +90,7 @@ router.post('/reconcile/:reference',
 // Lets the manager see every Paystack capture, including ones that
 // have no matching Payment row in our DB — then attach to a resident +
 // schedule to pull the money through.
-// AreaConnect admins only: the gateway ledger spans every estate, and
+// AreaConnector admins only: the gateway ledger spans every estate, and
 // attaching a reference creates paid money in an estate's wallet.
 router.get('/paystack/recent',
   authorize('super_admin'),

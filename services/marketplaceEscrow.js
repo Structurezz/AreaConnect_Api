@@ -8,7 +8,7 @@ const Estate = require('../models/Estate');
 const { emitNotification, getIO } = require('./socketService');
 const { sendManagerNotificationEmail } = require('./emailService');
 
-// Platform commission on every marketplace sale (AreaConnect's cut).
+// Platform commission on every marketplace sale (AreaConnector's cut).
 const COMMISSION_RATE = Number(process.env.MARKETPLACE_COMMISSION_RATE || 0.2);
 // Escrow: funds release to the seller this long after payment / delivery,
 // unless the buyer confirms sooner or opens a dispute.

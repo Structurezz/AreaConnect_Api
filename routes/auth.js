@@ -10,7 +10,7 @@ router.post('/register', limits.register, [
   body('email').isEmail().withMessage('Valid email required'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   // Public sign-up: managers, residents and guards only. super_admin accounts
-  // are created by AreaConnect admins (/api/users), never here.
+  // are created by AreaConnector admins (/api/users), never here.
   body('role').optional().isIn(['estate_manager', 'resident', 'security']),
 ], validate, ctrl.register);
 

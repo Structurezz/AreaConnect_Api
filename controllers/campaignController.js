@@ -9,7 +9,7 @@ const { emitNotification } = require('../services/socketService');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const BRAND = {
-  name: 'AreaConnect',
+  name: 'AreaConnector',
   tagline: 'Your estate, together.',
   logoText: 'Area<span style="color:{PRIMARY}">Connect</span>',
   footer: 'Powered by Area Connector Technologies · RC 9607864',
@@ -23,7 +23,7 @@ const PRODUCT_FACTS = {
     '- Security: one-tap SOS alert to estate security, live estate alerts, safety check-ins.',
     '- The Lounge: the estate social feed — posts, polls, events, community chat with neighbours.',
     '- Marketplace: buy and sell within the estate; payments are held in escrow until the buyer confirms delivery.',
-    '- AreaConnect FM: platform-wide live radio and podcasts featuring estate leaders and experts.',
+    '- AreaConnector FM: platform-wide live radio and podcasts featuring estate leaders and experts.',
     '- Announcements from the estate manager, event board, polls and voting, in-app calls to neighbours and the gate.',
   ].join('\n'),
   manager: [
@@ -41,10 +41,10 @@ const slugify = (s) =>
 
 const DAY = 86400000;
 const dayKey = (d) => new Date(d).toISOString().slice(0, 10);
-const brandFor = () => ({ name: 'AreaConnect', logoUrl: process.env.BRAND_LOGO_URL || '' });
+const brandFor = () => ({ name: 'AreaConnector', logoUrl: process.env.BRAND_LOGO_URL || '' });
 const appUrl = (role) => role === 'estate_manager'
-  ? (process.env.MANAGER_URL || 'https://area-connector.areaconnect.pro')
-  : (process.env.RESIDENTS_URL || 'https://area-mates.areaconnect.pro');
+  ? (process.env.MANAGER_URL || 'https://areamanager.area-connector.com')
+  : (process.env.RESIDENTS_URL || 'https://areamates.area-connector.com');
 // Relative CTA paths ("/payments") become absolute links in emails and pushes.
 const absUrl = (url, role) => (!url ? '' : /^https?:\/\//.test(url) ? url : `${appUrl(role)}${url.startsWith('/') ? '' : '/'}${url}`);
 
@@ -536,7 +536,7 @@ exports.generateEmailContent = async (req, res) => {
 
     const {
       goal = 'Welcome new members and introduce the platform',
-      audience = 'new residents on AreaConnect',
+      audience = 'new residents on AreaConnector',
       tone = 'warm, confident, briefly witty',
       theme = {},
       brand = {},

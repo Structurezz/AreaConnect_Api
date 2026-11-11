@@ -1,5 +1,5 @@
 // Google Calendar + Meet for landing-page demo bookings.
-// Uses an OAuth refresh token for the host's account (michael@areaconnect.pro).
+// Uses an OAuth refresh token for the host's account (michael@area-connector.com).
 // Generate one with: node scripts/getGoogleRefreshToken.js
 const axios = require('axios');
 const crypto = require('crypto');

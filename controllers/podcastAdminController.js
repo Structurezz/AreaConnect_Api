@@ -5,7 +5,7 @@ const User = require('../models/User');
 const Estate = require('../models/Estate');
 const { emitGlobalNotification, emitNotification } = require('../services/socketService');
 
-const RESIDENTS_URL = () => process.env.RESIDENTS_URL || 'https://area-mates.areaconnect.pro';
+const RESIDENTS_URL = () => process.env.RESIDENTS_URL || 'https://areamates.area-connector.com';
 const guestLink = (token) => `${RESIDENTS_URL()}/live-guest/${token}`;
 const fail = (res, err, code = 500, msg = 'Server error') => { if (code === 500) console.error('[podcast admin]', err); return res.status(code).json({ success: false, message: msg }); };
 
@@ -105,7 +105,7 @@ exports.remind = async (req, res) => {
     const when = show.scheduledAt ? new Date(show.scheduledAt).toLocaleString('en-NG', { weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lagos' }) : 'soon';
     const note = {
       id: `podcast-reminder:${show._id}:${Date.now()}`, type: 'podcast_reminder',
-      title: `🎙 Coming up on AreaConnect FM — ${show.title}`,
+      title: `🎙 Coming up on AreaConnector FM — ${show.title}`,
       body: String(req.body?.message || `${show.hostName} goes live ${when}. Don't miss it!`).slice(0, 240),
       meta: { kind: 'podcast_show', showId: String(show._id) },
     };
@@ -165,7 +165,7 @@ exports.createEpisode = async (req, res) => {
     if (!title?.trim() || !audioUrl) return fail(res, null, 400, 'Title and audio are required');
     const ep = await PodcastEpisode.create({
       showId: req.body.showId && mongoose.isValidObjectId(req.body.showId) ? req.body.showId : new mongoose.Types.ObjectId(),
-      hostUserId: req.user._id, hostName: req.body.hostName?.trim() || req.user.name || 'AreaConnect FM',
+      hostUserId: req.user._id, hostName: req.body.hostName?.trim() || req.user.name || 'AreaConnector FM',
       title: title.trim(), description: req.body.description || '', coverImage: req.body.coverImage || '', audioUrl,
       durationSec: Number(req.body.durationSec) || 0, guestNames: Array.isArray(req.body.guestNames) ? req.body.guestNames : [],
       category: req.body.category || 'community', tags: req.body.tags || [], seriesName: req.body.seriesName || '',

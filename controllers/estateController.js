@@ -296,7 +296,7 @@ exports.getEstateDetail = async (req, res) => {
 exports.updateEstate = async (req, res) => {
   try {
     const { name, address, settings, location: manualLocation } = req.body;
-    // Only this estate's managers (or AreaConnect admins) may change it
+    // Only this estate's managers (or AreaConnector admins) may change it
     const target = await Estate.findById(req.params.estateId).select('managerId');
     if (!target || !assertEstateAccess(req.user, target) || !['estate_manager', 'super_admin'].includes(req.user.role)) {
       return res.status(404).json({ success: false, message: 'Estate not found' });

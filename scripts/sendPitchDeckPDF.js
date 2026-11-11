@@ -1,5 +1,5 @@
 /**
- * Generates the AreaConnect pitch deck as a PDF (landscape A4, one slide per
+ * Generates the AreaConnector pitch deck as a PDF (landscape A4, one slide per
  * page) and emails it via Resend.
  *
  * Usage:
@@ -48,7 +48,7 @@ const NGN = (s) => s.replace(/₦/g, 'NGN ');
 
 const SLIDES = [
   { type: 'cover',
-    title: 'AreaConnect',
+    title: 'AreaConnector',
     subtitle: 'Smart Estate Management Platform',
     body: 'The all-in-one platform transforming how Nigerian estates manage residents, security, payments, and community — from a single dashboard.',
     tags: ['React','Node.js','MongoDB','Paystack','Socket.io'],
@@ -140,7 +140,7 @@ const SLIDES = [
       ['4.8 / 5',  'Avg. Satisfaction'],
     ],
     testimonials: [
-      ['AreaConnect reduced our security incidents by 60% in the first month.', 'Estate Manager, Lekki Phase 1'],
+      ['AreaConnector reduced our security incidents by 60% in the first month.', 'Estate Manager, Lekki Phase 1'],
       ['Collecting levies used to take weeks. Now it is automated and residents get receipts instantly.', 'Manager, Omole Phase 2, Lagos'],
       ['The visitor QR code system is a game changer. Our guards love it.', 'Facility Manager, Asokoro, Abuja'],
     ],
@@ -161,7 +161,7 @@ const SLIDES = [
     ],
   },
   { type: 'wins',
-    title: 'Why AreaConnect Wins',
+    title: 'Why AreaConnector Wins',
     subtitle: 'Unfair advantages we have built',
     advantages: [
       ['Nigeria-first Design',    'Built for Nigerian infrastructure realities — mobile-first, works on 3G, Paystack-native'],
@@ -174,12 +174,12 @@ const SLIDES = [
   },
   { type: 'cta',
     title: 'Let us transform your estate',
-    subtitle: 'Join hundreds of Nigerian estates running on AreaConnect',
+    subtitle: 'Join hundreds of Nigerian estates running on AreaConnector',
     ctas: [
-      ['Get Started',       'https://area-connector.areaconnect.pro/register'],
-      ['Schedule a Demo',   'mailto:hello@areaconnect.pro'],
+      ['Get Started',       'https://areamanager.area-connector.com/register'],
+      ['Schedule a Demo',   'mailto:hello@area-connector.com'],
     ],
-    contact: { email: 'hello@areaconnect.pro', web: 'areaconnect.pro' },
+    contact: { email: 'hello@area-connector.com', web: 'area-connector.com' },
   },
 ];
 
@@ -207,7 +207,7 @@ function drawHeader(doc, title, subtitle, accent, W) {
 
 function drawFooter(doc, index, total, W, H) {
   doc.fillColor(C.mute).font('Helvetica').fontSize(9)
-     .text('AreaConnect  ·  Pitch Deck 2026', 40, H - 24);
+     .text('AreaConnector  ·  Pitch Deck 2026', 40, H - 24);
   doc.text(`${index + 1} / ${total}`, 0, H - 24, { width: W - 40, align: 'right' });
 }
 
@@ -226,7 +226,7 @@ function drawCover(doc, s, W, H) {
      .text('PITCH DECK 2026', px, 80, { characterSpacing: 2 });
 
   doc.fillColor(C.white).font('Helvetica-Bold').fontSize(56)
-     .text('AreaConnect', px, 110);
+     .text('AreaConnector', px, 110);
 
   doc.fillColor(C.green).font('Helvetica-Bold').fontSize(18)
      .text(s.subtitle, px, 190);
@@ -535,8 +535,8 @@ async function generatePdf() {
     const doc = new PDFDocument({
       size: 'A4', layout: 'landscape', margin: 0, bufferPages: true,
       info: {
-        Title:   'AreaConnect — Pitch Deck 2026',
-        Author:  'AreaConnect Technologies',
+        Title:   'AreaConnector — Pitch Deck 2026',
+        Author:  'AreaConnector Technologies',
         Subject: 'Investor and prospect pitch deck',
       },
     });
@@ -567,13 +567,13 @@ async function generatePdf() {
   console.log(`✓ PDF generated (${(pdfBuffer.length / 1024).toFixed(1)} KB, ${SLIDES.length} slides)`);
 
   const resend = new Resend(process.env.RESEND_API_KEY);
-  const from = process.env.RESEND_FROM || 'Orizu <noreply@areaconnect.pro>';
-  const filename = `AreaConnect-Pitch-Deck-2026.pdf`;
+  const from = process.env.RESEND_FROM || 'Orizu <noreply@area-connector.com>';
+  const filename = `AreaConnector-Pitch-Deck-2026.pdf`;
 
   console.log(`→ Sending to ${to}…`);
   const { data, error } = await resend.emails.send({
     from, to,
-    subject: 'AreaConnect — Pitch Deck 2026 (for today\'s estate demo)',
+    subject: 'AreaConnector — Pitch Deck 2026 (for today\'s estate demo)',
     html: `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
@@ -588,7 +588,7 @@ async function generatePdf() {
     </div>
     <div style="padding:28px 32px;">
       <p style="font-size:15px;color:#374151;line-height:1.65;margin:0 0 16px;">
-        The full <strong>AreaConnect</strong> pitch deck is attached as a PDF for today's estate demo.
+        The full <strong>AreaConnector</strong> pitch deck is attached as a PDF for today's estate demo.
       </p>
       <p style="font-size:14px;color:#475569;line-height:1.6;margin:0 0 18px;">
         11 slides: the problem, the 5-app solution, core features, tech stack, market, pricing, traction, revenue model, why we win, and the call-to-action.

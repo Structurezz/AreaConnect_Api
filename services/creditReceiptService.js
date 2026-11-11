@@ -6,14 +6,14 @@ const { sendCreditReceiptEmail } = require('./emailService');
 const { CREDIT_PACKS } = require('../utils/credits');
 
 // Receipts for call credits — both purchases (Paystack top-ups) and bonus
-// credits gifted by AreaConnect. One builder feeds the emailed PDF and the
+// credits gifted by AreaConnector. One builder feeds the emailed PDF and the
 // in-app "download receipt", so they always match.
 
 // What a credit is worth when shown on a gift receipt (the base pack rate).
 const NAIRA_PER_CREDIT = CREDIT_PACKS[0].price / CREDIT_PACKS[0].credits;
 
 const ISSUER = {
-  name: 'AreaConnect',
+  name: 'AreaConnector',
   address: 'Area Connector Technologies · RC 9607864',
   estateCode: 'Call credits',
   logoUrl: '',
@@ -32,7 +32,7 @@ function buildCreditInvoice(tx, user) {
   const unit = user.unitId
     ? `${user.unitId.unitNumber}${user.unitId.block ? ` (Block ${user.unitId.block})` : ''}` // PDF prefixes "Unit:"
     : 'N/A';
-  const note = isGift ? (tx.description || '').replace(/^Bonus from AreaConnect( — )?/, '') : '';
+  const note = isGift ? (tx.description || '').replace(/^Bonus from AreaConnector( — )?/, '') : '';
 
   let items;
   let total;
@@ -40,7 +40,7 @@ function buildCreditInvoice(tx, user) {
     const value = Math.round(credits * NAIRA_PER_CREDIT);
     items = [
       { description: `${credits} call credits`, detail: `Bonus airtime · about ${credits} min of neighbour calls`, frequency: 'one_time', quantity: 1, unitPrice: value, vat: 0, total: value },
-      { description: 'AreaConnect gift credit', detail: note || 'A gift from AreaConnect', frequency: 'one_time', quantity: 1, unitPrice: -value, vat: 0, total: -value },
+      { description: 'AreaConnector gift credit', detail: note || 'A gift from AreaConnector', frequency: 'one_time', quantity: 1, unitPrice: -value, vat: 0, total: -value },
     ];
     total = 0;
   } else {
@@ -56,14 +56,14 @@ function buildCreditInvoice(tx, user) {
     date, dueDate: date, paidAt: date,
     status: 'paid',
     method: isGift ? 'comp' : 'paystack',
-    recordedBy: isGift ? 'AreaConnect team' : null,
+    recordedBy: isGift ? 'AreaConnector team' : null,
     estate: ISSUER,
     resident: { name: user.name, unit, email: user.email, phone: user.phone || '' },
     items,
     subtotal: total,
     total,
     notes: isGift
-      ? `Complimentary call credits from AreaConnect${note ? ` — ${note}` : ''}. Nothing to pay. Credits never expire; calls to security and estate management are always free.`
+      ? `Complimentary call credits from AreaConnector${note ? ` — ${note}` : ''}. Nothing to pay. Credits never expire; calls to security and estate management are always free.`
       : `Paid via Paystack${tx.reference ? ` (ref ${tx.reference})` : ''}. Credits never expire; 1 credit = 1 minute of neighbour calls. Calls to security and estate management are always free.`,
     meta: { isGift, credits, balanceAfter: tx.balanceAfter, note },
   };

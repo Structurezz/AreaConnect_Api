@@ -2,7 +2,7 @@ const User = require('../models/User');
 const CreditTransaction = require('../models/CreditTransaction');
 
 // ── Pricing ─────────────────────────────────────────────────────────────────
-// Credits are bought from AreaConnect (platform revenue) and spent on
+// Credits are bought from AreaConnector (platform revenue) and spent on
 // resident-to-resident calls, per started minute of connected talk time.
 // Emergency calls to security / estate management are always free.
 const RATE_PER_MINUTE = Number(process.env.CALL_CREDITS_PER_MINUTE) || 1;

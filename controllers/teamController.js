@@ -6,7 +6,7 @@ const Estate = require('../models/Estate');
 const { AREAS, PRESETS, cleanPermissions } = require('../utils/teamAccess');
 const { sendTeamInviteEmail } = require('../services/emailService');
 
-const MANAGER_APP_URL = process.env.ESTATE_MANAGER_URL || 'https://area-connector.areaconnect.pro';
+const MANAGER_APP_URL = process.env.ESTATE_MANAGER_URL || 'https://areamanager.area-connector.com';
 
 const genTempPassword = () => {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -73,7 +73,7 @@ exports.invite = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Pick at least one area this person can access' });
     }
     if (await User.exists({ email })) {
-      return res.status(409).json({ success: false, message: 'That email already has an AreaConnect account' });
+      return res.status(409).json({ success: false, message: 'That email already has an AreaConnector account' });
     }
 
     const estate = await Estate.findById(req.estateId).select('name').lean();

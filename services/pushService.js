@@ -18,7 +18,7 @@ async function getVapid() {
     }
     vapid = row.value;
   }
-  webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:support@areaconnect.pro', vapid.publicKey, vapid.privateKey);
+  webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:support@area-connector.com', vapid.publicKey, vapid.privateKey);
   return vapid;
 }
 

@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-// Audit record for a bonus-credit grant made by an AreaConnect admin. The
+// Audit record for a bonus-credit grant made by an AreaConnector admin. The
 // per-user credits themselves live in CreditTransaction (type 'grant').
 const creditGrantSchema = new mongoose.Schema({
   adminId:        { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

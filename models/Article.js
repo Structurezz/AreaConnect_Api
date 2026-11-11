@@ -18,7 +18,7 @@ const articleSchema = new mongoose.Schema({
   readMinutes:    { type: Number, default: 6 },
   body:           { type: [blockSchema], default: [] },
   topicKey:       { type: String, index: true },          // dedupe against the topic bank
-  author:         { type: String, default: 'AreaConnect Editorial' },
+  author:         { type: String, default: 'AreaConnector Editorial' },
   source:         { type: String, enum: ['gemini', 'manual'], default: 'gemini' },
   status:         { type: String, enum: ['published', 'draft'], default: 'published', index: true },
   publishedAt:    { type: Date, default: Date.now, index: true },

@@ -118,7 +118,7 @@ exports.start = async (req, res) => {
             }).select('name email').lean(),
           ]);
           if (!estate || !residents.length) return;
-          const FRONTEND_URL = process.env.FRONTEND_URL || 'https://area-mates.areaconnect.pro';
+          const FRONTEND_URL = process.env.FRONTEND_URL || 'https://areamates.area-connector.com';
           const joinUrl = `${FRONTEND_URL}/announcements?listen=${session._id}`;
           console.log(`[dj.start] blasting live announcement to ${residents.length} residents at ${estate.name}`);
           await Promise.allSettled(residents.map(r =>

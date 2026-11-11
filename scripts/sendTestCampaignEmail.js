@@ -13,10 +13,10 @@ const theme = THEMES[variant] || THEMES.residents;
 
 const COPY = {
   residents: {
-    subject:   'Welcome to AreaConnect — your estate, together',
+    subject:   'Welcome to AreaConnector — your estate, together',
     preheader: 'Book a visitor, pay dues, and meet your neighbours in one place.',
     ctaText:   'Explore My Dashboard',
-    ctaUrl:    'https://areamates.areaconnect.pro',
+    ctaUrl:    'https://areamates.area-connector.com',
     intro:     "You just joined a smarter way to live in your estate. In under a minute you can move dues from your bank, book a visitor pass, and jump into the Lounge with your neighbours. Here's what's already waiting for you:",
     cards: [
       ['📱 Book a visitor in seconds', "Generate a one-time code and share it on WhatsApp — no more phoning the gate."],
@@ -24,21 +24,21 @@ const COPY = {
       ['💬 Meet your neighbours in the Lounge', "The estate's social feed — polls, marketplace, events, chatter. Say hi."],
     ],
     highlight: '<strong>Do one thing today</strong> to make everything easier: complete your profile. It takes 30 seconds.',
-    signoff:   'Welcome aboard,<br/>The AreaConnect team',
+    signoff:   'Welcome aboard,<br/>The AreaConnector team',
   },
   managers: {
-    subject:   'Your estate is now on AreaConnect — here is what to set up first',
+    subject:   'Your estate is now on AreaConnector — here is what to set up first',
     preheader: 'Invite residents, publish dues, and get your gate wired up in an afternoon.',
     ctaText:   'Open Manager Console',
-    ctaUrl:    'https://areaconnect.pro',
-    intro:     "Your estate is live on AreaConnect. In an afternoon you can invite every resident, publish this month's dues, and give your gate the tools to stop 'my visitor is coming' calls. Start with these:",
+    ctaUrl:    'https://area-connector.com',
+    intro:     "Your estate is live on AreaConnector. In an afternoon you can invite every resident, publish this month's dues, and give your gate the tools to stop 'my visitor is coming' calls. Start with these:",
     cards: [
       ['👥 Invite residents in bulk', "Paste a WhatsApp list or upload a CSV — everyone signs up in one tap and lands in the right unit."],
       ['💳 Publish dues in minutes', "Set service charges, generate invoices, and let residents pay by card, transfer or wallet. Auto-reconciled."],
       ['🚪 Give your gate a superpower', "Guards see visitors before they arrive, log entries with one tap, and raise alerts you actually hear."],
     ],
     highlight: '<strong>Save your first hour today</strong>: create the resident invite link and drop it in your estate WhatsApp group.',
-    signoff:   'To a quieter estate,<br/>The AreaConnect team',
+    signoff:   'To a quieter estate,<br/>The AreaConnector team',
   },
 };
 
@@ -79,7 +79,7 @@ ${cardHtml}
       ctaText: c.ctaText,
       ctaUrl: c.ctaUrl,
       theme,
-      brand: { name: 'AreaConnect', logoUrl: process.env.BRAND_LOGO_URL || '' },
+      brand: { name: 'AreaConnector', logoUrl: process.env.BRAND_LOGO_URL || '' },
     });
     console.log('Result:', r);
     console.log('If Resend accepted it, check the inbox in a moment.');

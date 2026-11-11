@@ -7,7 +7,7 @@ const { emitNotification } = require('../services/socketService');
 const CreditTransaction = require('../models/CreditTransaction');
 const { emailCreditReceiptsInBackground } = require('../services/creditReceiptService');
 
-// AreaConnect admins giving bonus call credits ("airtime") — to any users on
+// AreaConnector admins giving bonus call credits ("airtime") — to any users on
 // the platform, or to every resident of one or more estates.
 
 const MAX_PER_USER = 10_000;
@@ -78,7 +78,7 @@ exports.grant = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    const description = note ? `Bonus from AreaConnect — ${note}` : 'Bonus from AreaConnect';
+    const description = note ? `Bonus from AreaConnector — ${note}` : 'Bonus from AreaConnector';
     let credited = 0;
     let failed = 0;
     const creditedRefs = [];
@@ -97,7 +97,7 @@ exports.grant = async (req, res) => {
         emitNotification(null, {
           id: `grant-${grant._id}-${batch[j]._id}`, type: 'credits_added',
           title: `🎁 ${credits} bonus call credits`,
-          body: `${note || 'A gift from AreaConnect'} — balance ${r.value.balance}`,
+          body: `${note || 'A gift from AreaConnector'} — balance ${r.value.balance}`,
           meta: { balance: r.value.balance, grantId: String(grant._id) },
         }, batch[j]._id);
       });

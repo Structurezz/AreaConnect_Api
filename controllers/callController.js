@@ -15,7 +15,7 @@ const { emailCreditReceipt, creditReceiptPdf } = require('../services/creditRece
 
 const PAYSTACK_BASE = 'https://api.paystack.co';
 const paystackHeaders = () => ({ Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`, 'Content-Type': 'application/json' });
-const RESIDENTS_URL = () => process.env.RESIDENTS_URL || 'https://area-mates.areaconnect.pro';
+const RESIDENTS_URL = () => process.env.RESIDENTS_URL || 'https://areamates.area-connector.com';
 const STAFF_ROLES = ['security', 'estate_manager', 'super_admin'];
 
 const unitLabel = (u) => (u ? `${u.block ? `Block ${u.block} · ` : ''}Unit ${u.unitNumber}` : '');
@@ -386,7 +386,7 @@ exports.getBuzzes = async (req, res) => {
   res.json({ success: true, data: list });
 };
 
-// ── AreaConnect admin calling (platform-wide, always free) ──────────────────
+// ── AreaConnector admin calling (platform-wide, always free) ──────────────────
 
 exports.adminDirectory = async (req, res) => {
   try {
@@ -417,7 +417,7 @@ exports.adminStartCall = async (req, res) => {
     const call = await Call.create({ estateId, callerId: req.user._id, calleeId: callee._id, kind: 'staff', ratePerMinute: 0 });
     calls.startRinging(call, {
       callId: String(call._id), kind: 'staff',
-      from: { _id: req.user._id, name: `${req.user.name} · AreaConnect`, role: 'super_admin', profilePhoto: (await require('../models/User').findById(req.user._id).select('profilePhoto').lean())?.profilePhoto || '', unit: 'AreaConnect support', online: true },
+      from: { _id: req.user._id, name: `${req.user.name} · AreaConnector`, role: 'super_admin', profilePhoto: (await require('../models/User').findById(req.user._id).select('profilePhoto').lean())?.profilePhoto || '', unit: 'AreaConnector support', online: true },
       iceServers: iceServers(),
     });
     res.status(201).json({ success: true, data: { call, callee: publicProfile(callee), iceServers: iceServers() } });

@@ -1,4 +1,4 @@
-// Site types — AreaConnect runs estates, schools, universities, hotels, industrial sites /
+// Site types — AreaConnector runs estates, schools, universities, hotels, industrial sites /
 // offices and hospitals on the same platform. The type picks the words the
 // apps use (TERMS), which modules start switched on (DEFAULT_MODULES, which
 // the manager can override per site) and the pass categories residents can

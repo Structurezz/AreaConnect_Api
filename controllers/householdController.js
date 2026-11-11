@@ -24,7 +24,7 @@ const MAX_MEMBERS = 10;
 
 // ?site= lets the sign-in page use the site's words before login
 const residentsLoginUrl = (type) =>
-  `${process.env.RESIDENTS_URL || process.env.CLIENT_URL || 'https://area-mates.areaconnect.pro'}/login${type && type !== 'estate' ? `?site=${type}` : ''}`;
+  `${process.env.RESIDENTS_URL || process.env.CLIENT_URL || 'https://areamates.area-connector.com'}/login${type && type !== 'estate' ? `?site=${type}` : ''}`;
 const loginUrlFor = async (estateId) => residentsLoginUrl((await siteTypes.siteFor(estateId).catch(() => null))?.site?.type);
 
 const genTempPassword = () => {
@@ -104,7 +104,7 @@ async function readForm(body) {
     permissions:  cleanPermissions(body.permissions),
   };
   if (!form.name || !isEmail(form.email)) return { error: 'Name and a valid email are required', status: 400 };
-  if (await User.exists({ email: form.email })) return { error: 'That email already has an AreaConnect account', status: 409 };
+  if (await User.exists({ email: form.email })) return { error: 'That email already has an AreaConnector account', status: 409 };
   return { form };
 }
 

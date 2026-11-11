@@ -14,7 +14,7 @@ const WELCOME_NEW_MEMBERS = {
   },
   content: {
     badge: 'NEW HERE?',
-    headline: 'Welcome to AreaConnect',
+    headline: 'Welcome to AreaConnector',
     subheadline: "Your estate, together — everything in one place.",
     body: [
       "You're now part of a smarter neighbourhood.",
@@ -32,11 +32,11 @@ const WELCOME_NEW_MEMBERS = {
     },
   },
   email: {
-    subject: 'Welcome to AreaConnect — your estate, together',
+    subject: 'Welcome to AreaConnector — your estate, together',
     preheader: 'A quick tour of what you can do next.',
     sendOnUserSignup: true,
     htmlBody: `
-      <h2 style="font-size:22px;font-weight:800;color:#0F172A;letter-spacing:-0.02em;margin-bottom:8px;">Welcome to AreaConnect 👋</h2>
+      <h2 style="font-size:22px;font-weight:800;color:#0F172A;letter-spacing:-0.02em;margin-bottom:8px;">Welcome to AreaConnector 👋</h2>
       <p style="font-size:15px;color:#475569;line-height:1.65;margin-bottom:20px;">
         You've just joined a smarter way to live in your estate. Here's what you can do right now:
       </p>

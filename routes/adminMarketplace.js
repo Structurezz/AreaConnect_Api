@@ -6,7 +6,7 @@ const Withdrawal = require('../models/Withdrawal');
 const escrow = require('../services/marketplaceEscrow');
 const { sellerLiability, ESCROW } = require('../services/marketplaceAdmin');
 
-// AreaConnect admins: marketplace revenue (commission), escrow, seller payouts.
+// AreaConnector admins: marketplace revenue (commission), escrow, seller payouts.
 router.use(authenticate, authorize('super_admin'));
 
 const since = (days) => (days ? { paidAt: { $gte: new Date(Date.now() - days * 86400_000) } } : { paidAt: { $ne: null } });

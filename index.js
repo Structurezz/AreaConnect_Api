@@ -30,15 +30,13 @@ app.use(mongoSanitize());
 
 // CORS
 const allowedOrigins = [
-  'https://area-mates.areaconnect.pro',
-  'https://area-connector.areaconnect.pro',
-  'https://area-connect-admin.areaconnect.pro',
-  'https://area-connect-security.areaconnect.pro',
-  'https://areaconnector-guards-production.up.railway.app',
-  'https://area-guards.areaconnect.pro',
-  'https://admin.areaconnect.pro',
+  // area-connector.com (current) — subdomains are matched by the regex below
+  'https://area-connector.com',
+  'https://www.area-connector.com',
+  // areaconnect.pro (previous domain) — kept while DNS and links move over
   'https://areaconnect.pro',
   'https://www.areaconnect.pro',
+  'https://areaconnector-guards-production.up.railway.app',
   ...(process.env.EXTRA_ORIGINS ? process.env.EXTRA_ORIGINS.split(',').map(o => o.trim()) : []),
   ...[5173, 5174, 5175, 5176, 5177, 5178, 5180, 5181].map(p => `http://localhost:${p}`),
 ];
@@ -46,7 +44,7 @@ const allowedOrigins = [
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin) || /\.up\.railway\.app$/.test(origin) || /\.areaconnect\.pro$/.test(origin)) {
+    if (allowedOrigins.includes(origin) || /\.up\.railway\.app$/.test(origin) || /\.area-connector\.com$/.test(origin) || /\.areaconnect\.pro$/.test(origin)) {
       return callback(null, true);
     }
     callback(new Error(`CORS: origin ${origin} not allowed`));

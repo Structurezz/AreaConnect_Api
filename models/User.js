@@ -76,7 +76,7 @@ const userSchema = new mongoose.Schema({
   refreshToken: { type: String, default: null },
   lastSeen: { type: Date, default: Date.now },
   walletBalance: { type: Number, default: 0 },
-  // Prepaid credits for resident-to-resident calls (bought from AreaConnect).
+  // Prepaid credits for resident-to-resident calls (bought from AreaConnector).
   // Only ever changed through utils/credits.js so every change is ledgered.
   callCredits: { type: Number, default: 0, min: 0 },
   paystackRecipientCode: { type: String, default: null },

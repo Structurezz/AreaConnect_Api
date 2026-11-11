@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const podcastEpisodeSchema = new mongoose.Schema({
   showId:          { type: mongoose.Schema.Types.ObjectId, ref: 'PodcastShow', required: true, index: true },
   hostUserId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  hostName:        { type: String, default: 'AreaConnect FM' },
+  hostName:        { type: String, default: 'AreaConnector FM' },
   title:           { type: String, required: true },
   description:     { type: String, default: '' },
   coverImage:      { type: String, default: '' },

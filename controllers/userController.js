@@ -122,10 +122,10 @@ exports.adminResetPassword = async (req, res) => {
       const estate = user.estateId ? await Estate.findById(user.estateId).select('name') : null;
       const emailService = require('../services/emailService');
       const loginUrl = user.role === 'security'
-        ? (process.env.SECURITY_URL || 'https://area-guards.areaconnect.pro')
+        ? (process.env.SECURITY_URL || 'https://areaguards.area-connector.com')
         : user.role === 'estate_manager'
-          ? (process.env.ESTATE_MANAGER_URL || 'https://area-connector.areaconnect.pro')
-          : (process.env.RESIDENT_URL || 'https://area-mates.areaconnect.pro');
+          ? (process.env.ESTATE_MANAGER_URL || 'https://areamanager.area-connector.com')
+          : (process.env.RESIDENT_URL || 'https://areamates.area-connector.com');
       await emailService.sendInviteEmail({
         to: user.email,
         name: user.name,

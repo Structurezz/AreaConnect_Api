@@ -2,7 +2,7 @@
 // job picks the first topic that hasn't been written yet. When the bank runs
 // out, the writer asks Gemini for fresh topics (see services/blogWriter.js).
 //
-// Every topic ties back to something AreaConnect actually does.
+// Every topic ties back to something AreaConnector actually does.
 
 module.exports = [
   // ── Guides / estate management ────────────────────────────────────────
@@ -105,20 +105,20 @@ module.exports = [
   ['Management', 'Reducing estate manager burnout'],
   ['Management', 'Data protection basics for Nigerian estate managers'],
 
-  // ── Product (how-to with AreaConnect) ─────────────────────────────────
-  ['Product', 'Introducing AreaConnect — why we built it'],
-  ['Product', 'A tour of the three AreaConnect apps: Admin, AreaMates and Guard'],
+  // ── Product (how-to with AreaConnector) ─────────────────────────────────
+  ['Product', 'Introducing AreaConnector — why we built it'],
+  ['Product', 'A tour of the three AreaConnector apps: Admin, AreaMates and Guard'],
   ['Product', 'How visitor passes work in AreaMates, step by step'],
   ['Product', 'Inside the Guard app: verifying a visitor in seconds'],
-  ['Product', 'Setting up payment schedules in AreaConnect Admin'],
+  ['Product', 'Setting up payment schedules in AreaConnector Admin'],
   ['Product', 'In-app calls: reaching the gate without sharing your number'],
   ['Product', 'The AreaMates safety tools explained'],
-  ['Product', 'Getting started with the AreaConnect marketplace'],
+  ['Product', 'Getting started with the AreaConnector marketplace'],
   ['Product', 'The resident lounge: feed, stories, polls and the DJ queue'],
-  ['Product', 'Bulk-importing residents with a CSV in AreaConnect'],
+  ['Product', 'Bulk-importing residents with a CSV in AreaConnector'],
   ['Product', 'Instant passes and early arrivals: handling guests at the gate'],
-  ['Product', 'Panic alerts in AreaConnect: what happens when you press SOS'],
+  ['Product', 'Panic alerts in AreaConnector: what happens when you press SOS'],
   ['Product', 'Invoices and receipts in AreaMates'],
   ['Product', 'Managing guards and gates from the Admin dashboard'],
-  ['Product', 'Meet Nkechi, the AreaConnect AI assistant'],
+  ['Product', 'Meet Nkechi, the AreaConnector AI assistant'],
 ];
