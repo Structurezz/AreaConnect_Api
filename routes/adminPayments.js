@@ -252,4 +252,70 @@ router.post('/paystack/attach', async (req, res) => {
   }
 });
 
+// Paystack's verify payload, trimmed to what the admin detail panel shows.
+function gatewayView(d) {
+  if (!d) return null;
+  const a = d.authorization || {};
+  return {
+    status: d.status, reference: d.reference, amount: (d.amount || 0) / 100, currency: d.currency,
+    fees: d.fees != null ? d.fees / 100 : null, channel: d.channel, gatewayResponse: d.gateway_response,
+    paidAt: d.paid_at || d.paidAt || null, createdAt: d.created_at || d.createdAt || null,
+    ipAddress: d.ip_address || null, domain: d.domain || null,
+    customer: d.customer ? { email: d.customer.email, name: [d.customer.first_name, d.customer.last_name].filter(Boolean).join(' ') || null, phone: d.customer.phone || null, code: d.customer.customer_code } : null,
+    card: a.last4 ? { brand: a.brand || a.card_type, last4: a.last4, bank: a.bank, expiry: a.exp_month && a.exp_year ? `${a.exp_month}/${String(a.exp_year).slice(-2)}` : null, country: a.country_code } : null,
+    bank: a.bank && !a.last4 ? a.bank : null,
+    metadata: d.metadata && typeof d.metadata === 'object' ? d.metadata : {},
+    log: Array.isArray(d.log?.history) ? d.log.history.map(h => ({ type: h.type, message: h.message, time: h.time })) : [],
+  };
+}
+
+async function verifyRef(reference) {
+  if (!reference || !process.env.PAYSTACK_SECRET_KEY) return null;
+  try {
+    const { data } = await axios.get(`${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(reference)}`, { headers: paystackHeaders(), timeout: 8000 });
+    return gatewayView(data?.data);
+  } catch (err) {
+    return { error: err.response?.data?.message || 'Could not reach Paystack' };
+  }
+}
+
+// GET /api/admin/payments/paystack/:reference — one Paystack capture in full
+router.get('/paystack/:reference', async (req, res) => {
+  try {
+    const gateway = await verifyRef(req.params.reference);
+    const payment = await Payment.findOne({ paystackReference: req.params.reference })
+      .populate('estateId', 'name estateCode site.type').populate('residentId', 'name email').populate('scheduleId', 'title').lean();
+    return res.json({ success: true, data: { gateway, payment } });
+  } catch (err) {
+    console.error('[admin/paystack detail]', err.message);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// GET /api/admin/payments/:id — one payment with member, unit, bill,
+// site, who recorded it, the live Paystack record and the member's history.
+router.get('/:id', async (req, res) => {
+  try {
+    if (!/^[a-f0-9]{24}$/i.test(req.params.id)) return res.status(404).json({ success: false, message: 'Payment not found' });
+    const payment = await Payment.findById(req.params.id)
+      .populate({ path: 'residentId', select: 'name email phone isActive unitId createdAt', populate: { path: 'unitId', select: 'unitNumber block type' } })
+      .populate('scheduleId', 'title description type amount frequency dueDate isActive')
+      .populate({ path: 'estateId', select: 'name estateCode city state site.type managerId', populate: { path: 'managerId', select: 'name email phone' } })
+      .populate('recordedBy', 'name email role')
+      .lean();
+    if (!payment) return res.status(404).json({ success: false, message: 'Payment not found' });
+
+    const [gateway, history] = await Promise.all([
+      verifyRef(payment.paystackReference),
+      Payment.find({ residentId: payment.residentId?._id, _id: { $ne: payment._id } })
+        .populate('scheduleId', 'title').sort({ createdAt: -1 }).limit(8)
+        .select('amount status paidAt createdAt scheduleId method').lean(),
+    ]);
+    return res.json({ success: true, data: { payment, gateway, history } });
+  } catch (err) {
+    console.error('[admin/payments detail]', err.message);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 module.exports = router;
