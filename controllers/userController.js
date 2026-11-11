@@ -177,3 +177,69 @@ exports.updateUser = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
+// GET /api/users/:id/detail — one account in full for the admin side panel:
+// profile, site, unit, household, care team, and recent activity across
+// payments, visitor passes, alerts, calls, credits, payouts and marketplace.
+exports.getUserDetail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!/^[a-f0-9]{24}$/i.test(id)) return res.status(404).json({ success: false, message: 'User not found' });
+    const user = await User.findById(id)
+      .select('-passwordHash -refreshToken')
+      .populate({ path: 'estateId', select: 'name estateCode city state site.type isActive managerId', populate: { path: 'managerId', select: 'name email' } })
+      .populate('managedEstates', 'name estateCode site.type isActive')
+      .populate('requestedEstateId', 'name estateCode')
+      .populate('unitId', 'unitNumber block type status')
+      .populate('stay.roomId', 'unitNumber block')
+      .populate('householdHead', 'name email phone')
+      .populate('assignedTo', 'name siteRole')
+      .populate('invitedBy', 'name email')
+      .lean();
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const m = (name) => require(`../models/${name}`);
+    const uid = user._id;
+    const safe = (p, fb) => p.catch(() => fb);
+    const [
+      household, payments, payTotals, visitors, visitorCount, verifiedCount, alerts, alertCount,
+      calls, callCount, credits, withdrawals, buys, sells, requests, sub,
+    ] = await Promise.all([
+      safe(User.find({ householdHead: uid }).select('name email relationship householdStatus isActive').lean(), []),
+      safe(m('Payment').find({ residentId: uid }).populate('scheduleId', 'title').sort({ createdAt: -1 }).limit(10).select('amount status paidAt createdAt method scheduleId paystackReference').lean(), []),
+      safe(m('Payment').aggregate([{ $match: { residentId: uid } }, { $group: { _id: '$status', total: { $sum: '$amount' }, count: { $sum: 1 } } }]), []),
+      safe(m('Visitor').find({ hostResidentId: uid }).sort({ createdAt: -1 }).limit(8).select('visitorName purpose status expectedDate entryTime exitTime category visitorCode createdAt').lean(), []),
+      safe(m('Visitor').countDocuments({ hostResidentId: uid }), 0),
+      user.role === 'security' ? safe(m('Visitor').countDocuments({ verifiedBySecurityId: uid }), 0) : 0,
+      safe(m('Alert').find({ residentId: uid }).sort({ createdAt: -1 }).limit(5).select('type status title createdAt').lean(), []),
+      safe(m('Alert').countDocuments({ residentId: uid }), 0),
+      safe(m('Call').find({ $or: [{ callerId: uid }, { calleeId: uid }] }).populate('callerId', 'name').populate('calleeId', 'name').sort({ createdAt: -1 }).limit(5).select('callerId calleeId status kind durationSec creditsCharged createdAt').lean(), []),
+      safe(m('Call').countDocuments({ $or: [{ callerId: uid }, { calleeId: uid }] }), 0),
+      safe(m('CreditTransaction').find({ userId: uid }).sort({ createdAt: -1 }).limit(6).select('type amount balanceAfter description createdAt').lean(), []),
+      safe(m('Withdrawal').find({ userId: uid }).sort({ createdAt: -1 }).limit(5).select('amount status reference createdAt source').lean(), []),
+      safe(m('MarketplaceOrder').aggregate([{ $match: { buyerId: uid } }, { $group: { _id: null, count: { $sum: 1 }, total: { $sum: '$amount' } } }]), []),
+      safe(m('MarketplaceOrder').aggregate([{ $match: { sellerId: uid } }, { $group: { _id: null, count: { $sum: 1 }, total: { $sum: '$sellerAmount' } } }]), []),
+      safe(m('ServiceRequest').countDocuments({ requesterId: uid }), 0),
+      user.role === 'estate_manager' && user.estateId?._id
+        ? safe(m('Subscription').findOne({ estateId: user.estateId._id }).populate('planId', 'name').select('status planId nextBillingDate trialEndsAt').lean(), null)
+        : null,
+    ]);
+
+    const byStatus = Object.fromEntries(payTotals.map((p) => [p._id, { total: p.total, count: p.count }]));
+    return res.json({
+      success: true,
+      data: {
+        user, household, subscription: sub,
+        payments: { recent: payments, byStatus },
+        visitors: { recent: visitors, total: visitorCount, verified: verifiedCount },
+        alerts: { recent: alerts, total: alertCount },
+        calls: { recent: calls, total: callCount },
+        credits, withdrawals, requests,
+        marketplace: { bought: buys[0] || { count: 0, total: 0 }, sold: sells[0] || { count: 0, total: 0 } },
+      },
+    });
+  } catch (err) {
+    console.error('[getUserDetail]', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};

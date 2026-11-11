@@ -8,6 +8,7 @@ router.use(authenticate, authorize('super_admin'));
 
 router.get('/',       ctrl.getUsers);
 router.get('/stats',  ctrl.getUserStats);
+router.get('/:id/detail', ctrl.getUserDetail);
 router.patch('/:id',  ctrl.updateUser);
 router.post('/:id/reset-password', ctrl.adminResetPassword);
 router.post('/bulk',  ctrl.bulkUpdate);
