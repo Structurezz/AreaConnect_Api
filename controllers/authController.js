@@ -480,7 +480,7 @@ exports.requestPasswordReset = async (req, res) => {
       }
 
       // Fire-and-forget email to each manager
-      const FRONTEND_URL = process.env.ESTATE_MANAGER_URL || process.env.FRONTEND_URL || 'https://areamanager.area-connector.com';
+      const FRONTEND_URL = process.env.ESTATE_MANAGER_URL || process.env.FRONTEND_URL || 'https://manager.area-connector.com';
       const reviewUrl = `${FRONTEND_URL}/settings/password-requests`;
       Promise.allSettled(managers.map(m =>
         emailService.sendPasswordResetRequestEmail?.({

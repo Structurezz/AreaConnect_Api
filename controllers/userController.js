@@ -124,7 +124,7 @@ exports.adminResetPassword = async (req, res) => {
       const loginUrl = user.role === 'security'
         ? (process.env.SECURITY_URL || 'https://areaguards.area-connector.com')
         : user.role === 'estate_manager'
-          ? (process.env.ESTATE_MANAGER_URL || 'https://areamanager.area-connector.com')
+          ? (process.env.ESTATE_MANAGER_URL || 'https://manager.area-connector.com')
           : (process.env.RESIDENT_URL || 'https://areamates.area-connector.com');
       await emailService.sendInviteEmail({
         to: user.email,

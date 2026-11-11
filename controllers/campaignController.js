@@ -43,7 +43,7 @@ const DAY = 86400000;
 const dayKey = (d) => new Date(d).toISOString().slice(0, 10);
 const brandFor = () => ({ name: 'AreaConnector', logoUrl: process.env.BRAND_LOGO_URL || '' });
 const appUrl = (role) => role === 'estate_manager'
-  ? (process.env.MANAGER_URL || 'https://areamanager.area-connector.com')
+  ? (process.env.MANAGER_URL || 'https://manager.area-connector.com')
   : (process.env.RESIDENTS_URL || 'https://areamates.area-connector.com');
 // Relative CTA paths ("/payments") become absolute links in emails and pushes.
 const absUrl = (url, role) => (!url ? '' : /^https?:\/\//.test(url) ? url : `${appUrl(role)}${url.startsWith('/') ? '' : '/'}${url}`);

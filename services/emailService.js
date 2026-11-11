@@ -340,7 +340,7 @@ const fmtNGN = (n) => `&#8358;${Number(n || 0).toLocaleString('en-NG', { minimum
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' }) : '&mdash;';
 
 // Estate manager web app — links in manager-facing emails (upgrade, dashboard)
-const FRONTEND_URL = process.env.ESTATE_MANAGER_URL || 'https://areamanager.area-connector.com';
+const FRONTEND_URL = process.env.ESTATE_MANAGER_URL || 'https://manager.area-connector.com';
 const RESIDENTS_APP_URL = process.env.RESIDENTS_URL || 'https://areamates.area-connector.com';
 const DEFAULT_HERO  = `${FRONTEND_URL}/estate-hero.jpeg`;
 
@@ -1143,7 +1143,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
   if (!process.env.RESEND_API_KEY) return { skipped: true };
 
   const REPLY_TO  = 'michael@area-connector.com';
-  const REGISTER  = 'https://areamanager.area-connector.com/register';
+  const REGISTER  = 'https://manager.area-connector.com/register';
   const firstName = escapeHtml((name || '').trim().split(' ')[0] || 'there');
   const org       = escapeHtml(company || 'your estate');
   const where     = city ? ` in ${escapeHtml(city)}` : '';
@@ -1696,8 +1696,8 @@ const ALERT_TYPE_LABEL = {
 const ALERT_SEVERITY_COLOR = { critical: '#B91C1C', high: '#DC2626', medium: '#D97706', low: '#2563EB' };
 const APP_URL_BY_ROLE = {
   resident:       process.env.RESIDENTS_URL || 'https://areamates.area-connector.com',
-  estate_manager: process.env.CLIENT_URL    || 'https://areamanager.area-connector.com',
-  super_admin:    process.env.CLIENT_URL    || 'https://areamanager.area-connector.com',
+  estate_manager: process.env.CLIENT_URL    || 'https://manager.area-connector.com',
+  super_admin:    process.env.CLIENT_URL    || 'https://manager.area-connector.com',
   security:       process.env.SECURITY_URL  || 'https://areaguards.area-connector.com',
 };
 
@@ -1872,7 +1872,7 @@ const sendCreditReceiptEmail = async ({ to, name, inv, pdf }) => {
 };
 
 // ── Admin onboarding: manager welcome (one or many estates) ───────────────────
-const MANAGER_APP = () => process.env.ESTATE_MANAGER_URL || 'https://areamanager.area-connector.com';
+const MANAGER_APP = () => process.env.ESTATE_MANAGER_URL || 'https://manager.area-connector.com';
 
 const onboardShell = ({ eyebrow, title, body }) => `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>

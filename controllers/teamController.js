@@ -6,7 +6,7 @@ const Estate = require('../models/Estate');
 const { AREAS, PRESETS, cleanPermissions } = require('../utils/teamAccess');
 const { sendTeamInviteEmail } = require('../services/emailService');
 
-const MANAGER_APP_URL = process.env.ESTATE_MANAGER_URL || 'https://areamanager.area-connector.com';
+const MANAGER_APP_URL = process.env.ESTATE_MANAGER_URL || 'https://manager.area-connector.com';
 
 const genTempPassword = () => {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';

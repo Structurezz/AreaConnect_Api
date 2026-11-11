@@ -176,7 +176,7 @@ const SLIDES = [
     title: 'Let us transform your estate',
     subtitle: 'Join hundreds of Nigerian estates running on AreaConnector',
     ctas: [
-      ['Get Started',       'https://areamanager.area-connector.com/register'],
+      ['Get Started',       'https://manager.area-connector.com/register'],
       ['Schedule a Demo',   'mailto:hello@area-connector.com'],
     ],
     contact: { email: 'hello@area-connector.com', web: 'area-connector.com' },
