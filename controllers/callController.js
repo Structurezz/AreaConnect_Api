@@ -25,10 +25,20 @@ const publicProfile = (u) => u && ({
   unit: unitLabel(u.unitId), online: isOnline(u._id),
 });
 
-// STUN only (free, public) — lets two devices find a direct path when one
-// exists. When it doesn't, calls carry on over our own audio relay
-// (services/callService.relayAudio); there is no TURN dependency.
-const iceServers = () => [{ urls: ['stun:stun.l.google.com:19302', 'stun:global.stun.twilio.com:3478'] }];
+// STUN (free, public) lets two devices find a direct path when one exists.
+// When it doesn't, calls carry on over our own audio relay
+// (services/callService.relayAudio). Optionally, a TURN server makes direct
+// links work behind strict NATs (common on mobile data) — set
+//   TURN_URLS="turn:host:3478,turns:host:443?transport=tcp"
+//   TURN_USERNAME=…  TURN_CREDENTIAL=…
+// and it's included automatically. Without them nothing changes.
+const TURN_URLS = (process.env.TURN_URLS || '').split(',').map((s) => s.trim()).filter(Boolean);
+const iceServers = () => [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:global.stun.twilio.com:3478'] },
+  ...(TURN_URLS.length && process.env.TURN_USERNAME && process.env.TURN_CREDENTIAL
+    ? [{ urls: TURN_URLS, username: process.env.TURN_USERNAME, credential: process.env.TURN_CREDENTIAL }]
+    : []),
+];
 
 // Is `user` (any role) a member of `estateId`? Managers may manage several.
 const inEstate = (user, estateId) =>
