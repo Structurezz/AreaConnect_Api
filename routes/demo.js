@@ -165,11 +165,11 @@ router.post('/book', bookLimiter, async (req, res) => {
 
     const topic = `AreaConnector demo — ${name}${company ? ` (${company})` : ''}`;
     const details = [
-      'A 30-minute walkthrough of the AreaConnector estate management platform.',
+      'A 30-minute walkthrough of the AreaConnector platform for estates, campuses, hotels, workplaces and hospitals.',
       '',
       `Name: ${name}`,
       `Email: ${email}`,
-      company ? `Estate / company: ${company}` : null,
+      company ? `Site / organisation: ${company}` : null,
       phone ? `Phone: ${phone}` : null,
       notes ? `\nNotes:\n${notes}` : null,
     ].filter(v => v !== null).join('\n');
@@ -233,7 +233,7 @@ router.post('/book', bookLimiter, async (req, res) => {
             <div style="margin:0 0 22px;">${brandMark({ size: 16 })}</div>
             <h2 style="font-size:20px;font-weight:800;color:#111;margin:0 0 20px;">New demo call booked</h2>
             <table style="width:100%;border-collapse:collapse;">
-              ${row('When', `${when} WAT`)}${row('Name', name)}${row('Email', email)}${row('Estate / company', company)}${row('Phone', phone)}
+              ${row('When', `${when} WAT`)}${row('Name', name)}${row('Email', email)}${row('Site / organisation', company)}${row('Phone', phone)}
               ${startLink ? `<tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Start meeting</td><td style="padding:6px 0;"><a href="${esc(startLink)}" style="color:#10B981;font-weight:600;">Start as host</a></td></tr>` : ''}
               ${joinLink ? `<tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">${meetingName}</td><td style="padding:6px 0;"><a href="${esc(joinLink)}" style="color:#10B981;font-weight:600;">${esc(joinLink)}</a></td></tr>` : ''}
             </table>

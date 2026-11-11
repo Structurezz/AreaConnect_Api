@@ -31,7 +31,7 @@ router.post('/', require('../middleware/rateLimits').contact, async (req, res) =
           <table style="width:100%;border-collapse:collapse;">
             <tr><td style="padding:8px 0;color:#6b7280;font-size:13px;width:120px;">Name</td><td style="padding:8px 0;font-weight:600;color:#111;">${name}</td></tr>
             <tr><td style="padding:8px 0;color:#6b7280;font-size:13px;">Email</td><td style="padding:8px 0;font-weight:600;color:#111;"><a href="mailto:${email}" style="color:#10B981;">${email}</a></td></tr>
-            ${company ? `<tr><td style="padding:8px 0;color:#6b7280;font-size:13px;">Estate/Company</td><td style="padding:8px 0;font-weight:600;color:#111;">${company}</td></tr>` : ''}
+            ${company ? `<tr><td style="padding:8px 0;color:#6b7280;font-size:13px;">Site / organisation</td><td style="padding:8px 0;font-weight:600;color:#111;">${company}</td></tr>` : ''}
             <tr><td style="padding:8px 0;color:#6b7280;font-size:13px;">Subject</td><td style="padding:8px 0;font-weight:600;color:#111;">${subject}</td></tr>
           </table>
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
