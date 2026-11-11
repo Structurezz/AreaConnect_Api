@@ -80,7 +80,7 @@ const icsText = (s = '') => String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;'
 
 function icsInvite({ uid, start, end, summary, description, location, organizer, attendee }) {
   return [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//AreaConnect//Demo booking//EN', 'CALSCALE:GREGORIAN', 'METHOD:REQUEST',
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//AreaConnector//Demo booking//EN', 'CALSCALE:GREGORIAN', 'METHOD:REQUEST',
     'BEGIN:VEVENT',
     `UID:${uid}`,
     `DTSTAMP:${icsDate(new Date())}`,
@@ -219,7 +219,7 @@ router.post('/book', bookLimiter, async (req, res) => {
         replyTo: HOST_EMAIL,
         subject: `Your AreaConnector demo — ${when} WAT`,
         html: guestEmailHtml({ name, when, joinLink, meetingName, start, end }),
-        attachments: [{ filename: 'areaconnect-demo.ics', content: Buffer.from(ics).toString('base64') }],
+        attachments: [{ filename: 'areaconnector-demo.ics', content: Buffer.from(ics).toString('base64') }],
       })).catch(err => console.error('Demo guest email error:', err));
 
       // To the host.
@@ -240,7 +240,7 @@ router.post('/book', bookLimiter, async (req, res) => {
             ${notes ? `<hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;"><p style="color:#374151;font-size:14px;line-height:1.7;white-space:pre-wrap;">${esc(notes)}</p>` : ''}
             ${joinLink ? '' : '<p style="color:#b45309;font-size:13px;margin-top:20px;">No meeting provider is connected — send the guest a meeting link manually.</p>'}
           </div>`,
-        attachments: [{ filename: 'areaconnect-demo.ics', content: Buffer.from(ics).toString('base64') }],
+        attachments: [{ filename: 'areaconnector-demo.ics', content: Buffer.from(ics).toString('base64') }],
       })).catch(err => console.error('Demo host email error:', err));
     }
 
