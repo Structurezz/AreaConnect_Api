@@ -5,13 +5,16 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { writeArticle } = require('../services/blogWriter');
 
 const router = express.Router();
-const LIST_FIELDS = 'slug title excerpt category readMinutes publishedAt author keywords';
+const LIST_FIELDS = 'slug title excerpt category sector readMinutes publishedAt author keywords';
 
-// GET /api/blog?category=Security&page=1&limit=12  (limit=all for the build-time prerender)
+// GET /api/blog?category=Security&sector=hotel&page=1&limit=12  (limit=all for the build-time prerender)
 router.get('/', async (req, res) => {
   try {
     const filter = { status: 'published', publishedAt: { $lte: new Date() } };
     if (req.query.category) filter.category = req.query.category;
+    // Solution filter; articles written before sectors existed count as estates.
+    const SECTORS = ['estate', 'university', 'school', 'hotel', 'industrial', 'hospital'];
+    if (SECTORS.includes(req.query.sector)) filter.sector = req.query.sector === 'estate' ? { $in: ['estate', null] } : req.query.sector;
     const all = req.query.limit === 'all';
     const limit = all ? 0 : Math.min(Number(req.query.limit) || 12, 50);
     const page = Math.max(Number(req.query.page) || 1, 1);
