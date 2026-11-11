@@ -18,14 +18,15 @@ const articleSchema = new mongoose.Schema({
   readMinutes:    { type: Number, default: 6 },
   body:           { type: [blockSchema], default: [] },
   topicKey:       { type: String, index: true },          // dedupe against the topic bank
-  // Cover photo stored in GridFS (/files/:id); credit as Pexels requires
+  // Cover photo stored in GridFS (/files/:id) with the photographer credit
   cover: {
     url:             { type: String, default: '' },
     alt:             { type: String, default: '' },
     photographer:    { type: String, default: '' },
     photographerUrl: { type: String, default: '' },
     sourceUrl:       { type: String, default: '' },
-    pexelsId:        { type: String, default: '', index: true },
+    provider:        { type: String, default: '' },   // pixabay | pexels
+    photoId:         { type: String, default: '', index: true },
     query:           { type: String, default: '' },
   },
   sector:         { type: String, enum: ['estate', 'university', 'school', 'hotel', 'industrial', 'hospital', 'all'], default: 'estate', index: true },
