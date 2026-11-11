@@ -29,7 +29,7 @@ const ROLES = {
   university: [
     R('student', 'Student', 'Students'),
     R('lecturer', 'Lecturer', 'Lecturers', { staff: true, assignable: true, specialty: true }),
-    R('warden', 'Hall warden / porter', 'Hall wardens & porters', { staff: true, responds: ALL_ALERTS, scoped: true, assignable: true, rollcall: true }),
+    R('warden', 'Hall warden', 'Hall wardens', { staff: true, responds: ALL_ALERTS, scoped: true, assignable: true, rollcall: true }),
     R('clinic', 'Clinic staff', 'Clinic staff', { staff: true, responds: ['medical'], onCall: true }),
     R('staff', 'University staff', 'University staff', { staff: true, rollcall: true }),
   ],
@@ -54,7 +54,7 @@ const ROLES = {
   ],
 };
 
-// Member-only features staff roles don't get (a porter, teacher, doctor or
+// Member-only features staff roles don't get (a warden, teacher, doctor or
 // housekeeper doesn't pay student fees / patient bills, add family, or sell
 // on the members' marketplace). Enforced in middleware/auth and hidden in
 // the apps; staff are also never billed.
@@ -172,9 +172,21 @@ function roleLabelFor(user, type) {
 }
 
 // Config for the apps
+// Posts for security accounts (role 'security', invited from the Guards
+// page). Porters are security staff, not members: they sign in to the Guard
+// app and are tied to a hall (User.guardPlace). `place` = label of that field.
+const GUARD_POSTS = {
+  university: [
+    { key: 'gate',   label: 'Gate security', plural: 'Gate security', place: '' },
+    { key: 'porter', label: 'Hall porter',   plural: 'Hall porters',  place: 'Hall' },
+  ],
+};
+const guardPostsFor = (type) => GUARD_POSTS[normType(type)] || [{ key: 'gate', label: 'Security guard', plural: 'Security guards', place: '' }];
+
 function rolesConfig(type) {
   const t = normType(type);
   return {
+    guardPosts: guardPostsFor(t),
     roles: rolesFor(t).map(r => ({ ...r, form: (FORMS[t] || {})[r.key] || F({ unit: 'Unit' }), hide: r.staff ? STAFF_HIDDEN_MODULES : [] })),
     defaultRole: defaultRole(t),
     assignLabel: ASSIGN_LABEL[t] || '',
@@ -182,4 +194,4 @@ function rolesConfig(type) {
   };
 }
 
-module.exports = { STAFF_HIDDEN_MODULES, hiddenModulesFor, roleLabelFor, FORMS, ROLES, ASSIGN_LABEL, REQUEST_KINDS, rolesFor, defaultRole, roleDef, roleOf, isStaff, requestKind, rolesConfig };
+module.exports = { GUARD_POSTS, guardPostsFor, STAFF_HIDDEN_MODULES, hiddenModulesFor, roleLabelFor, FORMS, ROLES, ASSIGN_LABEL, REQUEST_KINDS, rolesFor, defaultRole, roleDef, roleOf, isStaff, requestKind, rolesConfig };

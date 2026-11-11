@@ -52,6 +52,10 @@ const userSchema = new mongoose.Schema({
   // lecturer, warden, guest, housekeeping, employee, supervisor… Empty = the
   // site type's default member role.
   siteRole: { type: String, default: '' },
+  // Security accounts only (utils/siteRoles GUARD_POSTS): 'gate' or e.g.
+  // 'porter', and the hall / building a porter looks after.
+  guardPost:  { type: String, default: 'gate' },
+  guardPlace: { type: String, default: '', trim: true },
   roleInfo: {
     specialty:   { type: String, default: '' },   // e.g. Cardiology, Mathematics
     onCall:      { type: Boolean, default: false },

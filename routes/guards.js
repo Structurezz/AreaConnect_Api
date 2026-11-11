@@ -15,6 +15,7 @@ router.post('/invite', authorize('estate_manager', 'super_admin'), [
   body('phone').optional().trim(),
 ], validate, ctrl.inviteGuard);
 
+router.patch('/:id',          authorize('estate_manager', 'super_admin'), ctrl.updateGuard);
 router.patch('/:id/suspend',  authorize('estate_manager', 'super_admin'), ctrl.suspendGuard);
 router.patch('/:id/activate', authorize('estate_manager', 'super_admin'), ctrl.activateGuard);
 router.delete('/:id',         authorize('estate_manager', 'super_admin'), ctrl.removeGuard);
