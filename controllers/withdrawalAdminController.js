@@ -27,7 +27,7 @@ exports.listWithdrawals = async (req, res) => {
     const [withdrawals, counts] = await Promise.all([
       Withdrawal.find(q)
         .populate('userId', 'name email phone')
-        .populate('estateId', 'name estateCode')
+        .populate('estateId', 'name estateCode city state site.type')
         .sort({ createdAt: -1 })
         .limit(Math.min(Number(limit) || 100, 500))
         .lean(),

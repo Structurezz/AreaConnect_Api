@@ -71,8 +71,8 @@ exports.deletePlan = async (req, res) => {
 exports.getSubscriptions = async (req, res) => {
   try {
     const subs = await Subscription.find()
-      .populate('estateId', 'name address estateCode')
-      .populate('planId', 'name slug color price')
+      .populate({ path: 'estateId', select: 'name address estateCode city state site.type isActive managerId', populate: { path: 'managerId', select: 'name email phone' } })
+      .populate('planId', 'name slug color price features')
       .populate('comp.planId', 'name slug color price')
       .populate('comp.grantedBy', 'name email')
       .populate('updatedBy', 'name')
