@@ -157,7 +157,7 @@ const sendInviteEmail = async ({ to, name, estateName, loginUrl, tempPassword })
 const sendTeamInviteEmail = async ({ to, name, estateName, inviterName, permissions = [], loginUrl, tempPassword }) => {
   if (!process.env.RESEND_API_KEY) return { skipped: true };
   const estate  = escapeHtml(estateName || 'your estate');
-  const inviter = escapeHtml(inviterName || 'Your estate manager');
+  const inviter = escapeHtml(inviterName || 'Your manager');
   const areas   = permissions.map(p => `
           <tr><td width="22" valign="top" style="padding:0 0 8px;color:#10B981;font-weight:800;">&check;</td>
               <td style="padding:0 0 8px;font-size:14px;color:#0F172A;">${escapeHtml(p)}</td></tr>`).join('');
@@ -216,8 +216,8 @@ const sendTeamInviteEmail = async ({ to, name, estateName, inviterName, permissi
 const sendHouseholdInviteEmail = async ({ to, name, estateName, headName, relationship, unitLabel, permissions = [], loginUrl, tempPassword }) => {
   if (!process.env.RESEND_API_KEY) return { skipped: true };
   const estate = escapeHtml(estateName || 'your estate');
-  const head   = escapeHtml(headName || 'A resident');
-  const basics = ['Estate announcements', 'Security alerts & personal safety', 'Your own profile'];
+  const head   = escapeHtml(headName || 'A member');
+  const basics = ['Announcements', 'Security alerts & personal safety', 'Your own profile'];
   const row = (label, on) => `
           <tr><td width="22" valign="top" style="padding:0 0 8px;color:${on ? '#6366F1' : '#CBD5E1'};font-weight:800;">${on ? '&check;' : '&ndash;'}</td>
               <td style="padding:0 0 8px;font-size:14px;color:${on ? '#0F172A' : '#94A3B8'};">${escapeHtml(label)}</td></tr>`;
@@ -239,7 +239,7 @@ const sendHouseholdInviteEmail = async ({ to, name, estateName, headName, relati
     </div>
     <div style="padding:32px;">
       <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 22px;">
-        Hi <strong>${escapeHtml(name || 'there')}</strong>, ${head} has added you${relationship ? ` as their <strong>${escapeHtml(relationship.toLowerCase())}</strong>` : ''} to your home at <strong>${estate}</strong> on AreaMates, the resident app for your estate.
+        Hi <strong>${escapeHtml(name || 'there')}</strong>, ${head} has added you${relationship ? ` as their <strong>${escapeHtml(relationship.toLowerCase())}</strong>` : ''} to your account at <strong>${estate}</strong> on AreaMates, the app for your site.
       </p>
 
       <p style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9CA3AF;margin:0 0 10px;">What you can use</p>
@@ -276,7 +276,7 @@ const sendHouseholdInviteEmail = async ({ to, name, estateName, headName, relati
 // ── Manager notification email ────────────────────────────────────────────────
 const TYPE_META = {
   payment_received: { label: 'Payment Received',  color: '#10B981', icon: '💰' },
-  new_resident:     { label: 'New Resident',       color: '#6366F1', icon: '👤' },
+  new_resident:     { label: 'New member',       color: '#6366F1', icon: '👤' },
   visitor_checkin:  { label: 'Visitor Check-In',   color: '#0EA5E9', icon: '🚪' },
   visitor_checkout: { label: 'Visitor Check-Out',  color: '#F59E0B', icon: '🚪' },
   new_alert:        { label: 'Security Alert',     color: '#EF4444', icon: '🚨' },
@@ -404,7 +404,7 @@ const generateInvoiceHtml = (inv) => {
         <!-- Left: estate brand -->
         <td style="background:#0F172A;padding:24px;width:50%;vertical-align:top;">
           <div style="font-size:18px;font-weight:800;color:#fff;letter-spacing:-0.02em;">${inv.estate.name}</div>
-          <div style="font-size:10px;color:#94A3B8;letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">Estate Management</div>
+          <div style="font-size:10px;color:#94A3B8;letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">Smart site management</div>
           <div style="margin-top:14px;font-size:11px;color:#94A3B8;line-height:1.7;">${inv.estate.address || ''}</div>
           <div style="font-size:11px;color:#64748B;margin-top:4px;">Code: <span style="color:#10B981;font-weight:700;">${inv.estate.estateCode}</span></div>
         </td>
@@ -594,8 +594,8 @@ const sendSubscriptionReminderEmail = async ({ to, managerName, estateName, days
       <div style="background:${bg};border:1px solid ${color}40;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
         <p style="font-size:13px;color:${color};font-weight:600;line-height:1.6;">
           ${isUrgent
-            ? 'If your subscription expires, your estate features will be suspended and residents will lose access.'
-            : 'Renew now to ensure uninterrupted access for you and your residents.'}
+            ? 'If your subscription expires, your site’s features will be suspended and your members will lose access.'
+            : 'Renew now to ensure uninterrupted access for you and your members.'}
         </p>
       </div>
       <div style="text-align:center;margin-bottom:28px;">
@@ -627,7 +627,7 @@ const sendLiveAnnouncementEmail = async ({
 }) => {
   if (!process.env.RESEND_API_KEY || !to) return { skipped: true };
   const safeName = (name || 'Neighbour').split(' ')[0];
-  const safeMsg  = message || title || 'Something important for the estate — tap to listen.';
+  const safeMsg  = message || title || 'Something important for everyone — tap to listen.';
   const url      = joinUrl || `${RESIDENTS_APP_URL}/announcements`;
 
   await sendEmail({
@@ -707,7 +707,7 @@ const sendPasswordResetRequestEmail = async ({
 }) => {
   if (!process.env.RESEND_API_KEY || !to) return { skipped: true };
   const unitLine = requesterUnit ? `<strong>${requesterUnit}</strong> · ` : '';
-  const roleLabel = requesterRole === 'security' ? 'Security officer' : 'Resident';
+  const roleLabel = requesterRole === 'security' ? 'Security officer' : 'Member';
   await sendEmail({
     from: FROM(),
     to,
@@ -851,9 +851,9 @@ const sendSubscriptionExpiredEmail = async ({
       <div style="background:#FEE2E2;border:1px solid #FECACA;border-radius:12px;padding:14px 18px;margin-bottom:22px;">
         <div style="font-size:11px;font-weight:800;color:#991B1B;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">What this means right now</div>
         <ul style="margin:0;padding-left:18px;font-size:13px;color:#7F1D1D;line-height:1.75;">
-          <li>Residents can't log into AreaMates until the account is reactivated</li>
+          <li>Your members can't log into AreaMates until the account is reactivated</li>
           <li>Visitor QR passes won't verify at the gate</li>
-          <li>All your estate data is safe &mdash; nothing is deleted</li>
+          <li>All your data is safe &mdash; nothing is deleted</li>
         </ul>
       </div>
       <div style="text-align:center;margin-bottom:22px;">
@@ -927,7 +927,7 @@ const sendCompGiftEmail = async ({
       logoUrl:    estateLogoUrl || '',
     },
     resident: {
-      name:  managerName || 'Estate Manager',
+      name:  managerName || 'Manager',
       unit:  'N/A',
       email: to,
       phone: managerPhone || '',
@@ -1071,7 +1071,7 @@ const sendCompGiftEmail = async ({
       <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:12px;padding:16px 20px;margin-bottom:24px;">
         <div style="font-size:11px;font-weight:800;color:#065F46;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">What you can do right now</div>
         <ul style="margin:0;padding-left:18px;font-size:13px;color:#065F46;line-height:1.75;">
-          <li>Invite your residents and get them onto AreaMates</li>
+          <li>Invite your people (residents, students, guests or staff) onto AreaMates</li>
           <li>Issue your first visitor QR passes in under 30 seconds</li>
           <li>Schedule your first dues cycle via Paystack &mdash; collection usually jumps 60% &rarr; 90% in month one</li>
           <li>Broadcast your first announcement with read receipts</li>
@@ -1145,7 +1145,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
   const REPLY_TO  = 'michael@area-connector.com';
   const REGISTER  = 'https://manager.area-connector.com/register';
   const firstName = escapeHtml((name || '').trim().split(' ')[0] || 'there');
-  const org       = escapeHtml(company || 'your estate');
+  const org       = escapeHtml(company || 'your site');
   const where     = city ? ` in ${escapeHtml(city)}` : '';
   const about     = company ? ` (${company})` : '';
 
@@ -1176,7 +1176,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
   const pains = [
     ['🚪', 'Gate & visitor access',     'Who’s coming in — and did anyone check?'],
     ['💳', 'Levies & service charges',  'Chasing payments on WhatsApp'],
-    ['📣', 'Keeping residents informed', 'Notices nobody reads'],
+    ['📣', 'Keeping everyone informed', 'Notices nobody reads'],
     ['🛡️', 'Security response',         'Getting help fast when something happens'],
   ].map(([icon, label, hint]) => `
         <td class="stack" width="50%" valign="top" style="padding:0 4px 8px;">
@@ -1195,8 +1195,8 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
   const painGrid = `<tr>${pains[0]}${pains[1]}</tr><tr>${pains[2]}${pains[3]}</tr>`;
 
   const apps = [
-    ['Estate Manager', C.green,  'Residents, dues, payouts and reports in one dashboard.'],
-    ['AreaMates',      C.indigo, 'Residents invite guests, pay dues and get notices.'],
+    ['Manager portal', C.green,  'Members, payments, payouts and reports in one dashboard.'],
+    ['AreaMates',      C.indigo, 'Residents, students, guests and staff invite visitors, pay bills and get notices.'],
     ['Guard',          '#F59E0B','Verify a visitor’s code at the gate in seconds.'],
   ].map(([t, color, d]) => `
           <td class="stack" width="33%" valign="top" style="padding:0 20px 18px 0;">
@@ -1209,7 +1209,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
     from: FROM(),
     reply_to: REPLY_TO,
     to,
-    subject: `A calmer evening at ${company || 'your estate'}`,
+    subject: `A calmer evening at ${company || 'your site'}`,
     attachments: getPitchAssets(),
     html: `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -1255,7 +1255,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
       <a href="https://area-connector.com" style="display:inline-block;text-decoration:none;">
         <img src="cid:ac-phone" width="320" alt="AreaMates app: visitor passes updating live as guests arrive" style="display:block;border:0;width:320px;max-width:100%;height:auto;">
       </a>
-      <div style="font-size:12px;color:${C.muted};margin-top:6px;">Live on a resident’s phone &middot; AreaMates</div>
+      <div style="font-size:12px;color:${C.muted};margin-top:6px;">Live on a member’s phone &middot; AreaMates</div>
     </td>
   </tr></table>
 
@@ -1268,7 +1268,7 @@ const sendPitchEmail = async ({ to, name, title, company, city }) => {
   </div>
 
   <!-- Three apps -->
-  <h2 style="margin:0 0 16px;font-size:19px;font-weight:700;letter-spacing:-0.01em;color:${C.ink};">Three apps, one estate</h2>
+  <h2 style="margin:0 0 16px;font-size:19px;font-weight:700;letter-spacing:-0.01em;color:${C.ink};">Three apps, one platform</h2>
   <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 38px;"><tr>${apps}
   </tr></table>
 
@@ -1361,8 +1361,8 @@ const sendTrialEndingEmail = async ({ to, managerName, estateName, trialEndsAt, 
   // What stays switched on once they subscribe
   const keep = [
     ['🚪', 'Visitor passes & gate checks', 'Codes, QR passes and the guard app keep working.'],
-    ['💳', 'Dues, receipts & payouts',     'Residents keep paying in-app; you keep withdrawing.'],
-    ['📣', 'Notices & emergency alerts',   'Every resident stays one tap away.'],
+    ['💳', 'Dues, receipts & payouts',     'Members keep paying in-app; you keep withdrawing.'],
+    ['📣', 'Notices & emergency alerts',   'Everyone stays one tap away.'],
     ['💬', 'Lounge, chat & calls',         'Your community stays connected.'],
   ].map(([icon, t, d]) => `
           <tr>
@@ -1419,7 +1419,7 @@ const sendTrialEndingEmail = async ({ to, managerName, estateName, trialEndsAt, 
       </p>
       <table cellpadding="0" cellspacing="0"><tr>
         <td style="padding:0 10px 10px 0;">
-          <a href="${UPGRADE}" style="display:inline-block;background:${C.green};color:#FFFFFF;font-size:15px;font-weight:700;text-decoration:none;padding:13px 22px;border-radius:999px;">Keep my estate running &rarr;</a>
+          <a href="${UPGRADE}" style="display:inline-block;background:${C.green};color:#FFFFFF;font-size:15px;font-weight:700;text-decoration:none;padding:13px 22px;border-radius:999px;">Keep my site running &rarr;</a>
         </td>
         <td style="padding:0 0 10px;">
           <a href="${BOOK}" style="display:inline-block;background:#FFFFFF;color:${C.greenDark};font-size:15px;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:999px;border:1px solid #A7F3D0;">Book a 15-min walkthrough</a>
@@ -1430,7 +1430,7 @@ const sendTrialEndingEmail = async ({ to, managerName, estateName, trialEndsAt, 
       <a href="https://area-connector.com" style="display:inline-block;text-decoration:none;">
         <img src="cid:ac-phone" width="320" alt="AreaMates app: visitor passes updating live as guests arrive" style="display:block;border:0;width:320px;max-width:100%;height:auto;">
       </a>
-      <div style="font-size:12px;color:${C.muted};margin-top:6px;">What your residents see &middot; AreaMates</div>
+      <div style="font-size:12px;color:${C.muted};margin-top:6px;">What your members see &middot; AreaMates</div>
     </td>
   </tr></table>
 
@@ -1448,7 +1448,7 @@ const sendTrialEndingEmail = async ({ to, managerName, estateName, trialEndsAt, 
   </table>
 
   <p style="margin:0 0 6px;font-size:16px;line-height:1.7;color:${C.body};">
-    ${monthlyPrice ? `${plan} is <strong style="color:${C.ink};">${fmtNGN(monthlyPrice)}/month</strong>, or a little less if you pay yearly.` : 'Pick the plan that fits your estate.'}
+    ${monthlyPrice ? `${plan} is <strong style="color:${C.ink};">${fmtNGN(monthlyPrice)}/month</strong>, or a little less if you pay yearly.` : 'Pick the plan that fits your site.'}
     You can change plans or cancel anytime from your dashboard.
   </p>
   <p style="margin:0 0 22px;font-size:13px;color:${C.muted};">If the trial ends before you subscribe, nothing is deleted &mdash; you can pick up where you left off.</p>
@@ -1512,7 +1512,7 @@ const sendWithdrawalReceiptEmail = async ({ to, managerName, estateName, estateC
     method:        'bank_transfer',
     recordedBy:    null,
     estate:        { name: estateName, address: '', estateCode: estateCode || '' },
-    resident:      { name: managerName || 'Estate Manager', unit: 'N/A', email: to, phone: null },
+    resident:      { name: managerName || 'Manager', unit: 'N/A', email: to, phone: null },
     items: [{
       description: 'Wallet Withdrawal',
       detail:      `${bankName || ''} · ${maskedAcct}`,
@@ -1598,9 +1598,9 @@ const sendCampaignEmail = async ({ to, name, subject, preheader, htmlBody, ctaUr
   const brandName = brand?.name            || 'AreaConnector';
   const logoUrl   = brand?.logoUrl         || '';
   const social    = brand?.social || {
-    twitter:   process.env.BRAND_TWITTER_URL   || 'https://x.com/areaconnect',
-    instagram: process.env.BRAND_INSTAGRAM_URL || 'https://instagram.com/areaconnect',
-    linkedin:  process.env.BRAND_LINKEDIN_URL  || 'https://linkedin.com/company/areaconnect',
+    twitter:   process.env.BRAND_TWITTER_URL   || '',
+    instagram: process.env.BRAND_INSTAGRAM_URL || 'https://www.instagram.com/areaconnect.pro/',
+    linkedin:  process.env.BRAND_LINKEDIN_URL  || '',
     website:   process.env.BRAND_WEBSITE_URL   || 'https://area-connector.com',
   };
 
@@ -1797,7 +1797,7 @@ const sendBuzzEmail = async ({ to, toName, fromName, fromPhotoUrl, fromUnit, est
   await sendEmail({
     from: FROM(),
     to,
-    subject: `${copy.emoji} ${copy.headline(fromName || 'A neighbour')}`,
+    subject: `${copy.emoji} ${copy.headline(fromName || 'Someone on your site')}`,
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="background:#EEF2FF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
 <div style="width:100%;max-width:100%;margin:0;background:#fff;border-radius:0;overflow:hidden;border:0;">
@@ -1807,14 +1807,14 @@ const sendBuzzEmail = async ({ to, toName, fromName, fromPhotoUrl, fromUnit, est
   <div style="margin-top:-52px;text-align:center;padding:0 24px;">
     ${avatar}
     <div style="font-size:12px;color:#6366F1;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-top:14px;">${fromIsManager ? 'Check-in from estate management' : 'Neighbour buzz'} · ${escapeHtml(estateName)}</div>
-    <h1 style="font-size:22px;line-height:1.3;color:#0F172A;margin:6px 0 4px;">${copy.emoji} ${escapeHtml(copy.headline(fromName || 'A neighbour'))}</h1>
-    <div style="font-size:14px;color:#64748B;">${escapeHtml(fromName || 'Your neighbour')}${fromUnit ? ` &middot; ${escapeHtml(fromUnit)}` : ''}</div>
+    <h1 style="font-size:22px;line-height:1.3;color:#0F172A;margin:6px 0 4px;">${copy.emoji} ${escapeHtml(copy.headline(fromName || 'Someone on your site'))}</h1>
+    <div style="font-size:14px;color:#64748B;">${escapeHtml(fromName || 'Someone on your site')}${fromUnit ? ` &middot; ${escapeHtml(fromUnit)}` : ''}</div>
   </div>
   <div style="padding:22px 28px 28px;">
-    <p style="font-size:15px;line-height:1.6;color:#334155;margin:0 0 14px;">Hi ${first(toName)}, ${escapeHtml((fromName || 'your neighbour').split(' ')[0])} ${copy.line}</p>
+    <p style="font-size:15px;line-height:1.6;color:#334155;margin:0 0 14px;">Hi ${first(toName)}, ${escapeHtml((fromName || 'someone').split(' ')[0])} ${copy.line}</p>
     ${message ? `<p style="font-size:15px;line-height:1.6;color:#0F172A;background:#F5F3FF;border-left:3px solid #6366F1;padding:12px 14px;border-radius:8px;margin:0 0 18px;">“${escapeHtml(message)}”</p>` : ''}
     <a href="${appUrl}" style="display:block;text-align:center;background:#4F46E5;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:14px;border-radius:12px;">${fromIsManager ? `Call ${first(fromName)} back (free)` : `Buzz back or call ${first(fromName)}`}</a>
-    <p style="font-size:12px;color:#94A3B8;line-height:1.5;margin:16px 0 0;text-align:center;">${fromIsManager ? 'Sent by your estate management via AreaMates.' : 'You can hide yourself from the neighbours list in AreaMates → Settings → Privacy.'}</p>
+    <p style="font-size:12px;color:#94A3B8;line-height:1.5;margin:16px 0 0;text-align:center;">${fromIsManager ? 'Sent by your management via AreaMates.' : 'You can hide yourself from the directory in AreaMates → Settings → Privacy.'}</p>
   </div>
 </div>
 </body></html>`,
@@ -1854,13 +1854,13 @@ const sendCreditReceiptEmail = async ({ to, name, inv, pdf }) => {
   </div>
   <div style="padding:24px 28px;">
     <p style="font-size:15px;color:#334155;line-height:1.6;margin:0 0 16px;">Hi ${first}, ${isGift
-      ? 'AreaConnector has added free call credits to your account. Use them to call your neighbours from AreaMates.'
+      ? 'AreaConnector has added free call credits to your account. Use them to call people on your site from AreaMates.'
       : 'thanks for your purchase. Your call credits are ready to use.'}</p>
     ${isGift && note ? `<p style="font-size:15px;line-height:1.6;color:#0F172A;background:#F5F3FF;border-left:3px solid #6366F1;padding:12px 14px;border-radius:8px;margin:0 0 16px;">“${escapeHtml(note)}”</p>` : ''}
     <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:20px;">
       ${rows.map(([k, v]) => `<tr><td style="padding:7px 0;color:#64748B;width:120px;">${k}</td><td style="padding:7px 0;color:#0F172A;font-weight:600;">${escapeHtml(v)}</td></tr>`).join('')}
     </table>
-    <a href="${appUrl}" style="display:block;text-align:center;background:#4F46E5;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:14px;border-radius:12px;">Call a neighbour</a>
+    <a href="${appUrl}" style="display:block;text-align:center;background:#4F46E5;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:14px;border-radius:12px;">Open AreaMates</a>
     <p style="font-size:12px;color:#94A3B8;line-height:1.5;margin:16px 0 0;">Your ${isGift ? 'gift receipt' : 'invoice'} (${escapeHtml(inv.invoiceNumber)}.pdf) is attached. Credits never expire. Calls to security and estate management are always free.</p>
   </div>
 </div>
@@ -1908,27 +1908,27 @@ const sendManagerOnboardEmail = async ({ to, name, estates = [], tempPassword, t
           <p style="font-family:'Courier New',Courier,monospace;font-size:22px;font-weight:800;letter-spacing:0.08em;color:#047857;background:#F0FDF9;border:1px solid #A7F3D0;border-radius:8px;padding:10px 14px;display:inline-block;margin:0;">${escapeHtml(tempPassword)}</p>
         </div>
       </div>` : `
-      <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 24px;">Sign in with your existing AreaConnector login &mdash; the new ${names.length > 1 ? 'estates are' : 'estate is'} already in your estate switcher.</p>`;
+      <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 24px;">Sign in with your existing AreaConnector login &mdash; the new ${names.length > 1 ? 'sites are' : 'site is'} already in your site switcher.</p>`;
 
   const { error } = await sendEmail({
     from: FROM(),
     to,
     subject: names.length > 1
       ? `${names.length} estates are ready for you on AreaConnector`
-      : `${names[0] || 'Your estate'} is ready on AreaConnector`,
+      : `${names[0] || 'Your site'} is ready on AreaConnector`,
     html: onboardShell({
-      eyebrow: 'Estate manager &middot; AreaConnector',
-      title: names.length > 1 ? 'Your estates are set up' : 'Your estate is set up',
+      eyebrow: 'Manager &middot; AreaConnector',
+      title: names.length > 1 ? 'Your sites are set up' : 'Your site is set up',
       body: `
       <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 22px;">
-        Hi <strong>${escapeHtml(name || 'there')}</strong>, the AreaConnector team has set up ${names.length > 1 ? 'these estates' : 'this estate'} for you to manage${trialDays ? ` &mdash; with a <strong>${trialDays}-day free trial</strong>` : ''}.
+        Hi <strong>${escapeHtml(name || 'there')}</strong>, the AreaConnector team has set up ${names.length > 1 ? 'these sites' : 'this site'} for you to manage${trialDays ? ` &mdash; with a <strong>${trialDays}-day free trial</strong>` : ''}.
       </p>
       <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">${list}</table>
       ${login}
       <div style="text-align:center;margin-bottom:24px;">
         <a href="${MANAGER_APP()}/login" style="display:inline-block;background:linear-gradient(135deg,#10B981,#059669);color:#fff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 40px;border-radius:10px;">Open your dashboard &rarr;</a>
       </div>
-      <p style="font-size:13px;color:#64748B;line-height:1.6;margin:0;">Share each estate code with residents and guards so they can join from the AreaMates and Guard apps.</p>`,
+      <p style="font-size:13px;color:#64748B;line-height:1.6;margin:0;">Share each site code with your members and guards so they can join from the AreaMates and Guard apps.</p>`,
     }),
   });
   if (error) throw Object.assign(new Error(error.message), { name: error.name, statusCode: error.statusCode });
@@ -1952,7 +1952,7 @@ const sendOnboardingInviteEmail = async ({ to, name, estateName, link, note, tri
       ${note ? `<div style="border-left:3px solid #10B981;background:#F0FDF9;padding:12px 16px;border-radius:0 8px 8px 0;margin:0 0 22px;font-size:14px;color:#065F46;line-height:1.6;">${escapeHtml(note)}</div>` : ''}
       <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 26px;">It takes about two minutes. Your details are filled in already &mdash; just choose a password. You get a <strong>${trialDays}-day free trial</strong>, no card needed.</p>
       <div style="text-align:center;margin-bottom:24px;">
-        <a href="${link}" style="display:inline-block;background:linear-gradient(135deg,#10B981,#059669);color:#fff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 40px;border-radius:10px;">Set up my estate &rarr;</a>
+        <a href="${link}" style="display:inline-block;background:linear-gradient(135deg,#10B981,#059669);color:#fff;font-weight:700;font-size:15px;text-decoration:none;padding:14px 40px;border-radius:10px;">Set up my site &rarr;</a>
       </div>
       <p style="font-size:12px;color:#94A3B8;line-height:1.6;margin:0;text-align:center;">This invitation expires in 30 days.</p>`,
     }),
@@ -1962,7 +1962,7 @@ const sendOnboardingInviteEmail = async ({ to, name, estateName, link, note, tri
 };
 
 // ── AreaConnector FM: invite a guest / estate leader onto a show ────────────────
-const ROLE_LABEL = { guest: 'Guest', co_host: 'Co-host', estate_leader: 'Estate leader', expert: 'Expert guest' };
+const ROLE_LABEL = { guest: 'Guest', co_host: 'Co-host', estate_leader: 'Community leader', expert: 'Expert guest' };
 const sendPodcastInviteEmail = async ({ to, name, role, showTitle, hostName, when, topic, link }) => {
   if (!process.env.RESEND_API_KEY) return { skipped: true };
   const r = ROLE_LABEL[role] || 'Guest';
