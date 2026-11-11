@@ -1,6 +1,8 @@
 // AI blog writer: drafts one article per day with Gemini and publishes it to
-// the landing-site blog. Topics come from data/blogTopics.js; once that bank is
-// used up Gemini proposes new ones that don't repeat existing titles.
+// the landing-site blog. Each day goes to the solution (estates, universities,
+// schools, hotels, industrial sites, hospitals) with the fewest articles.
+// Topics come from data/blogTopics.js; once a sector's bank is used up Gemini
+// proposes new ones for that sector that don't repeat existing titles.
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Article = require('../models/Article');
 const TOPICS = require('../data/blogTopics');
@@ -11,22 +13,42 @@ const WAT_OFFSET_MS = 60 * 60_000;
 
 // What AreaConnector actually does — the only product facts articles may state.
 const PRODUCT_FACTS = `
-AreaConnector is an estate management platform built in Lagos, Nigeria (founded August 2026), with three apps:
-- AreaConnector Admin (web, for estate managers): residents and units (CSV bulk invite), guard management, payment schedules and levies, Paystack collection, estate wallet with bank withdrawals, announcements with read receipts, live alerts, visitor oversight and blacklist, estate constitution upload, analytics, in-app calls, multi-estate on Enterprise.
-- AreaMates (iOS, Android, web, for residents): visitor passes with QR code and 6-digit code shareable on WhatsApp, instant passes, approving early arrivals, cancelling passes, paying dues with Paystack (card, transfer, USSD) with invoices and receipts, SOS panic button (security, fire, medical), personal safety tools ("I'm being followed" silent alarm to staff, live location sharing with security for up to 1 hour, silent safety blocks, gate watch), in-app voice calls to the gate, neighbours and manager, "buzz a neighbour", estate group chat and direct messages, marketplace with escrow checkout and seller wallets, community lounge (feed, 24-hour stories, events and RSVP, polls, community DJ queue, radio), push notifications.
-- AreaConnector Guard (Android/iOS, for security): verify visitors by typing their 6-digit code, one-tap check-in/check-out, blacklist "access denied", panic alerts with a siren, acknowledge/resolve alerts, offline mode with sync, entry log, incident escalation.
-- Nkechi: built-in AI assistant in the estate chat.
-- Pricing: Starter ₦20,000/month (up to 50 residents), Growth ₦47,000 (up to 200), Premium ₦80,000 (up to 500), Enterprise custom. Annual billing saves 20%. 14-day free trial.
+AreaConnector is a visitor, security and payments platform built in Lagos, Nigeria (founded August 2026) for estates, universities and polytechnics, primary and secondary schools, hotels, industrial sites and offices, and hospitals. A site picks its type and the apps use its words (residents/units, students/hostel rooms or classes, guests/rooms, employees/departments, patients/wards) and switch on the right features. Three apps:
+- AreaConnector Admin (web, for managers and administrators): members and units (CSV bulk invite), site type and modules, Google Maps site map with halls, buildings and gates, staff roles (doctors, nurses, lecturers, hall wardens, teachers, front desk, housekeeping, supervisors, safety officers) with alert routing, guard and porter management, payment schedules (service charge, school or hostel fees, bills) with Paystack collection, wallet with bank withdrawals, announcements with read receipts, live alerts, visitor oversight and blacklist, rules/constitution upload, analytics, in-app calls, multi-site on Enterprise.
+- AreaMates (iOS, Android, web, for residents, students, parents, guests, employees, patients and next of kin): visitor passes with QR code and 6-digit code shareable on WhatsApp with Google Maps directions to the right building, instant passes, pass types (visitor, delivery, contractor, supplier, authorised school pickup, patient visit), paying bills and fees with Paystack (card, transfer, USSD) with invoices and receipts, SOS button (security, fire, medical), personal safety tools ("I'm being followed" silent alarm, live location sharing with security, gate watch), requests to staff (housekeeping, room service, repairs, call a nurse, sick bay, hostel repair), emergency roll-call ("I'm safe" / "I need help"), household or family accounts with limited access, in-app calls, group chat and direct messages, marketplace with escrow, community lounge (feed, stories, events, polls), push notifications.
+- AreaConnector Guard (for security, porters and front desks): verify visitors by QR or 6-digit code, one-tap check-in/check-out, blacklist "access denied", panic alerts with a siren, offline mode with sync, entry log, deliveries and vehicle log, staff shift check, contractor safety induction at the gate, hospital and hostel visiting hours with a per-patient visitor limit (override needs a logged reason).
+Sector specifics:
+- Estates: residents, units and blocks, service charge and levies, dues enforcement (notice, grace period, then a pause of convenience services that lifts on payment), households.
+- Universities and polytechnics: students and staff, halls and hostel rooms, hostel visiting hours, matric-number ID checks, campus map with directions to halls, hostel fees, hall wardens and porters.
+- Schools (primary and secondary): parents and guardians linked to students, authorised pickup passes showing the student and class, staff shift check, school fees, sick bay requests.
+- Hotels: guest stays from check-in to check-out (access and visitor passes end automatically), live room board, extend or end a stay, housekeeping and room-service requests.
+- Industrial sites and offices: employees and departments, contractor and supplier passes with safety induction, deliveries and vehicle log, shift check, incident and hazard reporting, emergency roll-call.
+- Hospitals: patients and staff, wards, patient-visit passes, visiting hours and visitor limits, care teams (doctors and nurses), call-a-nurse requests, admission and discharge dates.
+- Nkechi: built-in AI assistant in the chat.
+- Pricing: Starter ₦20,000/month (up to 50 members), Growth ₦47,000 (up to 200), Premium ₦80,000 (up to 500), Enterprise custom. Annual billing saves 20%. 14-day free trial.
 `;
 
-const RULES = `
+// Who each article is for. The writer rotates through these so every
+// solution gets articles, using that sector's own words.
+const SECTORS = {
+  estate:     { name: 'estates',                       audience: 'Nigerian estate managers, residents\' associations, property managers and residents', words: 'estate, residents, units, service charge' },
+  university: { name: 'universities and polytechnics', audience: 'Nigerian university and polytechnic administrators, student affairs, hall wardens, porters, campus security and students', words: 'campus, students, halls and hostel rooms, hostel fees' },
+  school:     { name: 'primary and secondary schools', audience: 'Nigerian school owners, administrators, teachers, gate security and parents', words: 'school, students, classes, parents and guardians, school fees' },
+  hotel:      { name: 'hotels',                        audience: 'Nigerian hotel owners, general managers, front desk, security and housekeeping teams', words: 'property, guests, rooms, front desk' },
+  industrial: { name: 'industrial sites and offices',  audience: 'Nigerian facility managers, HSE and safety officers, HR and site security at factories, plants, warehouses and offices', words: 'site, employees, departments, contractors' },
+  hospital:   { name: 'hospitals',                     audience: 'Nigerian hospital administrators, nurses, security and patients\' families', words: 'hospital, patients and staff, wards, visiting hours' },
+};
+const SECTOR_KEYS = Object.keys(SECTORS);
+
+const RULES = (sector) => `
 Rules:
-- Audience: Nigerian estate managers, residents' associations, property managers and residents. Use Nigerian context (Lagos, Abuja, naira, Paystack, PHCN/generators, okada/dispatch riders) naturally.
+- Audience: ${SECTORS[sector].audience}. Use their words (${SECTORS[sector].words}). Use Nigerian context (Lagos, Abuja, Port Harcourt, naira, Paystack, PHCN/generators, okada/dispatch riders) naturally.
+- Write for ${SECTORS[sector].name}; only mention features that apply to them.
 - Be genuinely useful and practical: concrete steps, checklists, templates, examples.
-- NEVER invent statistics, survey results, percentages, studies, quotes, named people, named estates, case studies or customer stories. If you use an example, make it clearly hypothetical ("Imagine an estate with 120 units...").
-- Do NOT claim how many estates or users AreaConnector has, and don't make claims about AreaConnector beyond the product facts given.
+- NEVER invent statistics, survey results, percentages, studies, quotes, named people, named organisations, case studies or customer stories. If you use an example, make it clearly hypothetical ("Imagine a hospital with 120 beds...").
+- Do NOT claim how many sites or users AreaConnector has, and don't make claims about AreaConnector beyond the product facts given.
 - Mention AreaConnector only where it genuinely fits (usually 1–3 times, plus a short closing paragraph). The article must stand on its own as helpful advice.
-- No legal or financial guarantees; suggest consulting a professional where appropriate.
+- No legal, medical or financial guarantees; suggest consulting a professional where appropriate.
 - British/Nigerian English spelling. Warm, clear, confident tone. No hype, no emojis.
 - 900–1,300 words in the body.
 `;
@@ -92,8 +114,8 @@ function clean(article, category) {
   };
 }
 
-async function draft(category, topic) {
-  const prompt = `You are the editor of the AreaConnector blog.\n${PRODUCT_FACTS}\n${RULES}\nWrite an article in the "${category}" category on this topic:\n"${topic}"\n${SCHEMA_HINT}`;
+async function draft(category, topic, sector = 'estate') {
+  const prompt = `You are the editor of the AreaConnector blog.\n${PRODUCT_FACTS}\n${RULES(sector)}\nWrite an article in the "${category}" category on this topic:\n"${topic}"\n${SCHEMA_HINT}`;
   const res = await model().generateContent(prompt);
   const text = res.response.text().trim().replace(/^```json\s*|```$/g, '');
   return clean(JSON.parse(text), category);
@@ -106,32 +128,43 @@ async function uniqueSlug(title) {
   return slug;
 }
 
-// Ask Gemini for new topic ideas once the bank is exhausted.
-async function freshTopics(n = 10) {
+// Ask Gemini for new topic ideas for one sector once its bank is used up.
+async function freshTopics(sector, n = 10) {
   const existing = (await Article.find({}, 'title').sort({ publishedAt: -1 }).limit(300).lean()).map((a) => a.title);
-  const prompt = `${PRODUCT_FACTS}\nSuggest ${n} new, specific, genuinely useful blog article topics for Nigerian estate managers and residents, related to what AreaConnector offers. Spread them across these categories: ${CATEGORIES.join(', ')}. Do not repeat or closely paraphrase any of these existing titles:\n${existing.map((t) => `- ${t}`).join('\n')}\nReturn ONLY JSON: [{"category": string, "topic": string}]`;
+  const S = SECTORS[sector];
+  const prompt = `${PRODUCT_FACTS}\nSuggest ${n} new, specific, genuinely useful blog article topics for ${S.audience}, about running ${S.name} in Nigeria and related to what AreaConnector offers them. Use their words (${S.words}). Spread them across these categories: ${CATEGORIES.join(', ')}. Do not repeat or closely paraphrase any of these existing titles:\n${existing.map((t) => `- ${t}`).join('\n')}\nReturn ONLY JSON: [{"category": string, "topic": string}]`;
   const res = await model().generateContent(prompt);
   const list = JSON.parse(res.response.text().trim().replace(/^```json\s*|```$/g, ''));
-  return list.filter((t) => CATEGORIES.includes(t.category) && t.topic).map((t) => [t.category, t.topic]);
+  return list.filter((t) => CATEGORIES.includes(t.category) && t.topic).map((t) => [t.category, t.topic, sector]);
+}
+
+// The sector covered least recently goes next, so the blog rotates evenly
+// through every solution (estates included) one day at a time.
+async function nextSector() {
+  const latest = Object.fromEntries((await Article.aggregate([
+    { $group: { _id: { $ifNull: ['$sector', 'estate'] }, last: { $max: '$publishedAt' } } },
+  ])).map((x) => [x._id, new Date(x.last).getTime()]));
+  return SECTOR_KEYS.reduce((best, k) => ((latest[k] || 0) < (latest[best] || 0) ? k : best), SECTOR_KEYS[0]);
 }
 
 async function nextTopic() {
   const used = new Set((await Article.find({}, 'topicKey').lean()).map((a) => a.topicKey));
-  const fromBank = TOPICS.find(([, t]) => !used.has(topicKey(t)));
-  if (fromBank) return fromBank;
-  const ideas = await freshTopics();
+  const sector = await nextSector();
+  const fromBank = TOPICS.find(([, t, sec = 'estate']) => sec === sector && !used.has(topicKey(t)));
+  if (fromBank) return [fromBank[0], fromBank[1], sector];
+  const ideas = await freshTopics(sector);
   return ideas.find(([, t]) => !used.has(topicKey(t))) || null;
 }
 
 /** Writes and publishes one article. `topic` is optional ([category, title]). */
 async function writeArticle(topic, { publishedAt = new Date() } = {}) {
-  const [category, title] = topic || (await nextTopic()) || [];
+  const [category, title, sector = 'estate'] = topic || (await nextTopic()) || [];
   if (!title) throw new Error('No topic available');
   let lastErr;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const a = await draft(category, title);
-      return await Article.create({ ...a, slug: await uniqueSlug(a.title), topicKey: topicKey(title), publishedAt });
+      const a = await draft(category, title, sector);
+      return await Article.create({ ...a, slug: await uniqueSlug(a.title), topicKey: topicKey(title), sector, publishedAt });
     } catch (err) {
       lastErr = err;
       await new Promise((r) => setTimeout(r, 4000 * attempt));
@@ -175,4 +208,4 @@ function startBlogWriter({ intervalMs = 60 * 60_000 } = {}) {
   console.log('[blog] daily AI writer started');
 }
 
-module.exports = { writeArticle, startBlogWriter, TOPICS, topicKey };
+module.exports = { writeArticle, startBlogWriter, TOPICS, topicKey, SECTORS };

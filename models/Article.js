@@ -18,6 +18,7 @@ const articleSchema = new mongoose.Schema({
   readMinutes:    { type: Number, default: 6 },
   body:           { type: [blockSchema], default: [] },
   topicKey:       { type: String, index: true },          // dedupe against the topic bank
+  sector:         { type: String, enum: ['estate', 'university', 'school', 'hotel', 'industrial', 'hospital', 'all'], default: 'estate', index: true },
   author:         { type: String, default: 'AreaConnector Editorial' },
   source:         { type: String, enum: ['gemini', 'manual'], default: 'gemini' },
   status:         { type: String, enum: ['published', 'draft'], default: 'published', index: true },
