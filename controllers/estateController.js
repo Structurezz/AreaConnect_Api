@@ -314,7 +314,26 @@ exports.updateEstate = async (req, res) => {
     for (const f of ['city', 'state', 'estateType', 'contactPhone', 'contactEmail', 'adminNotes', 'logoUrl']) {
       if (req.body[f] !== undefined && (f !== 'adminNotes' || req.user.role === 'super_admin')) update[f] = String(req.body[f]).trim();
     }
-    if (req.body.siteType !== undefined) update['site.type'] = normType(req.body.siteType);
+    // Site type + module overrides (same rules as PATCH /api/site, which is
+    // scoped to the caller's own estate so super admins can't use it).
+    // Changing the type resets overrides unless siteModules are sent too.
+    const siteTypes = require('../utils/siteTypes');
+    if (req.body.siteType !== undefined || (req.body.siteModules && typeof req.body.siteModules === 'object')) {
+      const cur = await Estate.findById(req.params.estateId).select('site').lean();
+      const type = req.body.siteType !== undefined ? normType(req.body.siteType) : normType(cur?.site?.type);
+      if (req.body.siteType !== undefined) update['site.type'] = type;
+      const typeChanged = type !== normType(cur?.site?.type);
+      if (typeChanged || req.body.siteModules) {
+        const next = typeChanged ? {} : { ...(cur?.site?.modules || {}) };
+        for (const [k, v] of Object.entries(req.body.siteModules || {})) {
+          if (!siteTypes.MODULES[k]) continue;
+          if (v === null) delete next[k]; else next[k] = !!v;
+        }
+        const defaults = siteTypes.DEFAULT_MODULES[type];
+        for (const k of Object.keys(next)) if (next[k] === defaults[k]) delete next[k];
+        update['site.modules'] = next;
+      }
+    }
     if (req.body.unitCount !== undefined) update.unitCount = Math.max(0, Number(req.body.unitCount) || 0);
     if (req.body.isActive !== undefined && req.user.role === 'super_admin') update.isActive = !!req.body.isActive;
 
@@ -367,6 +386,11 @@ exports.updateEstate = async (req, res) => {
     );
     if (!estate) return res.status(404).json({ success: false, message: 'Estate not found' });
     invalidateSite(estate._id);
+    if (update['site.type'] || update['site.modules']) {
+      try {
+        require('../services/socketService').getIO?.()?.to(`estate:${estate._id}`).emit('site_update', require('../utils/siteTypes').siteConfig(estate));
+      } catch {}
+    }
     return res.json({ success: true, data: estate, geocode: geocodeOutcome });
   } catch (err) {
     console.error('updateEstate error:', err);
