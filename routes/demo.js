@@ -1,12 +1,11 @@
 // Landing-page "Book a demo" — 30-min video calls with the AreaConnector team.
-// Meetings are created on Zoho Meeting when configured (host: michael@area-connector.com),
-// otherwise Google Meet. Every booking is stored so taken slots disappear.
+// Meetings are created on Google Meet (Google Calendar of the host account,
+// michael@area-connector.com). Every booking is stored so taken slots disappear.
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { Resend } = require('resend');
 const { brandMark, withLogo } = require('../services/emailBrand');
 const gcal = require('../services/googleCalendarService');
-const zoho = require('../services/zohoMeetingService');
 const DemoBooking = require('../models/DemoBooking');
 
 const router = express.Router();
@@ -51,7 +50,9 @@ function candidateSlots() {
 
 const overlaps = (start, end, busy) => busy.some(b => start < b.end && end > b.start);
 
-const provider = () => (zoho.isConfigured() ? 'zoho' : gcal.isConfigured() ? 'google' : 'none');
+// Google Meet only. Without Google credentials the slot is still booked and
+// the guest is told the link will follow.
+const provider = () => (gcal.isConfigured() ? 'google' : 'none');
 
 async function freeSlots() {
   const days = candidateSlots();
@@ -186,11 +187,7 @@ router.post('/book', bookLimiter, async (req, res) => {
     let joinLink = null;
     let startLink = null;
     try {
-      if (provider() === 'zoho') {
-        const m = await zoho.createMeeting({ start, minutes: SLOT_MINUTES, topic, agenda: details, guestEmail: email });
-        joinLink = m.joinLink; startLink = m.startLink;
-        Object.assign(booking, { meetingKey: m.key, joinLink, startLink });
-      } else if (provider() === 'google') {
+      if (provider() === 'google') {
         const event = await gcal.createMeetEvent({
           start, end, summary: topic, description: details,
           attendees: [{ email: HOST_EMAIL, responseStatus: 'accepted' }, { email, displayName: name }],
@@ -205,7 +202,7 @@ router.post('/book', bookLimiter, async (req, res) => {
       throw e;
     }
 
-    const meetingName = provider() === 'zoho' ? 'Zoho Meeting' : 'Google Meet';
+    const meetingName = 'Google Meet';
 
     if (process.env.RESEND_API_KEY) {
       const resend = getResend();
