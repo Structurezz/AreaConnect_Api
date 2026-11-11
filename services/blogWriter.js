@@ -162,7 +162,7 @@ async function nextTopic() {
 async function attachCover(article) {
   if (!blogImages.isConfigured() || article.cover?.url) return article;
   try {
-    const usedIds = new Set((await Article.find({ 'cover.photoId': { $ne: '' } }, 'cover.photoId').lean()).map((x) => x.cover.photoId));
+    const usedIds = new Set((await Article.find({ 'cover.photoId': { $nin: ['', null] } }, 'cover.photoId').lean()).map((x) => x.cover?.photoId).filter(Boolean));
     const cover = await blogImages.coverFor({ title: article.title, excerpt: article.excerpt, sector: article.sector, usedIds, slug: article.slug });
     if (cover) { article.cover = cover; await article.save(); }
   } catch (err) {
