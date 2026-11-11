@@ -5,7 +5,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { writeArticle } = require('../services/blogWriter');
 
 const router = express.Router();
-const LIST_FIELDS = 'slug title excerpt category sector readMinutes publishedAt author keywords';
+const LIST_FIELDS = 'slug title excerpt category sector cover readMinutes publishedAt author keywords';
 
 // GET /api/blog?category=Security&sector=hotel&page=1&limit=12  (limit=all for the build-time prerender)
 router.get('/', async (req, res) => {

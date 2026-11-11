@@ -6,6 +6,7 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Article = require('../models/Article');
 const TOPICS = require('../data/blogTopics');
+const blogImages = require('./blogImages');
 
 const MODEL = process.env.BLOG_MODEL || 'gemini-2.5-flash';
 const CATEGORIES = ['Guide', 'Security', 'Payments', 'Community', 'Management', 'Product'];
@@ -156,6 +157,20 @@ async function nextTopic() {
   return ideas.find(([, t]) => !used.has(topicKey(t))) || null;
 }
 
+// Finds a fitting stock photo, stores it in GridFS and saves it on the article.
+// Never fails the article: without a photo the site shows its fallback cover.
+async function attachCover(article) {
+  if (!blogImages.isConfigured() || article.cover?.url) return article;
+  try {
+    const usedIds = new Set((await Article.find({ 'cover.pexelsId': { $ne: '' } }, 'cover.pexelsId').lean()).map((x) => x.cover.pexelsId));
+    const cover = await blogImages.coverFor({ title: article.title, excerpt: article.excerpt, sector: article.sector, usedIds, slug: article.slug });
+    if (cover) { article.cover = cover; await article.save(); }
+  } catch (err) {
+    console.warn(`[blog] cover photo failed for "${article.title}": ${err.message}`);
+  }
+  return article;
+}
+
 /** Writes and publishes one article. `topic` is optional ([category, title]). */
 async function writeArticle(topic, { publishedAt = new Date() } = {}) {
   const [category, title, sector = 'estate'] = topic || (await nextTopic()) || [];
@@ -164,7 +179,9 @@ async function writeArticle(topic, { publishedAt = new Date() } = {}) {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const a = await draft(category, title, sector);
-      return await Article.create({ ...a, slug: await uniqueSlug(a.title), topicKey: topicKey(title), sector, publishedAt });
+      const created = await Article.create({ ...a, slug: await uniqueSlug(a.title), topicKey: topicKey(title), sector, publishedAt });
+      await attachCover(created);
+      return created;
     } catch (err) {
       lastErr = err;
       await new Promise((r) => setTimeout(r, 4000 * attempt));
@@ -208,4 +225,4 @@ function startBlogWriter({ intervalMs = 60 * 60_000 } = {}) {
   console.log('[blog] daily AI writer started');
 }
 
-module.exports = { writeArticle, startBlogWriter, TOPICS, topicKey, SECTORS };
+module.exports = { writeArticle, attachCover, startBlogWriter, TOPICS, topicKey, SECTORS };
