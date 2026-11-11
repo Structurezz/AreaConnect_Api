@@ -211,6 +211,12 @@ async function tick() {
   try {
     const a = await writeArticle();
     console.log(`[blog] published "${a.title}"`);
+    // Rebuild the landing site so the new article gets its own prerendered
+    // page (title, description and cover photo in link previews).
+    if (process.env.NETLIFY_BUILD_HOOK) {
+      fetch(process.env.NETLIFY_BUILD_HOOK, { method: 'POST' })
+        .catch((e) => console.error('[blog] landing rebuild hook failed:', e.message));
+    }
   } catch (err) {
     console.error('[blog] daily article failed:', err.message);
   } finally {
