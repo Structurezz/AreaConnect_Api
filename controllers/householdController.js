@@ -19,6 +19,7 @@ const { sendHouseholdInviteEmail } = require('../services/emailService');
 const { emitNotification, getIO } = require('../services/socketService');
 const { sendToUser } = require('../services/pushService');
 const { unitCapacity } = require('../utils/unitCapacity');
+const { managerQuery } = require('../utils/managers');
 
 const MAX_MEMBERS = 10;
 
@@ -66,7 +67,7 @@ function notifyManagers(estateId, notification, pushUrl) {
   try {
     getIO()?.to(`estate:${estateId}:staff`).emit('notification', { ...notification, createdAt: new Date().toISOString() });
   } catch (e) { console.error('[household notify staff]', e.message); }
-  User.find({ estateId, role: 'estate_manager', isActive: true }).select('_id').lean()
+  User.find({ ...managerQuery(estateId), isActive: true }).select('_id').lean()
     .then(ms => ms.forEach(m => sendToUser(m._id, { title: notification.title, body: notification.body, url: pushUrl, tag: `household-${notification.id}` }).catch(() => {})))
     .catch(() => {});
 }

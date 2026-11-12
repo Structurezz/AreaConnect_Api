@@ -5,7 +5,13 @@ const { brandMark, withLogo } = require('./emailBrand');
 
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 // Every single send goes through here so the logo attachment is never missed
-const sendEmail = (payload) => getResend().emails.send(withLogo(payload));
+// Resend reports most failures (bad sender, invalid address, unverified domain)
+// in the response instead of throwing, so log them here or they vanish.
+const sendEmail = async (payload) => {
+  const res = await getResend().emails.send(withLogo(payload));
+  if (res?.error) console.error(`[email] "${payload.subject}" to ${payload.to} failed:`, res.error.message || res.error);
+  return res;
+};
 const FROM      = () => process.env.RESEND_FROM || 'Orizu <noreply@area-connector.com>';
 
 // ── Visitor pass ─────────────────────────────────────────────────────────────
@@ -758,7 +764,7 @@ const sendPasswordResetRequestEmail = async ({
 
 // ── Auto-renewal receipt (recurring charge succeeded) ─────────────────────
 const sendRenewalReceiptEmail = async ({
-  to, managerName, estateName, plan, cycle, amount, reference, cardLast4, cardBrand, nextBillingDate,
+  to, managerName, estateName, plan, cycle, amount, reference, cardLast4, cardBrand, nextBillingDate, isNew = false,
 }) => {
   if (!process.env.RESEND_API_KEY || !to) return { skipped: true };
   const planName = plan?.name || 'Current Plan';
@@ -769,7 +775,7 @@ const sendRenewalReceiptEmail = async ({
   await sendEmail({
     from: FROM(),
     to,
-    subject: `✅ Payment received — ${estateName} ${planName} renewed`,
+    subject: isNew ? `✅ Payment received — ${estateName} is now on ${planName}` : `✅ Payment received — ${estateName} ${planName} renewed`,
     html: `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
@@ -780,17 +786,19 @@ const sendRenewalReceiptEmail = async ({
   <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
     <div style="background:linear-gradient(135deg,#10B981,#059669);padding:30px 32px;text-align:center;">
       <div style="font-size:40px;line-height:1;margin-bottom:6px;">✅</div>
-      <h1 style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.02em;margin:0;">Payment received &middot; ${planName} renewed</h1>
+      <h1 style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.02em;margin:0;">Payment received &middot; ${planName} ${isNew ? 'activated' : 'renewed'}</h1>
     </div>
     <div style="padding:30px 32px;">
       <p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 20px;">
         Hi <strong>${managerName || 'there'}</strong>,<br><br>
-        We just renewed your <strong>${planName}</strong> subscription for <strong>${estateName}</strong>.
-        Your access continues without interruption.
+        ${isNew
+          ? `Thank you! Your <strong>${planName}</strong> subscription for <strong>${estateName}</strong> is now active.`
+          : `We just renewed your <strong>${planName}</strong> subscription for <strong>${estateName}</strong>.
+        Your access continues without interruption.`}
       </p>
       <div style="background:#fff;border:1px solid #E2E8F0;border-radius:14px;overflow:hidden;margin-bottom:20px;">
         <div style="background:#0F172A;padding:18px 22px;">
-          <div style="font-size:10px;color:#94A3B8;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:3px;">Renewal receipt</div>
+          <div style="font-size:10px;color:#94A3B8;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:3px;">${isNew ? 'Payment receipt' : 'Renewal receipt'}</div>
           <div style="font-size:18px;font-weight:800;color:#fff;letter-spacing:-0.02em;">${amountFmt}</div>
         </div>
         <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
@@ -806,6 +814,53 @@ const sendRenewalReceiptEmail = async ({
       <p style="font-size:13px;color:#64748B;line-height:1.6;">
         Reply to this email if anything looks off. Have a great month running ${estateName}!
       </p>
+    </div>
+  </div>
+  <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by Area Connector Technologies &middot; RC 9607864</p>
+</div>
+</body></html>`,
+  });
+  return { sent: true };
+};
+
+// ── Plan assigned by AreaConnector (admin) ───────────────────────────────
+const sendPlanAssignedEmail = async ({ to, managerName, estateName, plan, cycle, status, trialEndsAt, nextBillingDate }) => {
+  if (!process.env.RESEND_API_KEY || !to) return { skipped: true };
+  const planName = plan?.name || 'your plan';
+  const trial = status === 'trial';
+  const rows = [
+    ['Site',   estateName],
+    ['Plan',   `${planName} (${cycle === 'annual' ? 'Annual' : 'Monthly'})`],
+    ['Status', trial ? 'Free trial' : 'Active'],
+    trial && trialEndsAt ? ['Trial ends', fmtDate(trialEndsAt)] : ['Next billing', fmtDate(nextBillingDate)],
+  ];
+  await sendEmail({
+    from: FROM(),
+    to,
+    subject: trial ? `🎉 Your ${planName} trial for ${estateName} has started` : `🎉 ${estateName} is now on ${planName}`,
+    html: `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="background:#F0F4F8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;margin:0;padding:0;">
+<div style="width:100%;max-width:100%;margin:0;">
+  <div style="text-align:center;padding:20px 16px 0;margin-bottom:20px;">
+    ${brandMark()}
+  </div>
+  <div style="background:#fff;border-radius:0;overflow:hidden;box-shadow:none;">
+    <div style="background:linear-gradient(135deg,#10B981,#059669);padding:30px 32px;text-align:center;">
+      <div style="font-size:40px;line-height:1;margin-bottom:6px;">🎉</div>
+      <h1 style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.02em;margin:0;">${trial ? `${planName} trial started` : `${planName} is active`}</h1>
+    </div>
+    <div style="padding:30px 32px;">
+      <p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 20px;">
+        Hi <strong>${managerName || 'there'}</strong>,<br><br>
+        ${trial
+          ? `<strong>${estateName}</strong> now has a free trial of <strong>${planName}</strong>. Every feature in the plan is unlocked for your team and everyone on site.`
+          : `<strong>${estateName}</strong> is now on the <strong>${planName}</strong> plan. Every feature in the plan is unlocked for your team and everyone on site.`}
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #E2E8F0;border-radius:14px;overflow:hidden;margin-bottom:20px;">
+        ${rows.map(([l, v], i) => `<tr style="background:${i % 2 === 0 ? '#F8FAFC' : '#fff'};"><td style="padding:11px 22px;font-size:12px;color:#94A3B8;font-weight:600;width:42%;">${l}</td><td style="padding:11px 22px;font-size:13px;color:#0F172A;">${v}</td></tr>`).join('')}
+      </table>
+      <p style="font-size:13px;color:#64748B;line-height:1.6;">Questions about your plan? Just reply to this email.</p>
     </div>
   </div>
   <p style="text-align:center;font-size:12px;color:#9CA3AF;margin-top:20px;">Powered by Area Connector Technologies &middot; RC 9607864</p>
@@ -2057,6 +2112,7 @@ module.exports = {
   sendSubscriptionReminderEmail,
   sendCompGiftEmail,
   sendRenewalReceiptEmail,
+  sendPlanAssignedEmail,
   sendSubscriptionExpiredEmail,
   sendLiveAnnouncementEmail,
   sendPasswordResetRequestEmail,

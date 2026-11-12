@@ -20,6 +20,7 @@ const Subscription = require('../models/Subscription');
 const Plan = require('../models/Plan');
 const Estate = require('../models/Estate');
 const User = require('../models/User');
+const { managerQuery } = require('../utils/managers');
 const {
   sendRenewalReceiptEmail,
   sendSubscriptionExpiredEmail,
@@ -55,7 +56,7 @@ const computeAmount = (plan, cycle, billingModel, residentCount) => {
 };
 
 const findManagerFor = (estateId) =>
-  User.findOne({ estateId, role: 'estate_manager' }).select('name email');
+  User.findOne({ ...managerQuery(estateId) }).select('name email');
 
 // Attempt a recurring charge via Paystack `transaction/charge_authorization`.
 // Returns { ok, data } or { ok: false, reason, retriable }.

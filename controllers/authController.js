@@ -17,6 +17,7 @@ const { generateAccessToken, generateRefreshToken, verifyRefreshToken } = requir
 const { emitNotification } = require('../services/socketService');
 const campaignController = require('./campaignController');
 const emailService = require('../services/emailService');
+const { managerQuery } = require('../utils/managers');
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -27,14 +28,14 @@ const COOKIE_OPTS = {
 
 async function notifyManagersOfWaitingGuard(user, estate) {
   const { sendToUser } = require('../services/pushService');
-  const managers = await User.find({ estateId: user.estateId, role: 'estate_manager', isActive: true }).select('_id');
+  const managers = await User.find({ ...managerQuery(user.estateId), isActive: true }).select('_id');
   managers.forEach((m) => sendToUser(m._id, { title: 'New guard waiting for approval', body: `${user.name} signed up as security with the estate code. Approve them on the Guards page if they work for you.`, url: '/guards', tag: `guard-${user._id}` }).catch(() => {}));
 }
 
 async function notifyManagersOfWaitingResident(user, estate) {
   const { sendToUser } = require('../services/pushService');
   const { sendManagerNotificationEmail } = require('../services/emailService');
-  const managers = await User.find({ estateId: user.estateId, role: 'estate_manager', isActive: true }).select('name email');
+  const managers = await User.find({ ...managerQuery(user.estateId), isActive: true }).select('name email');
   const esc = (v) => String(v || '').replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
   managers.forEach((m) => {
     sendToUser(m._id, { title: 'New resident waiting for a unit', body: `${user.name} joined with the estate code — assign them to their unit so they can sign in.`, url: '/residents?filter=no_unit', tag: `no-unit-${user._id}` }).catch(() => {});

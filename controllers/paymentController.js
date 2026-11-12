@@ -9,6 +9,7 @@ const { syncRestriction } = require('../utils/duesEnforcement');
 // Paying (or a waiver) can clear a dues restriction — restore services straight away
 const restoreIfCleared = (residentId) => syncRestriction(residentId).catch((e) => console.error('[dues sync]', e.message));
 const { sendManagerNotificationEmail, sendPaymentReceiptEmail, sendWithdrawalReceiptEmail } = require('../services/emailService');
+const { managerQuery } = require('../utils/managers');
 
 const PAYSTACK_BASE = 'https://api.paystack.co';
 const paystackHeaders = () => ({
@@ -512,7 +513,7 @@ async function settlePaymentByReference(reference) {
       body: `Your payment of ${fmt(payment.amount)} for ${payment.scheduleId?.title || 'levy'} was received`,
     }, resident?._id);
 
-    const manager = await User.findOne({ estateId: payment.estateId, role: 'estate_manager' }).select('name email');
+    const manager = await User.findOne({ ...managerQuery(payment.estateId) }).select('name email');
     emitNotification(payment.estateId, notif, manager?._id);
 
     if (manager && estate) {

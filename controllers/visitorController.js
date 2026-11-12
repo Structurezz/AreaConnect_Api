@@ -12,6 +12,7 @@ const { passExpiresAt, isPastExpiry, expireOverdue } = require('../utils/passExp
 const siteTypes = require('../utils/siteTypes');
 const { placeForUnit, publicPlace } = require('../utils/places');
 const { withinVisitingHours } = require('../utils/siteClock');
+const { managerQuery } = require('../utils/managers');
 
 const DETAIL_KEYS = ['studentName', 'studentClass', 'company', 'job', 'goods', 'vehiclePlate', 'patientName', 'ward'];
 
@@ -178,7 +179,7 @@ async function notifyManagersOfHeldPass(visitor, host) {
   const { sendManagerNotificationEmail } = require('../services/emailService');
   const [estate, managers] = await Promise.all([
     require('../models/Estate').findById(visitor.estateId).select('name'),
-    User.find({ estateId: visitor.estateId, role: 'estate_manager', isActive: true }).select('name email'),
+    User.find({ ...managerQuery(visitor.estateId), isActive: true }).select('name email'),
   ]);
   const when = new Date(visitor.expectedDate).toLocaleString('en-NG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   emitVisitorUpdate(String(visitor.estateId), visitor);

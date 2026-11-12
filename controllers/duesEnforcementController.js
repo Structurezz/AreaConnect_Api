@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Estate = require('../models/Estate');
 const Payment = require('../models/Payment');
 const DuesEnforcementLog = require('../models/DuesEnforcementLog');
+const { managerQuery } = require('../utils/managers');
 const {
   SERVICES, SERVICE_KEYS, PROTECTED, NGN, BASIS_TYPES, basisText,
   settingsOf, overdueBills, log, notifyResident, syncRestriction,
@@ -317,7 +318,7 @@ exports.disputeMine = async (req, res) => {
     const { sendToUser } = require('../services/pushService');
     const [estate, managers] = await Promise.all([
       Estate.findById(req.estateId).select('name'),
-      User.find({ estateId: req.estateId, role: 'estate_manager', isActive: true }).select('name email'),
+      User.find({ ...managerQuery(req.estateId), isActive: true }).select('name email'),
     ]);
     managers.forEach((m) => {
       sendToUser(m._id, { title: 'Dues dispute', body: `${user.name} disputed their dues notice`, url: '/payments?tab=enforcement', tag: `dues-dispute-${user._id}` }).catch(() => {});

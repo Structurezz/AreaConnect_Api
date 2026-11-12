@@ -4,10 +4,12 @@ const Plan = require('../models/Plan');
 const Subscription = require('../models/Subscription');
 const Estate = require('../models/Estate');
 const User = require('../models/User');
+const { managerQuery } = require('../utils/managers');
 const {
   sendSubscriptionReminderEmail,
   sendCompGiftEmail,
   sendRenewalReceiptEmail,
+  sendPlanAssignedEmail,
 } = require('../services/emailService');
 
 const PAYSTACK_BASE = 'https://api.paystack.co';
@@ -18,6 +20,21 @@ const paystackHeaders = () => ({
 const genRef = () => `PLAN-${Date.now()}-${Math.random().toString(36).slice(2,8).toUpperCase()}`;
 
 // ── Plans ──────────────────────────────────────────────────────────────────
+
+// Emails the site's manager (multi-site managers included). A delivery
+// failure is logged but never blocks the request.
+async function emailManager(estateId, send) {
+  try {
+    const [manager, estate] = await Promise.all([
+      User.findOne(managerQuery(estateId)).select('name email'),
+      Estate.findById(estateId).select('name'),
+    ]);
+    if (!manager?.email || !estate) return console.warn(`[plans] no manager email for estate ${estateId}`);
+    await send({ to: manager.email, managerName: manager.name, estateName: estate.name });
+  } catch (e) {
+    console.error('[plans email]', e.message);
+  }
+}
 
 exports.getPlans = async (req, res) => {
   try {
@@ -119,7 +136,7 @@ exports.getMySubscription = async (req, res) => {
       if (threshold) {
         try {
           const [manager, estate] = await Promise.all([
-            User.findOne({ estateId: req.estateId, role: 'estate_manager' }).select('name email'),
+            User.findOne({ ...managerQuery(req.estateId) }).select('name email'),
             Estate.findById(req.estateId).select('name'),
           ]);
           if (manager?.email && estate) {
@@ -185,6 +202,10 @@ exports.assignSubscription = async (req, res) => {
       },
       { new: true, upsert: true, runValidators: true }
     ).populate('planId').populate('estateId', 'name');
+
+    await emailManager(estateId, (m) => sendPlanAssignedEmail({
+      ...m, plan, cycle: sub.cycle, status: sub.status, trialEndsAt, nextBillingDate,
+    }));
 
     return res.json({ success: true, data: sub });
   } catch (err) {
@@ -364,6 +385,11 @@ exports.verifyUpgrade = async (req, res) => {
     // A concurrent request already used this reference
     if (!sub) return res.json({ success: true, data: await Subscription.findOne({ estateId }).populate('planId') });
 
+    await emailManager(estateId, (m) => sendRenewalReceiptEmail({
+      ...m, plan, cycle, amount: Number(data.data.amount) / 100, reference,
+      cardLast4: auth.last4, cardBrand: auth.card_type || auth.brand, nextBillingDate: next, isNew: true,
+    }));
+
     return res.json({ success: true, data: sub });
   } catch (err) {
     console.error('[Plan upgrade verify]', err.response?.data || err.message);
@@ -427,7 +453,8 @@ exports.grantComp = async (req, res) => {
     // Fire the gift email with a PDF receipt attached — don't let a
     // delivery failure block the grant.
     try {
-      const manager = await User.findOne({ estateId, role: 'estate_manager' }).select('name email phone');
+      const manager = await User.findOne({ ...managerQuery(estateId) }).select('name email phone');
+      if (!manager?.email) console.warn(`[grantComp] no manager email for estate ${estateId}`);
       if (manager?.email) {
         const addressStr = typeof estate.address === 'string'
           ? estate.address
@@ -613,32 +640,13 @@ exports.paystackWebhook = async (req, res) => {
     sub.remindersSent = [];
     await sub.save();
 
-    // Fire renewal receipt for recurring (upgrades already have the first
-    // transaction confirmation on the client, so skip for `plan_upgrade`).
-    if (meta.type === 'plan_renewal') {
-      try {
-        const [manager, estate] = await Promise.all([
-          User.findOne({ estateId, role: 'estate_manager' }).select('name email'),
-          Estate.findById(estateId).select('name'),
-        ]);
-        if (manager?.email && estate) {
-          await sendRenewalReceiptEmail({
-            to: manager.email,
-            managerName: manager.name,
-            estateName: estate.name,
-            plan,
-            cycle,
-            amount: (event.data?.amount || 0) / 100,
-            reference,
-            cardLast4: auth.last4,
-            cardBrand: auth.card_type || auth.brand,
-            nextBillingDate: next,
-          });
-        }
-      } catch (e) {
-        console.error('[paystackWebhook renewal email]', e.message);
-      }
-    }
+    // Receipt for the first payment and for renewals. Each reference is
+    // applied once (here or in verifyUpgrade), so only one receipt goes out.
+    await emailManager(estateId, (m) => sendRenewalReceiptEmail({
+      ...m, plan, cycle, amount: (event.data?.amount || 0) / 100, reference,
+      cardLast4: auth.last4, cardBrand: auth.card_type || auth.brand, nextBillingDate: next,
+      isNew: meta.type === 'plan_upgrade',
+    }));
 
     return res.status(200).json({ received: true });
   } catch (err) {
